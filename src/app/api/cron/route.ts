@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { execSync } from "child_process";
 
+function runCron(args: string[]) {
+  // Use execSync so shell can resolve openclaw/openclaw.cmd cross-platform.
+  const cmd = `openclaw cron ${args.join(" ")}`;
+  return execSync(cmd, {
+    timeout: 10000,
+    encoding: "utf-8",
+    windowsHide: true,
+  });
+}
+
 function getGatewayConfig() {
   try {
     const configRaw = require("fs").readFileSync((process.env.OPENCLAW_DIR || "/root/.openclaw") + "/openclaw.json", "utf-8");
@@ -17,10 +27,7 @@ function getGatewayConfig() {
 // GET: List all cron jobs from the OpenClaw gateway
 export async function GET() {
   try {
-    const output = execSync("openclaw cron list --json --all 2>/dev/null", {
-      timeout: 10000,
-      encoding: "utf-8",
-    });
+    const output = runCron(["list", "--json", "--all"]);
 
     const data = JSON.parse(output);
     const jobs = (data.jobs || []).map((job: Record<string, unknown>) => ({
@@ -99,11 +106,9 @@ export async function PUT(request: NextRequest) {
     }
 
     const action = enabled ? "enable" : "disable";
-    // Use openclaw CLI to update the job
-    const output = execSync(
-      `openclaw cron ${action} ${id} --json 2>/dev/null || openclaw cron update ${id} --enabled=${enabled} --json 2>/dev/null`,
-      { timeout: 10000, encoding: "utf-8" }
-    );
+
+    // Use native cron enable/disable commands (cross-platform, no shell redirection)
+    runCron([action, id]);
 
     return NextResponse.json({ success: true, id, enabled });
   } catch (error) {
@@ -125,10 +130,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Job ID is required" }, { status: 400 });
     }
 
-    execSync(`openclaw cron remove ${id} 2>/dev/null`, {
-      timeout: 10000,
-      encoding: "utf-8",
-    });
+    runCron(["rm", id]);
 
     return NextResponse.json({ success: true, deleted: id });
   } catch (error) {
