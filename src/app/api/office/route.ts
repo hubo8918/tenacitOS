@@ -189,7 +189,24 @@ export async function GET() {
     // Try gateway first, fallback to file-based
     const gatewayStatus = await getAgentStatusFromGateway();
 
-    const agents = config.agents.list.map((agent: any) => {
+    const configuredAgents = Array.isArray(config?.agents?.list)
+      ? config.agents.list
+      : [];
+
+    const normalizedAgents =
+      configuredAgents.length > 0
+        ? configuredAgents
+        : [
+            {
+              id: "main",
+              name: process.env.NEXT_PUBLIC_AGENT_NAME || "main",
+              workspace:
+                config?.agents?.defaults?.workspace ||
+                join(process.env.OPENCLAW_DIR || "/root/.openclaw", "workspace"),
+            },
+          ];
+
+    const agents = normalizedAgents.map((agent: any) => {
       const agentInfo = AGENT_CONFIG[agent.id as keyof typeof AGENT_CONFIG] || {
         emoji: "🤖",
         color: "#666",

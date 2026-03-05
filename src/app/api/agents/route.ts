@@ -61,8 +61,33 @@ export async function GET() {
     const configPath = (process.env.OPENCLAW_DIR || "/root/.openclaw") + "/openclaw.json";
     const config = JSON.parse(readFileSync(configPath, "utf-8"));
 
-    // Get agents from config
-    const agents: Agent[] = config.agents.list.map((agent: any) => {
+    // Support both legacy configs (agents.list) and modern configs (defaults-only)
+    const configuredAgents = Array.isArray(config?.agents?.list)
+      ? config.agents.list
+      : [];
+
+    const normalizedAgents =
+      configuredAgents.length > 0
+        ? configuredAgents
+        : [
+            {
+              id: "main",
+              name: process.env.NEXT_PUBLIC_AGENT_NAME || "main",
+              workspace:
+                config?.agents?.defaults?.workspace ||
+                join(process.env.OPENCLAW_DIR || "/root/.openclaw", "workspace"),
+              model: {
+                primary:
+                  config?.agents?.defaults?.model?.primary || "unknown",
+              },
+              subagents: { allowAgents: [] },
+              ui: {
+                emoji: process.env.NEXT_PUBLIC_AGENT_EMOJI || "🤖",
+              },
+            },
+          ];
+
+    const agents: Agent[] = normalizedAgents.map((agent: any) => {
       const agentInfo = getAgentDisplayInfo(agent.id, agent);
 
       // Get telegram account info
@@ -93,7 +118,7 @@ export async function GET() {
       const allowAgents = agent.subagents?.allowAgents || [];
       const allowAgentsDetails = allowAgents.map((subagentId: string) => {
         // Find subagent in config
-        const subagentConfig = config.agents.list.find(
+        const subagentConfig = normalizedAgents.find(
           (a: any) => a.id === subagentId
         );
         if (subagentConfig) {

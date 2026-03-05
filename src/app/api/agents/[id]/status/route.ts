@@ -15,8 +15,30 @@ export async function GET(
     const configPath = (process.env.OPENCLAW_DIR || "/root/.openclaw") + "/openclaw.json";
     const config = JSON.parse(readFileSync(configPath, "utf-8"));
 
+    const configuredAgents = Array.isArray(config?.agents?.list)
+      ? config.agents.list
+      : [];
+
+    const normalizedAgents =
+      configuredAgents.length > 0
+        ? configuredAgents
+        : [
+            {
+              id: "main",
+              name: process.env.NEXT_PUBLIC_AGENT_NAME || "main",
+              workspace:
+                config?.agents?.defaults?.workspace ||
+                join(process.env.OPENCLAW_DIR || "/root/.openclaw", "workspace"),
+              model: {
+                primary:
+                  config?.agents?.defaults?.model?.primary || "unknown",
+              },
+              subagents: { allowAgents: [] },
+            },
+          ];
+
     // Find agent
-    const agent = config.agents.list.find((a: any) => a.id === id);
+    const agent = normalizedAgents.find((a: any) => a.id === id);
     if (!agent) {
       return NextResponse.json({ error: "Agent not found" }, { status: 404 });
     }
