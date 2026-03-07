@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { readFileSync } from "fs";
 import { join } from "path";
+import { OPENCLAW_DIR, OPENCLAW_CONFIG, OPENCLAW_WORKSPACE } from "@/lib/paths";
 
 export const dynamic = "force-dynamic";
 
@@ -58,7 +59,7 @@ function getAgentDisplayInfo(agentId: string, agentConfig: any): { emoji: string
 export async function GET() {
   try {
     // Read openclaw config
-    const configPath = (process.env.OPENCLAW_DIR || "/root/.openclaw") + "/openclaw.json";
+    const configPath = OPENCLAW_CONFIG;
     const config = JSON.parse(readFileSync(configPath, "utf-8"));
 
     // Support both legacy configs (agents.list) and modern configs (defaults-only)
@@ -75,7 +76,7 @@ export async function GET() {
               name: process.env.NEXT_PUBLIC_AGENT_NAME || "main",
               workspace:
                 config?.agents?.defaults?.workspace ||
-                join(process.env.OPENCLAW_DIR || "/root/.openclaw", "workspace"),
+                join(OPENCLAW_DIR, "workspace"),
               model: {
                 primary:
                   config?.agents?.defaults?.model?.primary || "unknown",

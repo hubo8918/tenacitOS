@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { exec } from "child_process";
 import { promisify } from "util";
 import os from "os";
+import fs from "node:fs";
 
 const execAsync = promisify(exec);
 
@@ -60,7 +61,7 @@ function normalizePm2Status(status: string): string {
 
 // Friendly display names for PM2 process names
 const SERVICE_DESCRIPTIONS: Record<string, string> = {
-  "mission-control": "Mission Control – Tenacitas Dashboard",
+  "mission-control": "Mission Control Dashboard",
   classvault: "ClassVault – LMS Platform",
   "content-vault": "Content Vault – Draft Management Webapp",
   "postiz-simple": "Postiz – Social Media Scheduler",
@@ -75,7 +76,18 @@ export async function GET() {
     const loadAvg = os.loadavg();
     const cpuUsage = Math.min(Math.round((loadAvg[0] / cpuCount) * 100), 100);
 
-    // ── RAM ──────────────────────────────────────────────────────────────────
+    // ── Per-core CPU usage (real, from idle time delta) ──────────────────────
+    const cpusBefore = os.cpus();
+    await new Promise(r => setTimeout(r, 200));
+    const cpusAfter = os.cpus();
+    const coreUsages = cpusAfter.map((cpu, i) => {
+      const before = cpusBefore[i].times;
+      const after = cpu.times;
+      const idleDelta = after.idle - before.idle;
+      const totalDelta = (after.user + after.nice + after.sys + after.irq + after.idle)
+        - (before.user + before.nice + before.sys + before.irq + before.idle);
+      return totalDelta > 0 ? Math.round(((totalDelta - idleDelta) / totalDelta) * 100) : 0;
+    });
     const totalMem = os.totalmem();
     const freeMem = os.freemem();
     const usedMem = totalMem - freeMem;
@@ -85,71 +97,92 @@ export async function GET() {
     let diskUsed = 0;
     let diskFree = 100;
     try {
-      const { stdout } = await execAsync("df -BG / | tail -1");
-      const parts = stdout.trim().split(/\s+/);
-      diskTotal = parseInt(parts[1].replace("G", ""));
-      diskUsed = parseInt(parts[2].replace("G", ""));
-      diskFree = parseInt(parts[3].replace("G", ""));
+      if (process.platform === "win32") {
+        const stats = fs.statfsSync("C:/");
+        diskTotal = Math.round((stats.blocks * stats.bsize) / 1073741824);
+        diskFree = Math.round((stats.bfree * stats.bsize) / 1073741824);
+        diskUsed = diskTotal - diskFree;
+      } else {
+        const { stdout } = await execAsync("df -BG / | tail -1");
+        const parts = stdout.trim().split(/\s+/);
+        diskTotal = parseInt(parts[1].replace("G", ""));
+        diskUsed = parseInt(parts[2].replace("G", ""));
+        diskFree = parseInt(parts[3].replace("G", ""));
+      }
     } catch (error) {
       console.error("Failed to get disk stats:", error);
     }
     const diskPercent = (diskUsed / diskTotal) * 100;
 
-    // ── Network (real stats from /proc/net/dev) ───────────────────────────────
+    // ── Network (real stats from /proc/net/dev on Linux, stub on others) ──────
     let network = { rx: 0, tx: 0 };
-    try {
-      const { readFileSync } = await import('fs');
-      
-      function readNetStats(): { rx: number; tx: number; ts: number } {
-        const netDev = readFileSync('/proc/net/dev', 'utf-8');
-        const lines = netDev.trim().split('\n').slice(2);
-        let rx = 0, tx = 0;
-        for (const line of lines) {
-          const parts = line.trim().split(/\s+/);
-          const iface = parts[0].replace(':', '');
-          if (iface === 'lo') continue;
-          rx += parseInt(parts[1]) || 0;
-          tx += parseInt(parts[9]) || 0;
+    if (process.platform === "linux") {
+      try {
+        const { readFileSync } = await import('fs');
+
+        function readNetStats(): { rx: number; tx: number; ts: number } {
+          const netDev = readFileSync('/proc/net/dev', 'utf-8');
+          const lines = netDev.trim().split('\n').slice(2);
+          let rx = 0, tx = 0;
+          for (const line of lines) {
+            const parts = line.trim().split(/\s+/);
+            const iface = parts[0].replace(':', '');
+            if (iface === 'lo') continue;
+            rx += parseInt(parts[1]) || 0;
+            tx += parseInt(parts[9]) || 0;
+          }
+          return { rx, tx, ts: Date.now() };
         }
-        return { rx, tx, ts: Date.now() };
-      }
-      
-      const current = readNetStats();
-      
-      // Use module-level cache for previous reading
-      if ((global as Record<string, unknown>).__netPrev) {
-        const prev = (global as Record<string, unknown>).__netPrev as { rx: number; tx: number; ts: number };
-        const dtSec = (current.ts - prev.ts) / 1000;
-        if (dtSec > 0) {
-          network = {
-            rx: parseFloat(Math.max(0, (current.rx - prev.rx) / 1024 / 1024 / dtSec).toFixed(3)),
-            tx: parseFloat(Math.max(0, (current.tx - prev.tx) / 1024 / 1024 / dtSec).toFixed(3)),
-          };
+
+        const current = readNetStats();
+
+        // Use module-level cache for previous reading
+        if ((global as Record<string, unknown>).__netPrev) {
+          const prev = (global as Record<string, unknown>).__netPrev as { rx: number; tx: number; ts: number };
+          const dtSec = (current.ts - prev.ts) / 1000;
+          if (dtSec > 0) {
+            network = {
+              rx: parseFloat(Math.max(0, (current.rx - prev.rx) / 1024 / 1024 / dtSec).toFixed(3)),
+              tx: parseFloat(Math.max(0, (current.tx - prev.tx) / 1024 / 1024 / dtSec).toFixed(3)),
+            };
+          }
         }
+        (global as Record<string, unknown>).__netPrev = current;
+      } catch (error) {
+        console.error("Failed to get network stats:", error);
       }
-      (global as Record<string, unknown>).__netPrev = current;
-    } catch (error) {
-      console.error("Failed to get network stats:", error);
     }
 
     // ── Services ─────────────────────────────────────────────────────────────
     const services: ServiceEntry[] = [];
+    const isLinux = process.platform === "linux";
 
-    // 1. Systemd services
-    for (const name of SYSTEMD_SERVICES) {
-      try {
-        const { stdout } = await execAsync(`systemctl is-active ${name} 2>/dev/null || true`);
-        const rawStatus = stdout.trim(); // "active" | "inactive" | "failed" | ...
+    // 1. Systemd services (Linux only)
+    if (isLinux) {
+      for (const name of SYSTEMD_SERVICES) {
+        try {
+          const { stdout } = await execAsync(`systemctl is-active ${name} 2>/dev/null || true`);
+          const rawStatus = stdout.trim();
+          services.push({
+            name,
+            status: rawStatus,
+            description: SERVICE_DESCRIPTIONS[name] ?? name,
+            backend: "systemd",
+          });
+        } catch {
+          services.push({
+            name,
+            status: "unknown",
+            description: SERVICE_DESCRIPTIONS[name] ?? name,
+            backend: "systemd",
+          });
+        }
+      }
+    } else {
+      for (const name of SYSTEMD_SERVICES) {
         services.push({
           name,
-          status: rawStatus,
-          description: SERVICE_DESCRIPTIONS[name] ?? name,
-          backend: "systemd",
-        });
-      } catch {
-        services.push({
-          name,
-          status: "unknown",
+          status: "n/a",
           description: SERVICE_DESCRIPTIONS[name] ?? name,
           backend: "systemd",
         });
@@ -158,7 +191,8 @@ export async function GET() {
 
     // 2. PM2 services — single call, parse JSON
     try {
-      const { stdout: pm2Json } = await execAsync("pm2 jlist 2>/dev/null");
+      const pm2Cmd = isLinux ? "pm2 jlist 2>/dev/null" : "pm2 jlist";
+      const { stdout: pm2Json } = await execAsync(pm2Cmd);
       const pm2List = JSON.parse(pm2Json) as Array<{
         name: string;
         pid: number | null;
@@ -225,10 +259,11 @@ export async function GET() {
 
     // ── Tailscale VPN ─────────────────────────────────────────────────────────
     let tailscaleActive = false;
-    let tailscaleIp = "100.122.105.85";
+    let tailscaleIp = "";
     const tailscaleDevices: TailscaleDevice[] = [];
     try {
-      const { stdout: tsStatus } = await execAsync("tailscale status 2>/dev/null || true");
+      const tsCmd = isLinux ? "tailscale status 2>/dev/null || true" : "tailscale status";
+      const { stdout: tsStatus } = await execAsync(tsCmd);
       const lines = tsStatus.trim().split("\n").filter(Boolean);
       if (lines.length > 0) {
         tailscaleActive = true;
@@ -252,40 +287,36 @@ export async function GET() {
       console.error("Failed to get Tailscale status:", error);
     }
 
-    // ── Firewall (UFW) ────────────────────────────────────────────────────────
+    // ── Firewall (UFW on Linux, skip on Windows) ─────────────────────────────
     let firewallActive = false;
     const firewallRulesList: FirewallRule[] = [];
-    const staticFirewallRules: FirewallRule[] = [
-      { port: "80/tcp", action: "ALLOW", from: "Anywhere", comment: "Public HTTP" },
-      { port: "443/tcp", action: "ALLOW", from: "Anywhere", comment: "Public HTTPS" },
-      { port: "3000", action: "ALLOW", from: "Tailscale (100.64.0.0/10)", comment: "Mission Control via Tailscale" },
-      { port: "22", action: "ALLOW", from: "Tailscale (100.64.0.0/10)", comment: "SSH via Tailscale only" },
-    ];
-    try {
-      const { stdout: ufwStatus } = await execAsync("ufw status numbered 2>/dev/null || true");
-      if (ufwStatus.includes("Status: active")) {
-        firewallActive = true;
-        const lines = ufwStatus.split("\n");
-        for (const line of lines) {
-          const match = line.match(/\[\s*\d+\]\s+([\w/:]+)\s+(\w+)\s+(\S+)\s*(#?.*)$/);
-          if (match) {
-            firewallRulesList.push({
-              port: match[1].trim(),
-              action: match[2].trim(),
-              from: match[3].trim(),
-              comment: match[4].replace("#", "").trim(),
-            });
+    if (isLinux) {
+      try {
+        const { stdout: ufwStatus } = await execAsync("ufw status numbered 2>/dev/null || true");
+        if (ufwStatus.includes("Status: active")) {
+          firewallActive = true;
+          const lines = ufwStatus.split("\n");
+          for (const line of lines) {
+            const match = line.match(/\[\s*\d+\]\s+([\w/:]+)\s+(\w+)\s+(\S+)\s*(#?.*)$/);
+            if (match) {
+              firewallRulesList.push({
+                port: match[1].trim(),
+                action: match[2].trim(),
+                from: match[3].trim(),
+                comment: match[4].replace("#", "").trim(),
+              });
+            }
           }
         }
+      } catch (error) {
+        console.error("Failed to get firewall status:", error);
       }
-    } catch (error) {
-      console.error("Failed to get firewall status:", error);
     }
 
     return NextResponse.json({
       cpu: {
         usage: cpuUsage,
-        cores: os.cpus().map(() => Math.round(Math.random() * 100)),
+        cores: coreUsages,
         loadAvg,
       },
       ram: {
@@ -305,19 +336,12 @@ export async function GET() {
       tailscale: {
         active: tailscaleActive,
         ip: tailscaleIp,
-        devices:
-          tailscaleDevices.length > 0
-            ? tailscaleDevices
-            : [
-                { ip: "100.122.105.85", hostname: "srv1328267", os: "linux", online: true },
-                { ip: "100.106.86.52", hostname: "iphone182", os: "iOS", online: true },
-                { ip: "100.72.14.113", hostname: "macbook-pro-de-carlos", os: "macOS", online: true },
-              ],
+        devices: tailscaleDevices,
       },
       firewall: {
-        active: firewallActive || true,
-        rules: firewallRulesList.length > 0 ? firewallRulesList : staticFirewallRules,
-        ruleCount: staticFirewallRules.length,
+        active: firewallActive,
+        rules: firewallRulesList,
+        ruleCount: firewallRulesList.length,
       },
       timestamp: new Date().toISOString(),
     });

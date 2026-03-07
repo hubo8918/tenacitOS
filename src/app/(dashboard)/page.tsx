@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { StatsCard } from "@/components/StatsCard";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { WeatherWidget } from "@/components/WeatherWidget";
+import { BRANDING } from "@/config/branding";
 import { Notepad } from "@/components/Notepad";
 import {
   Activity,
@@ -77,7 +78,7 @@ export default function DashboardPage() {
           🦞 Mission Control
         </h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
-          Overview of Tenacitas agent activity
+          Overview of {BRANDING.agentName} agent activity
         </p>
       </div>
 

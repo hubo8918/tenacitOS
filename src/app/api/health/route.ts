@@ -31,6 +31,9 @@ async function checkUrl(url: string, timeoutMs = 5000): Promise<{ status: 'up' |
 }
 
 async function checkSystemdService(name: string): Promise<ServiceCheck> {
+  if (process.platform !== 'linux') {
+    return { name, status: 'unknown', details: 'systemd not available on this platform' };
+  }
   try {
     const { stdout } = await execAsync(`systemctl is-active ${name} 2>/dev/null`);
     const active = stdout.trim() === 'active';
@@ -42,7 +45,8 @@ async function checkSystemdService(name: string): Promise<ServiceCheck> {
 
 async function checkPm2Service(name: string): Promise<ServiceCheck> {
   try {
-    const { stdout } = await execAsync('pm2 jlist 2>/dev/null');
+    const cmd = process.platform === 'linux' ? 'pm2 jlist 2>/dev/null' : 'pm2 jlist';
+    const { stdout } = await execAsync(cmd);
     const list = JSON.parse(stdout);
     const proc = list.find((p: { name: string }) => p.name === name);
     if (!proc) return { name, status: 'unknown', details: 'not found in pm2' };
@@ -70,24 +74,14 @@ export async function GET() {
   checks.push(...pm2Checks);
 
   // External URLs
-  const urlChecks = await Promise.all([
-    checkUrl('https://tenacitas.cazaustre.dev'),
-    checkUrl('https://api.anthropic.com', 3000),
-  ]);
-
-  checks.push({
-    name: 'tenacitas.cazaustre.dev',
-    status: urlChecks[0].status,
-    latency: urlChecks[0].latency,
-    url: 'https://tenacitas.cazaustre.dev',
-  });
+  const anthropicCheck = await checkUrl('https://api.anthropic.com', 3000);
 
   checks.push({
     name: 'Anthropic API',
-    status: urlChecks[1].status === 'up' || (urlChecks[1] as { httpCode?: number }).httpCode === 401 ? 'up' : urlChecks[1].status,
-    latency: urlChecks[1].latency,
+    status: anthropicCheck.status === 'up' || (anthropicCheck as { httpCode?: number }).httpCode === 401 ? 'up' : anthropicCheck.status,
+    latency: anthropicCheck.latency,
     url: 'https://api.anthropic.com',
-    details: urlChecks[1].status === 'up' || (urlChecks[1] as { httpCode?: number }).httpCode === 401 ? 'reachable' : 'unreachable',
+    details: anthropicCheck.status === 'up' || (anthropicCheck as { httpCode?: number }).httpCode === 401 ? 'reachable' : 'unreachable',
   });
 
   // Overall status

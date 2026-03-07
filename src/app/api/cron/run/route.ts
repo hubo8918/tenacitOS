@@ -15,9 +15,10 @@ async function createNotification(title: string, message: string, type: "info" |
 
 // POST: Trigger a cron job immediately
 export async function POST(request: NextRequest) {
+  let id: string | undefined;
   try {
     const body = await request.json();
-    const { id } = body;
+    id = body.id;
 
     if (!id) {
       return NextResponse.json({ error: "Job ID required" }, { status: 400 });
@@ -28,9 +29,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid job ID" }, { status: 400 });
     }
 
-    const output = execSync(`openclaw cron run ${id} --force 2>&1`, {
+    const output = execSync(`openclaw cron run ${id} --force`, {
       timeout: 15000,
       encoding: "utf-8",
+      windowsHide: true,
     });
 
     // Create success notification
@@ -48,15 +50,16 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to trigger job";
     console.error("Error triggering cron job:", error);
-    
+
     // Create error notification
-    const body = await request.json();
-    await createNotification(
-      "Cron Job Failed",
-      `Failed to execute job "${body.id}": ${message}`,
-      "error"
-    );
-    
+    if (id) {
+      await createNotification(
+        "Cron Job Failed",
+        `Failed to execute job "${id}": ${message}`,
+        "error"
+      );
+    }
+
     // Even if the command exits with non-zero, the job might have been triggered
     // The openclaw CLI sometimes exits with error but still works
     return NextResponse.json({ success: false, error: message }, { status: 500 });

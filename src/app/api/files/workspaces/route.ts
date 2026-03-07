@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
-const OPENCLAW_DIR = process.env.OPENCLAW_DIR || '/root/.openclaw';
+import { OPENCLAW_DIR } from '@/lib/paths';
 
 interface Workspace {
   id: string;
@@ -54,7 +54,7 @@ export async function GET() {
         name: 'Workspace Principal',
         emoji: mainInfo?.emoji || '🦞',
         path: mainWorkspace,
-        agentName: mainInfo?.name || 'Tenacitas',
+        agentName: mainInfo?.name || 'Main Agent',
       });
     }
     

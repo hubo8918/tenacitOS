@@ -3,6 +3,7 @@
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Terminal, Lock, AlertCircle } from "lucide-react";
+import { BRANDING } from "@/config/branding";
 
 function LoginForm() {
   const [password, setPassword] = useState("");
@@ -127,7 +128,7 @@ function LoginForm() {
         className="text-center text-xs mt-6"
         style={{ color: 'var(--text-muted)' }}
       >
-        Tenacitas Agent Dashboard
+        {BRANDING.agentName} Agent Dashboard
       </p>
     </div>
   );

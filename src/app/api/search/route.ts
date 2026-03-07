@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
-const WORKSPACE = process.env.OPENCLAW_WORKSPACE || '/root/.openclaw/workspace';
+import { OPENCLAW_WORKSPACE as WORKSPACE } from '@/lib/paths';
 const MEMORY_DIR = path.join(WORKSPACE, 'memory');
 
 interface SearchResult {

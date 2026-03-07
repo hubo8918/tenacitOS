@@ -18,9 +18,10 @@ export async function GET(request: NextRequest) {
     let runs: RunEntry[] = [];
 
     try {
-      const output = execSync(`openclaw cron runs ${id} --json 2>/dev/null`, {
+      const output = execSync(`openclaw cron runs ${id} --json`, {
         timeout: 10000,
         encoding: "utf-8",
+        windowsHide: true,
       });
 
       const data = JSON.parse(output);

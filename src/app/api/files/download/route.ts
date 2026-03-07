@@ -3,7 +3,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { logActivity } from '@/lib/activities-db';
 
-const OPENCLAW_DIR = process.env.OPENCLAW_DIR || '/root/.openclaw';
+import { OPENCLAW_DIR } from '@/lib/paths';
 
 const WORKSPACE_MAP: Record<string, string> = {
   workspace: path.join(OPENCLAW_DIR, 'workspace'),

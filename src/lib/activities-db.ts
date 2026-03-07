@@ -77,33 +77,7 @@ function getDb(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_activities_status ON activities(status);
   `);
 
-  // Migrate from JSON if DB is empty and JSON exists
-  const count = (_db.prepare('SELECT COUNT(*) as n FROM activities').get() as { n: number }).n;
-  if (count === 0) {
-    const jsonPath = path.join(process.cwd(), 'data', 'activities.json');
-    if (fs.existsSync(jsonPath)) {
-      try {
-        const data = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
-        const insert = _db.prepare(`
-          INSERT OR IGNORE INTO activities (id, timestamp, type, description, status, duration_ms, tokens_used, agent, metadata)
-          VALUES (@id, @timestamp, @type, @description, @status, @duration_ms, @tokens_used, @agent, @metadata)
-        `);
-        const insertMany = _db.transaction((activities: Activity[]) => {
-          for (const a of activities) {
-            insert.run({
-              ...a,
-              agent: (a as Activity & { agent?: string }).agent ?? null,
-              metadata: a.metadata ? JSON.stringify(a.metadata) : null,
-            });
-          }
-        });
-        insertMany(Array.isArray(data) ? data : []);
-        console.log(`[activities-db] Migrated ${Array.isArray(data) ? data.length : 0} activities from JSON`);
-      } catch (e) {
-        console.warn('[activities-db] Migration from JSON failed:', e);
-      }
-    }
-  }
+  // DB starts empty — real activities are logged as the system runs
 
   return _db;
 }

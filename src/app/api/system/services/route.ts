@@ -6,8 +6,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import os from 'os';
+import path from 'path';
 
 const execAsync = promisify(exec);
+const execOpts = { windowsHide: true } as const;
+const isLinux = process.platform === 'linux';
 
 const ALLOWED_SERVICES_PM2 = ['classvault', 'content-vault', 'postiz-simple', 'brain'];
 const ALLOWED_SERVICES_SYSTEMD = ['mission-control', 'openclaw-gateway', 'nginx'];
@@ -22,19 +26,24 @@ async function pm2Action(name: string, action: string): Promise<string> {
   }
 
   if (action === 'logs') {
-    // Get last 100 lines of PM2 logs
     try {
-      const logFile = `/root/.pm2/logs/${name}-out.log`;
-      const { stdout } = await execAsync(`tail -100 "${logFile}" 2>/dev/null || echo "No logs available"`);
-      const errFile = `/root/.pm2/logs/${name}-error.log`;
-      const { stdout: errOut } = await execAsync(`tail -50 "${errFile}" 2>/dev/null || echo ""`).catch(() => ({ stdout: '' }));
-      return `=== STDOUT (last 100 lines) ===\n${stdout}\n${errOut ? `\n=== STDERR (last 50 lines) ===\n${errOut}` : ''}`;
+      const pm2Home = process.env.PM2_HOME || path.join(os.homedir(), '.pm2');
+      const logFile = path.join(pm2Home, 'logs', `${name}-out.log`);
+      const errFile = path.join(pm2Home, 'logs', `${name}-error.log`);
+      if (isLinux) {
+        const { stdout } = await execAsync(`tail -100 "${logFile}" 2>/dev/null || echo "No logs available"`);
+        const { stdout: errOut } = await execAsync(`tail -50 "${errFile}" 2>/dev/null || echo ""`).catch(() => ({ stdout: '' }));
+        return `=== STDOUT (last 100 lines) ===\n${stdout}\n${errOut ? `\n=== STDERR (last 50 lines) ===\n${errOut}` : ''}`;
+      } else {
+        const { stdout } = await execAsync(`powershell -Command "Get-Content '${logFile}' -Tail 100 -ErrorAction SilentlyContinue"`, execOpts).catch(() => ({ stdout: 'No logs available' }));
+        return `=== STDOUT (last 100 lines) ===\n${stdout}`;
+      }
     } catch {
       return 'Could not retrieve logs';
     }
   }
 
-  const { stdout, stderr } = await execAsync(`pm2 ${action} "${name}" 2>&1`);
+  const { stdout, stderr } = await execAsync(`pm2 ${action} "${name}"`, execOpts);
   return stdout + (stderr ? `\nSTDERR: ${stderr}` : '');
 }
 
@@ -44,6 +53,9 @@ async function systemdAction(name: string, action: string): Promise<string> {
   }
   if (!['restart', 'stop', 'start', 'logs'].includes(action)) {
     throw new Error(`Invalid action "${action}"`);
+  }
+  if (!isLinux) {
+    return `systemd is not available on ${process.platform}`;
   }
 
   if (action === 'logs') {
@@ -64,11 +76,11 @@ async function dockerAction(id: string, action: string): Promise<string> {
   }
 
   if (action === 'logs') {
-    const { stdout } = await execAsync(`docker logs --tail 100 "${id}" 2>&1`);
+    const { stdout } = await execAsync(`docker logs --tail 100 "${id}"`, execOpts);
     return stdout;
   }
 
-  const { stdout } = await execAsync(`docker ${action} "${id}" 2>&1`);
+  const { stdout } = await execAsync(`docker ${action} "${id}"`, execOpts);
   return stdout || `${action} executed successfully`;
 }
 

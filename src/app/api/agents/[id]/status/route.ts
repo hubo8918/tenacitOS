@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { readFileSync, readdirSync, statSync } from "fs";
 import { join } from "path";
+import { OPENCLAW_DIR, OPENCLAW_CONFIG } from "@/lib/paths";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,7 @@ export async function GET(
     const { id } = await params;
 
     // Read openclaw config
-    const configPath = (process.env.OPENCLAW_DIR || "/root/.openclaw") + "/openclaw.json";
+    const configPath = OPENCLAW_CONFIG;
     const config = JSON.parse(readFileSync(configPath, "utf-8"));
 
     const configuredAgents = Array.isArray(config?.agents?.list)
@@ -28,7 +29,7 @@ export async function GET(
               name: process.env.NEXT_PUBLIC_AGENT_NAME || "main",
               workspace:
                 config?.agents?.defaults?.workspace ||
-                join(process.env.OPENCLAW_DIR || "/root/.openclaw", "workspace"),
+                join(OPENCLAW_DIR, "workspace"),
               model: {
                 primary:
                   config?.agents?.defaults?.model?.primary || "unknown",

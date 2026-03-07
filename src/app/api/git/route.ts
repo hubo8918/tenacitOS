@@ -10,7 +10,9 @@ import { promises as fs } from 'fs';
 import path from 'path';
 
 const execAsync = promisify(exec);
-const WORKSPACE = process.env.OPENCLAW_DIR ? `${process.env.OPENCLAW_DIR}/workspace` : '/root/.openclaw/workspace';
+import { OPENCLAW_WORKSPACE as WORKSPACE } from '@/lib/paths';
+
+const execOpts = { windowsHide: true } as const;
 
 interface RepoStatus {
   name: string;
@@ -27,8 +29,39 @@ interface RepoStatus {
 }
 
 async function getRepos(): Promise<string[]> {
-  const { stdout } = await execAsync(`find "${WORKSPACE}" -maxdepth 2 -name ".git" -type d 2>/dev/null`);
-  return stdout.trim().split('\n').filter(Boolean).map((d) => d.replace('/.git', ''));
+  // Cross-platform: scan workspace for .git dirs up to 2 levels deep
+  const repos: string[] = [];
+  try {
+    const entries = await fs.readdir(WORKSPACE, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const entryPath = path.join(WORKSPACE, entry.name);
+      // Check if this dir itself is a git repo
+      try {
+        await fs.access(path.join(entryPath, '.git'));
+        repos.push(entryPath);
+        continue;
+      } catch {}
+      // Check one level deeper
+      try {
+        const subEntries = await fs.readdir(entryPath, { withFileTypes: true });
+        for (const sub of subEntries) {
+          if (!sub.isDirectory()) continue;
+          const subPath = path.join(entryPath, sub.name);
+          try {
+            await fs.access(path.join(subPath, '.git'));
+            repos.push(subPath);
+          } catch {}
+        }
+      } catch {}
+    }
+  } catch {}
+  // Also check if WORKSPACE itself is a git repo
+  try {
+    await fs.access(path.join(WORKSPACE, '.git'));
+    if (!repos.includes(WORKSPACE)) repos.push(WORKSPACE);
+  } catch {}
+  return repos;
 }
 
 async function getRepoStatus(repoPath: string): Promise<RepoStatus> {
@@ -36,19 +69,19 @@ async function getRepoStatus(repoPath: string): Promise<RepoStatus> {
 
   try {
     // Get branch
-    const { stdout: branch } = await execAsync(`cd "${repoPath}" && git rev-parse --abbrev-ref HEAD 2>/dev/null`).catch(() => ({ stdout: 'unknown' }));
+    const { stdout: branch } = await execAsync(`git rev-parse --abbrev-ref HEAD`, { ...execOpts, cwd: repoPath }).catch(() => ({ stdout: 'unknown' }));
 
     // Get ahead/behind
     let ahead = 0, behind = 0;
     try {
-      const { stdout: abStr } = await execAsync(`cd "${repoPath}" && git rev-list --left-right --count HEAD...@{upstream} 2>/dev/null`).catch(() => ({ stdout: '0\t0' }));
+      const { stdout: abStr } = await execAsync(`git rev-list --left-right --count HEAD...@{upstream}`, { ...execOpts, cwd: repoPath }).catch(() => ({ stdout: '0\t0' }));
       const parts = abStr.trim().split('\t');
       ahead = parseInt(parts[0]) || 0;
       behind = parseInt(parts[1]) || 0;
     } catch {}
 
     // Get status
-    const { stdout: statusOut } = await execAsync(`cd "${repoPath}" && git status --porcelain 2>/dev/null`).catch(() => ({ stdout: '' }));
+    const { stdout: statusOut } = await execAsync(`git status --porcelain`, { ...execOpts, cwd: repoPath }).catch(() => ({ stdout: '' }));
     const lines = statusOut.trim().split('\n').filter(Boolean);
 
     const staged: string[] = [];
@@ -69,7 +102,7 @@ async function getRepoStatus(repoPath: string): Promise<RepoStatus> {
     // Last commit
     let lastCommit = null;
     try {
-      const { stdout: commitOut } = await execAsync(`cd "${repoPath}" && git log -1 --format="%H|%s|%an|%ar" 2>/dev/null`);
+      const { stdout: commitOut } = await execAsync(`git log -1 --format="%H|%s|%an|%ar"`, { ...execOpts, cwd: repoPath });
       const parts = commitOut.trim().split('|');
       if (parts.length >= 4) {
         lastCommit = { hash: parts[0].slice(0, 8), message: parts[1], author: parts[2], date: parts[3] };
@@ -79,7 +112,7 @@ async function getRepoStatus(repoPath: string): Promise<RepoStatus> {
     // Remote URL
     let remoteUrl = '';
     try {
-      const { stdout: remote } = await execAsync(`cd "${repoPath}" && git remote get-url origin 2>/dev/null`);
+      const { stdout: remote } = await execAsync(`git remote get-url origin`, { ...execOpts, cwd: repoPath });
       remoteUrl = remote.trim();
     } catch {}
 
@@ -140,22 +173,22 @@ export async function POST(request: NextRequest) {
 
     switch (action) {
       case 'status': {
-        const { stdout } = await execAsync(`cd "${repo}" && git status 2>&1`);
+        const { stdout } = await execAsync(`git status`, { ...execOpts, cwd: repo });
         output = stdout;
         break;
       }
       case 'pull': {
-        const { stdout } = await execAsync(`cd "${repo}" && git pull 2>&1`);
+        const { stdout } = await execAsync(`git pull`, { ...execOpts, cwd: repo });
         output = stdout;
         break;
       }
       case 'log': {
-        const { stdout } = await execAsync(`cd "${repo}" && git log --oneline -20 2>&1`);
+        const { stdout } = await execAsync(`git log --oneline -20`, { ...execOpts, cwd: repo });
         output = stdout;
         break;
       }
       case 'diff': {
-        const { stdout } = await execAsync(`cd "${repo}" && git diff --stat 2>&1`);
+        const { stdout } = await execAsync(`git diff --stat`, { ...execOpts, cwd: repo });
         output = stdout || 'No changes';
         break;
       }

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readFile, stat } from "fs/promises";
 import path from "path";
+import { OPENCLAW_WORKSPACE, OPENCLAW_MEDIA } from "@/lib/paths";
 
 const ALLOWED_PREFIXES = [
-  (process.env.OPENCLAW_WORKSPACE || "/root/.openclaw/workspace") + "/",
-  (process.env.OPENCLAW_DIR || "/root/.openclaw") + "/media/",
+  OPENCLAW_WORKSPACE + path.sep,
+  OPENCLAW_MEDIA + path.sep,
 ];
 
 const ALLOWED_EXTENSIONS: Record<string, string> = {

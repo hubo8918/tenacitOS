@@ -25,15 +25,19 @@ export default function Office3D() {
   const [controlMode, setControlMode] = useState<'orbit' | 'fps'>('orbit');
   const [avatarPositions, setAvatarPositions] = useState<Map<string, any>>(new Map());
   
-  // Mock data - TODO: Replace with real API data
-  const [agentStates] = useState<Record<string, AgentState>>({
-    main: { id: 'main', status: 'working', currentTask: 'Procesando emails', model: 'opus', tokensPerHour: 15000, tasksInQueue: 3, uptime: 12 },
-    academic: { id: 'academic', status: 'idle', model: 'sonnet', tokensPerHour: 0, tasksInQueue: 0, uptime: 8 },
-    studio: { id: 'studio', status: 'thinking', currentTask: 'Generando guión YouTube', model: 'opus', tokensPerHour: 8000, tasksInQueue: 1, uptime: 5 },
-    linkedin: { id: 'linkedin', status: 'working', currentTask: 'Redactando post', model: 'sonnet', tokensPerHour: 5000, tasksInQueue: 2, uptime: 10 },
-    social: { id: 'social', status: 'idle', model: 'sonnet', tokensPerHour: 0, tasksInQueue: 0, uptime: 7 },
-    infra: { id: 'infra', status: 'error', currentTask: 'Failed deployment', model: 'haiku', tokensPerHour: 1000, tasksInQueue: 0, uptime: 15 },
+  const defaultState = (id: string): AgentState => ({
+    id,
+    status: 'idle',
+    model: 'sonnet',
+    tokensPerHour: 0,
+    tasksInQueue: 0,
+    uptime: 0,
   });
+
+  // Mock data - TODO: Replace with real API data
+  const [agentStates] = useState<Record<string, AgentState>>(
+    Object.fromEntries(AGENTS.map(a => [a.id, defaultState(a.id)]))
+  );
 
   const handleDeskClick = (agentId: string) => {
     setSelectedAgent(agentId);
@@ -115,7 +119,7 @@ export default function Office3D() {
             <AgentDesk
               key={agent.id}
               agent={agent}
-              state={agentStates[agent.id]}
+              state={agentStates[agent.id] ?? defaultState(agent.id)}
               onClick={() => handleDeskClick(agent.id)}
               isSelected={selectedAgent === agent.id}
             />
@@ -126,7 +130,7 @@ export default function Office3D() {
             <MovingAvatar
               key={`avatar-${agent.id}`}
               agent={agent}
-              state={agentStates[agent.id]}
+              state={agentStates[agent.id] ?? defaultState(agent.id)}
               officeBounds={{ minX: -8, maxX: 8, minZ: -7, maxZ: 7 }}
               obstacles={obstacles}
               otherAvatarPositions={avatarPositions}
@@ -178,7 +182,7 @@ export default function Office3D() {
       {selectedAgent && (
         <AgentPanel
           agent={AGENTS.find(a => a.id === selectedAgent)!}
-          state={agentStates[selectedAgent]}
+          state={agentStates[selectedAgent] ?? defaultState(selectedAgent)}
           onClose={handleClosePanel}
         />
       )}

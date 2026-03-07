@@ -25,14 +25,15 @@ interface MovingAvatarProps {
   onPositionUpdate: (id: string, pos: Vector3) => void;
 }
 
-export default function MovingAvatar({ 
-  agent, 
-  state, 
-  officeBounds, 
-  obstacles, 
+export default function MovingAvatar({
+  agent,
+  state: rawState,
+  officeBounds,
+  obstacles,
   otherAvatarPositions,
-  onPositionUpdate 
+  onPositionUpdate
 }: MovingAvatarProps) {
+  const state = rawState ?? { id: agent.id, status: 'idle' as const };
   const groupRef = useRef<Group>(null);
   
   // Posición inicial completamente aleatoria SIN colisiones

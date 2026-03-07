@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { exec } from "child_process";
 import { promisify } from "util";
 import os from "os";
+import fs from "node:fs";
 
 const execAsync = promisify(exec);
 
@@ -27,42 +28,55 @@ export async function GET() {
     let diskUsed = 0;
     let diskTotal = 100;
     try {
-      const { stdout } = await execAsync("df -BG / | tail -1");
-      const parts = stdout.trim().split(/\s+/);
-      diskTotal = parseInt(parts[1].replace("G", ""));
-      diskUsed = parseInt(parts[2].replace("G", ""));
+      if (process.platform === "win32") {
+        const stats = fs.statfsSync("C:/");
+        diskTotal = Math.round((stats.blocks * stats.bsize) / 1073741824);
+        diskUsed = diskTotal - Math.round((stats.bfree * stats.bsize) / 1073741824);
+      } else {
+        const { stdout } = await execAsync("df -BG / | tail -1");
+        const parts = stdout.trim().split(/\s+/);
+        diskTotal = parseInt(parts[1].replace("G", ""));
+        diskUsed = parseInt(parts[2].replace("G", ""));
+      }
     } catch (error) {
       console.error("Failed to get disk stats:", error);
     }
 
-    // Systemd Services (count active ones)
+    const isLinux = process.platform === "linux";
+
+    // Systemd Services (count active ones) — Linux only
     let activeServices = 0;
     let totalServices = SYSTEMD_SERVICES.length;
-    try {
-      for (const name of SYSTEMD_SERVICES) {
-        const { stdout } = await execAsync(`systemctl is-active ${name} 2>/dev/null || true`);
-        if (stdout.trim() === "active") activeServices++;
+    if (isLinux) {
+      try {
+        for (const name of SYSTEMD_SERVICES) {
+          const { stdout } = await execAsync(`systemctl is-active ${name} 2>/dev/null || true`);
+          if (stdout.trim() === "active") activeServices++;
+        }
+      } catch (error) {
+        console.error("Failed to get systemd stats:", error);
       }
-    } catch (error) {
-      console.error("Failed to get systemd stats:", error);
     }
 
     // Tailscale VPN Status
     let vpnActive = false;
     try {
-      const { stdout } = await execAsync("tailscale status 2>/dev/null || true");
+      const tsCmd = isLinux ? "tailscale status 2>/dev/null || true" : "tailscale status";
+      const { stdout } = await execAsync(tsCmd);
       vpnActive = stdout.trim().length > 0 && !stdout.includes("Tailscale is stopped");
     } catch {
       vpnActive = true; // We know it's active
     }
 
-    // Firewall Status
+    // Firewall Status (UFW on Linux only)
     let firewallActive = true;
-    try {
-      const { stdout } = await execAsync("ufw status 2>/dev/null | head -1 || true");
-      firewallActive = stdout.includes("active");
-    } catch {
-      firewallActive = true;
+    if (isLinux) {
+      try {
+        const { stdout } = await execAsync("ufw status 2>/dev/null | head -1 || true");
+        firewallActive = stdout.includes("active");
+      } catch {
+        firewallActive = true;
+      }
     }
 
     // Uptime

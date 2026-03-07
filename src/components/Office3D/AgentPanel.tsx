@@ -9,7 +9,8 @@ interface AgentPanelProps {
   onClose: () => void;
 }
 
-export default function AgentPanel({ agent, state, onClose }: AgentPanelProps) {
+export default function AgentPanel({ agent, state: rawState, onClose }: AgentPanelProps) {
+  const state = rawState ?? { id: agent.id, status: 'idle' as const };
   const getStatusColor = () => {
     switch (state.status) {
       case 'working': return 'text-green-500';
@@ -96,22 +97,20 @@ export default function AgentPanel({ agent, state, onClose }: AgentPanelProps) {
         </div>
       </div>
 
-      {/* Activity Feed (placeholder) */}
+      {/* Activity Feed */}
       <div>
         <h3 className="text-sm font-semibold text-gray-400 mb-3">Recent Activity</h3>
         <div className="space-y-2">
-          <div className="bg-white/5 p-3 rounded-lg text-sm">
-            <p className="text-gray-400 text-xs mb-1">2 minutes ago</p>
-            <p>Completed task: Generate report</p>
-          </div>
-          <div className="bg-white/5 p-3 rounded-lg text-sm">
-            <p className="text-gray-400 text-xs mb-1">15 minutes ago</p>
-            <p>Started: {state.currentTask || 'Processing data'}</p>
-          </div>
-          <div className="bg-white/5 p-3 rounded-lg text-sm">
-            <p className="text-gray-400 text-xs mb-1">1 hour ago</p>
-            <p>Switched model to {state.model}</p>
-          </div>
+          {state.currentTask ? (
+            <div className="bg-white/5 p-3 rounded-lg text-sm">
+              <p className="text-gray-400 text-xs mb-1">Current</p>
+              <p>{state.currentTask}</p>
+            </div>
+          ) : (
+            <div className="bg-white/5 p-3 rounded-lg text-sm text-gray-500">
+              No recent activity
+            </div>
+          )}
         </div>
       </div>
 

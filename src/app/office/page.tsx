@@ -1,4 +1,4 @@
-import Office3D from '@/components/Office3D/Office3D';
+import OfficeClient from './OfficeClient';
 
 export const metadata = {
   title: 'The Office 3D | Mission Control',
@@ -6,5 +6,5 @@ export const metadata = {
 };
 
 export default function OfficePage() {
-  return <Office3D />;
+  return <OfficeClient />;
 }
