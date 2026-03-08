@@ -63,20 +63,51 @@ interface OpenClawSessionsPayload {
   }>;
 }
 
+interface TeamBuildTrace {
+  overlayMs: number;
+  agentsMs: number;
+  sessionsMs: number;
+  mergeMs: number;
+  totalMs: number;
+  overlayCount: number;
+  realAgentCount: number;
+  sessionCount: number;
+  fallbackOverlayOnly: boolean;
+}
+
+interface TeamBuildResult {
+  team: TeamAgent[];
+  trace: TeamBuildTrace;
+}
+
 interface TeamCacheEntry {
   team: TeamAgent[];
   updatedAt: number;
 }
 
 const TEAM_CACHE_TTL_MS = 15_000;
+const TEAM_TRACE_SLOW_MS = 6_000;
 let teamCache: TeamCacheEntry | null = null;
-let teamRefreshInFlight: Promise<TeamAgent[]> | null = null;
+let teamRefreshInFlight: Promise<TeamBuildResult> | null = null;
 
 const OPENCLAW_CMD = "openclaw";
 const OPENCLAW_POWERSHELL_SCRIPT =
   process.platform === "win32" && process.env.APPDATA
     ? path.join(process.env.APPDATA, "npm", "openclaw.ps1")
     : null;
+
+function logTeamTrace(event: string, payload: object): void {
+  const withTotal = payload as { totalMs?: unknown };
+  const totalMs = typeof withTotal.totalMs === "number" ? withTotal.totalMs : null;
+  const shouldLog =
+    process.env.MC_TEAM_TRACE === "1" ||
+    process.env.NODE_ENV !== "production" ||
+    (typeof totalMs === "number" && totalMs >= TEAM_TRACE_SLOW_MS);
+
+  if (!shouldLog) return;
+
+  console.info(`[team-api] ${event} ${JSON.stringify(payload)}`);
+}
 
 function runOpenClaw(args: string[], timeoutMs = 12000): string {
   const execOptions = {
@@ -369,55 +400,93 @@ function syncAgentIdentity(realAgent: OpenClawAgent, name?: string, emoji?: stri
   runOpenClaw(args);
 }
 
-async function buildMergedTeam(): Promise<TeamAgent[]> {
+async function buildMergedTeam(): Promise<TeamBuildResult> {
+  const totalStart = Date.now();
+
+  const overlayStart = Date.now();
   const overlay = await loadTeamOverlay();
+  const overlayMs = Date.now() - overlayStart;
   const overlayMap = new Map(overlay.map((item) => [item.id, item]));
 
+  const agentsStart = Date.now();
   let realAgents: OpenClawAgent[] = [];
+  let agentsLoadFailed = false;
   try {
     realAgents = listOpenClawAgents().filter((agent) => agent.id !== "main");
   } catch {
+    agentsLoadFailed = true;
     realAgents = [];
   }
+  const agentsMs = Date.now() - agentsStart;
 
-  const sessionStatsMap = buildSessionStatsMap(listOpenClawSessions());
+  const sessionsStart = Date.now();
+  const sessionsPayload = listOpenClawSessions();
+  const sessionsMs = Date.now() - sessionsStart;
+  const sessionCount = Array.isArray(sessionsPayload.sessions)
+    ? sessionsPayload.sessions.length
+    : 0;
+  const sessionStatsMap = buildSessionStatsMap(sessionsPayload);
 
-  if (realAgents.length === 0 && overlay.length > 0) {
-    return overlay.map(fallbackFromOverlay);
-  }
-
+  const mergeStart = Date.now();
+  let fallbackOverlayOnly = false;
   const merged: TeamAgent[] = [];
 
-  // Keep existing card order from overlay for UX consistency.
-  for (const entry of overlay) {
-    const real = realAgents.find((agent) => agent.id === entry.id);
-    if (!real) {
-      merged.push(fallbackFromOverlay(entry));
-      continue;
+  if (realAgents.length === 0 && overlay.length > 0) {
+    fallbackOverlayOnly = true;
+    merged.push(...overlay.map(fallbackFromOverlay));
+  } else {
+    // Keep existing card order from overlay for UX consistency.
+    for (const entry of overlay) {
+      const real = realAgents.find((agent) => agent.id === entry.id);
+      if (!real) {
+        merged.push(fallbackFromOverlay(entry));
+        continue;
+      }
+
+      merged.push(
+        mergeTeamAgent(
+          entry,
+          real,
+          sessionStatsMap.get(entry.id) || { activeSessions: 0, lastActiveAt: null }
+        )
+      );
     }
 
-    merged.push(
-      mergeTeamAgent(
-        entry,
-        real,
-        sessionStatsMap.get(entry.id) || { activeSessions: 0, lastActiveAt: null }
-      )
-    );
+    // Include real agents that exist locally but are not yet in overlay.
+    for (const real of realAgents) {
+      if (overlayMap.has(real.id)) continue;
+      merged.push(
+        mergeTeamAgent(
+          undefined,
+          real,
+          sessionStatsMap.get(real.id) || { activeSessions: 0, lastActiveAt: null }
+        )
+      );
+    }
   }
 
-  // Include real agents that exist locally but are not yet in overlay.
-  for (const real of realAgents) {
-    if (overlayMap.has(real.id)) continue;
-    merged.push(
-      mergeTeamAgent(
-        undefined,
-        real,
-        sessionStatsMap.get(real.id) || { activeSessions: 0, lastActiveAt: null }
-      )
-    );
+  const mergeMs = Date.now() - mergeStart;
+  const totalMs = Date.now() - totalStart;
+
+  const trace: TeamBuildTrace = {
+    overlayMs,
+    agentsMs,
+    sessionsMs,
+    mergeMs,
+    totalMs,
+    overlayCount: overlay.length,
+    realAgentCount: realAgents.length,
+    sessionCount,
+    fallbackOverlayOnly,
+  };
+
+  if (agentsLoadFailed) {
+    logTeamTrace("build.agents_failed", trace);
+  } else {
+    logTeamTrace("build.completed", trace);
   }
 
-  return merged;
+  return { team: merged, trace };
 }
 
 function cloneTeam(team: TeamAgent[]): TeamAgent[] {
@@ -445,15 +514,15 @@ function invalidateTeamCache(): void {
   teamRefreshInFlight = null;
 }
 
-async function refreshTeamCache(): Promise<TeamAgent[]> {
+async function refreshTeamCache(): Promise<TeamBuildResult> {
   if (teamRefreshInFlight) {
     return teamRefreshInFlight;
   }
 
   teamRefreshInFlight = (async () => {
-    const nextTeam = await buildMergedTeam();
-    setTeamCache(nextTeam);
-    return nextTeam;
+    const next = await buildMergedTeam();
+    setTeamCache(next.team);
+    return next;
   })().finally(() => {
     teamRefreshInFlight = null;
   });
@@ -469,17 +538,21 @@ async function resolveTeamForGet(): Promise<TeamAgent[]> {
 
   try {
     const refreshed = await refreshTeamCache();
-    return cloneTeam(refreshed);
+    return cloneTeam(refreshed.team);
   } catch {
     if (teamCache?.team) {
+      const ageMs = Date.now() - teamCache.updatedAt;
+      logTeamTrace("build.failed_using_stale_cache", { ageMs });
       return cloneTeam(teamCache.team);
     }
 
     const overlay = await loadTeamOverlay();
     if (overlay.length > 0) {
+      logTeamTrace("build.failed_using_overlay", { overlayCount: overlay.length });
       return overlay.map(fallbackFromOverlay);
     }
 
+    logTeamTrace("build.failed_empty", {});
     return [];
   }
 }
