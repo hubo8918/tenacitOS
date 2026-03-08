@@ -14,11 +14,32 @@ interface TeamAgent {
   status: "online" | "offline";
   tier: string;
   specialBadge?: string;
+  activeSessions?: number;
+  lastActiveAt?: string | null;
 }
 
 interface AgentCardProps {
   agent: TeamAgent;
   onUpdate?: () => void;
+}
+
+function formatLastActive(lastActiveAt?: string | null): string {
+  if (!lastActiveAt) return "never";
+
+  const date = new Date(lastActiveAt);
+  if (Number.isNaN(date.getTime())) return "unknown";
+
+  const diffMs = Date.now() - date.getTime();
+  if (diffMs < 60_000) return "just now";
+
+  const minutes = Math.floor(diffMs / 60_000);
+  if (minutes < 60) return `${minutes}m ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }
 
 export function AgentCard({ agent, onUpdate }: AgentCardProps) {
@@ -279,8 +300,23 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
           ))}
         </div>
 
-        {/* Footer: edit link */}
-        <div className="flex justify-end">
+        {/* Footer: activity + edit link */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-[11px] leading-tight" style={{ color: "var(--text-muted)" }}>
+            <p>
+              live sessions:{" "}
+              <span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>
+                {agent.activeSessions ?? 0}
+              </span>
+            </p>
+            <p>
+              last active:{" "}
+              <span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>
+                {formatLastActive(agent.lastActiveAt)}
+              </span>
+            </p>
+          </div>
+
           <button
             onClick={() => setEditing(true)}
             className="flex items-center gap-1 text-xs transition-colors"

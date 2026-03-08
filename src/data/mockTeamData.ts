@@ -9,6 +9,8 @@ export interface TeamAgent {
   status: "online" | "offline";
   tier: "leadership" | "operations" | "io" | "meta";
   specialBadge?: string; // e.g. "The Engineer" for Codex
+  activeSessions?: number;
+  lastActiveAt?: string | null;
 }
 
 export interface TierConfig {

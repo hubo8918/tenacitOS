@@ -39,6 +39,8 @@ interface TeamAgent {
   status: TeamStatus;
   tier: TeamTier;
   specialBadge?: string;
+  activeSessions: number;
+  lastActiveAt: string | null;
 }
 
 interface OpenClawAgent {
@@ -225,9 +227,14 @@ function listOpenClawSessions(): OpenClawSessionsPayload {
   }
 }
 
-function buildActiveSessionsMap(payload: OpenClawSessionsPayload): Map<string, number> {
+interface AgentSessionStats {
+  activeSessions: number;
+  lastActiveAt: string | null;
+}
+
+function buildSessionStatsMap(payload: OpenClawSessionsPayload): Map<string, AgentSessionStats> {
   const sessions = Array.isArray(payload.sessions) ? payload.sessions : [];
-  const map = new Map<string, number>();
+  const map = new Map<string, AgentSessionStats>();
   const now = Date.now();
 
   for (const session of sessions) {
@@ -236,9 +243,18 @@ function buildActiveSessionsMap(payload: OpenClawSessionsPayload): Map<string, n
     const updatedAt = session.updatedAt;
 
     if (typeof agentId !== "string" || typeof updatedAt !== "number") continue;
-    if (now - updatedAt > ACTIVE_WINDOW_MS) continue;
 
-    map.set(agentId, (map.get(agentId) || 0) + 1);
+    const stats = map.get(agentId) || { activeSessions: 0, lastActiveAt: null };
+
+    if (!stats.lastActiveAt || updatedAt > Date.parse(stats.lastActiveAt)) {
+      stats.lastActiveAt = new Date(updatedAt).toISOString();
+    }
+
+    if (now - updatedAt <= ACTIVE_WINDOW_MS) {
+      stats.activeSessions += 1;
+    }
+
+    map.set(agentId, stats);
   }
 
   return map;
@@ -247,7 +263,7 @@ function buildActiveSessionsMap(payload: OpenClawSessionsPayload): Map<string, n
 function mergeTeamAgent(
   overlay: TeamOverlay | undefined,
   realAgent: OpenClawAgent,
-  activeSessions: number
+  sessionStats: AgentSessionStats
 ): TeamAgent {
   const fallbackTags: TeamTag[] = [{ label: "Local", color: "#30D158" }];
 
@@ -266,11 +282,13 @@ function mergeTeamAgent(
       "Local OpenClaw agent connected to Mission Control.",
     tags: overlay?.tags && overlay.tags.length > 0 ? overlay.tags : fallbackTags,
     status:
-      activeSessions > 0
+      sessionStats.activeSessions > 0
         ? "online"
         : normalizeStatus(overlay?.status) || "offline",
     tier: normalizeTier(overlay?.tier),
     specialBadge: overlay?.specialBadge,
+    activeSessions: sessionStats.activeSessions,
+    lastActiveAt: sessionStats.lastActiveAt,
   };
 }
 
@@ -319,7 +337,7 @@ async function buildMergedTeam(): Promise<TeamAgent[]> {
   const overlayMap = new Map(overlay.map((item) => [item.id, item]));
 
   const realAgents = listOpenClawAgents().filter((agent) => agent.id !== "main");
-  const activityMap = buildActiveSessionsMap(listOpenClawSessions());
+  const sessionStatsMap = buildSessionStatsMap(listOpenClawSessions());
 
   const merged: TeamAgent[] = [];
 
@@ -328,13 +346,25 @@ async function buildMergedTeam(): Promise<TeamAgent[]> {
     const real = realAgents.find((agent) => agent.id === entry.id);
     if (!real) continue;
 
-    merged.push(mergeTeamAgent(entry, real, activityMap.get(entry.id) || 0));
+    merged.push(
+      mergeTeamAgent(
+        entry,
+        real,
+        sessionStatsMap.get(entry.id) || { activeSessions: 0, lastActiveAt: null }
+      )
+    );
   }
 
   // Include real agents that exist locally but are not yet in overlay.
   for (const real of realAgents) {
     if (overlayMap.has(real.id)) continue;
-    merged.push(mergeTeamAgent(undefined, real, activityMap.get(real.id) || 0));
+    merged.push(
+      mergeTeamAgent(
+        undefined,
+        real,
+        sessionStatsMap.get(real.id) || { activeSessions: 0, lastActiveAt: null }
+      )
+    );
   }
 
   return merged;
@@ -424,10 +454,17 @@ export async function POST(request: NextRequest) {
     overlays.push(newOverlay);
     await saveTeamOverlay(overlays);
 
-    const activeMap = buildActiveSessionsMap(listOpenClawSessions());
-    return NextResponse.json(mergeTeamAgent(newOverlay, real, activeMap.get(id) || 0), {
-      status: 201,
-    });
+    const sessionStatsMap = buildSessionStatsMap(listOpenClawSessions());
+    return NextResponse.json(
+      mergeTeamAgent(
+        newOverlay,
+        real,
+        sessionStatsMap.get(id) || { activeSessions: 0, lastActiveAt: null }
+      ),
+      {
+        status: 201,
+      }
+    );
   } catch {
     return NextResponse.json({ error: "Failed to create agent" }, { status: 500 });
   }
@@ -481,8 +518,14 @@ export async function PUT(request: NextRequest) {
     overlays[index] = nextOverlay;
     await saveTeamOverlay(overlays);
 
-    const activeMap = buildActiveSessionsMap(listOpenClawSessions());
-    return NextResponse.json(mergeTeamAgent(nextOverlay, real, activeMap.get(id) || 0));
+    const sessionStatsMap = buildSessionStatsMap(listOpenClawSessions());
+    return NextResponse.json(
+      mergeTeamAgent(
+        nextOverlay,
+        real,
+        sessionStatsMap.get(id) || { activeSessions: 0, lastActiveAt: null }
+      )
+    );
   } catch {
     return NextResponse.json({ error: "Failed to update agent" }, { status: 500 });
   }
