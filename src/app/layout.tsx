@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Sora, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -22,7 +22,6 @@ export const metadata: Metadata = {
   title: "Mission Control - OpenClaw",
   description: "Your OpenClaw agent dashboard",
   manifest: "/manifest.json",
-  themeColor: "#1a1a2e",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -30,6 +29,10 @@ export const metadata: Metadata = {
   icons: {
     apple: "/apple-touch-icon.png",
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#1a1a2e",
 };
 
 export default function RootLayout({
@@ -40,7 +43,14 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <head>
-        <script dangerouslySetInnerHTML={{__html:`if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js")`}} />
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              process.env.NODE_ENV === "production"
+                ? `if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js"));}`
+                : `if("serviceWorker" in navigator){navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister()));}`,
+          }}
+        />
       </head>
       <body 
         className={`${inter.variable} ${sora.variable} ${jetbrainsMono.variable} font-sans`}

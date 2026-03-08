@@ -118,12 +118,7 @@ export async function GET(request: NextRequest) {
 
 async function listSessions(): Promise<NextResponse> {
   try {
-    const output = execSync('openclaw sessions list --json', {
-      timeout: 10000,
-      encoding: 'utf-8',
-      windowsHide: true,
-    });
-
+    const output = runSessionsList();
     const data = JSON.parse(output);
     const rawSessions: RawSession[] = data.sessions || [];
 
@@ -187,6 +182,30 @@ interface JsonlLine {
   modelId?: string;
   customType?: string;
   data?: unknown;
+}
+
+function runSessionsList(): string {
+  const commands = [
+    'openclaw sessions --json',
+    // Backward compatibility with older OpenClaw CLIs
+    'openclaw sessions list --json',
+  ];
+
+  let lastError: unknown;
+
+  for (const command of commands) {
+    try {
+      return execSync(command, {
+        timeout: 10000,
+        encoding: 'utf-8',
+        windowsHide: true,
+      });
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError;
 }
 
 async function getSessionMessages(sessionId: string): Promise<NextResponse> {
