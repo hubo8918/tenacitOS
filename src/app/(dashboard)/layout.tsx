@@ -1,6 +1,7 @@
 "use client";
 
-import { Dock, TopBar, StatusBar } from "@/components/TenacitOS";
+import { TopBar, StatusBar } from "@/components/TenacitOS";
+import { Sidebar } from "@/components/Sidebar";
 
 export default function DashboardLayout({
   children,
@@ -9,12 +10,12 @@ export default function DashboardLayout({
 }) {
   return (
     <div className="tenacios-shell" style={{ minHeight: "100vh" }}>
-      <Dock />
+      <Sidebar />
       <TopBar />
       
       <main
         style={{
-          marginLeft: "68px", // Width of dock
+          marginLeft: "16rem", // Width of dock
           marginTop: "48px", // Height of top bar
           marginBottom: "32px", // Height of status bar
           minHeight: "calc(100vh - 48px - 32px)",

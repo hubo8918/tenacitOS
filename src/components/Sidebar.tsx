@@ -4,53 +4,89 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard,
-  Activity,
-  Timer,
   Brain,
+  Users,
+  Settings,
+  LogOut,
+  Menu,
+  X,
+  Terminal,
+  GitBranch,
+  ListTodo,
+  Bot,
+  FileText,
+  CheckCircle2,
+  Crown,
+  CalendarDays,
+  FolderKanban,
+  Building2,
+  UserCircle,
+  Monitor,
+  Radar,
+  Factory,
+  MessageCircle,
+  LayoutDashboard,
+  Zap,
+  SquareTerminal,
+  GitFork,
+  Workflow,
+  Activity,
+  FolderOpen,
+  Timer,
+  History,
   Search,
   BarChart3,
   FileBarChart,
   Puzzle,
-  FolderOpen,
-  Terminal,
-  LogOut,
-  Settings,
   User,
-  Menu,
-  X,
-  Users,
-  Gamepad2,
-  GitBranch,
-  Workflow,
-  Zap,
-  Server,
-  GitFork,
-  SquareTerminal,
-  History,
 } from "lucide-react";
 import { getAgentDisplayName } from "@/config/branding";
 
-const navItems = [
+interface NavItem {
+  href: string;
+  label: string;
+  icon: any;
+  highlight?: boolean;
+  disabled?: boolean;
+}
+
+const navItems: NavItem[] = [
+  // Core
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/agents", label: "Agents", icon: Users },
-  { href: "/office", label: "🎮 Office", icon: Gamepad2, highlight: true },
+  { href: "/office", label: "Office", icon: Building2, highlight: true },
   { href: "/actions", label: "Quick Actions", icon: Zap },
-  { href: "/system", label: "System", icon: Server },
+  // Agents
+  { href: "/agents", label: "Agents", icon: Bot },
+  { href: "/agents/team", label: "Team", icon: UserCircle },
+  { href: "/agents/projects", label: "Projects", icon: FolderKanban },
+  { href: "/agents/tasks", label: "Tasks", icon: ListTodo },
+  { href: "/agents/calendar", label: "Calendar", icon: CalendarDays },
+  { href: "/agents/docs", label: "Content", icon: FileText },
+  // System & Tools
+  { href: "/system", label: "System", icon: Monitor },
   { href: "/logs", label: "Live Logs", icon: Terminal },
   { href: "/terminal", label: "Terminal", icon: SquareTerminal },
   { href: "/git", label: "Git", icon: GitFork },
   { href: "/workflows", label: "Workflows", icon: Workflow },
-  { href: "/activity", label: "Activity", icon: Activity },
+  // Data
   { href: "/memory", label: "Memory", icon: Brain },
   { href: "/files", label: "Files", icon: FolderOpen },
-  { href: "/cron", label: "Cron Jobs", icon: Timer },
   { href: "/sessions", label: "Sessions", icon: History },
-  { href: "/search", label: "Search", icon: Search },
+  { href: "/cron", label: "Cron Jobs", icon: Timer },
+  // Insights
+  { href: "/activity", label: "Activity", icon: Activity },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/reports", label: "Reports", icon: FileBarChart },
+  { href: "/search", label: "Search", icon: Search },
   { href: "/skills", label: "Skills", icon: Puzzle },
-  { href: "/about", label: getAgentDisplayName(), icon: User },
+  // New (disabled)
+  { href: "/agents/approvals", label: "Approvals", icon: CheckCircle2, disabled: true },
+  { href: "/agents/council", label: "Council", icon: Crown, disabled: true },
+  { href: "/people", label: "People", icon: Users, disabled: true },
+  { href: "/radar", label: "Radar", icon: Radar, disabled: true },
+  { href: "/factory", label: "Factory", icon: Factory, disabled: true },
+  { href: "/pipeline", label: "Pipeline", icon: GitBranch, disabled: true },
+  { href: "/feedback", label: "Feedback", icon: MessageCircle, disabled: true },
 ];
 
 export function Sidebar() {
@@ -67,7 +103,7 @@ export function Sidebar() {
         setIsOpen(false);
       }
     };
-    
+
     checkMobile();
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
@@ -100,6 +136,14 @@ export function Sidebar() {
 
   const toggleSidebar = () => setIsOpen(!isOpen);
   const closeSidebar = () => setIsOpen(false);
+
+  const isItemActive = (item: NavItem): boolean => {
+    // For / and /agents routes, match exactly to avoid false positives
+    if (item.href === "/" || item.href === "/agents") {
+      return pathname === item.href;
+    }
+    return pathname === item.href || pathname.startsWith(item.href + "/");
+  };
 
   return (
     <>
@@ -216,11 +260,29 @@ export function Sidebar() {
         <nav className="flex-1 pt-4">
           <ul className="space-y-0.5">
             {navItems.map((item) => {
-              const isActive = pathname === item.href;
+              const isActive = isItemActive(item);
               const Icon = item.icon;
 
+              if (item.disabled) {
+                return (
+                  <li key={item.href + item.label}>
+                    <div
+                      className="nav-item w-full"
+                      style={{
+                        color: "var(--text-muted)",
+                        opacity: 0.4,
+                        cursor: "not-allowed",
+                      }}
+                    >
+                      <Icon className="w-5 h-5" style={{ color: "var(--text-muted)" }} />
+                      {item.label}
+                    </div>
+                  </li>
+                );
+              }
+
               return (
-                <li key={item.href}>
+                <li key={item.href + item.label}>
                   <Link
                     href={item.href}
                     className={`nav-item w-full ${isActive ? "active" : ""}`}

@@ -34,7 +34,7 @@ export function TopBar() {
         style={{
           position: "fixed",
           top: 0,
-          left: "68px", // Width of dock
+          left: "16rem", // Width of dock
           right: 0,
           height: "48px",
           backgroundColor: "var(--surface)",

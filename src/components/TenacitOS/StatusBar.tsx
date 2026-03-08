@@ -112,7 +112,7 @@ export function StatusBar() {
         borderTop: "1px solid var(--border)",
         display: "flex",
         alignItems: "center",
-        padding: "0 16px 0 84px",
+        padding: "0 16px 0 calc(16rem + 16px)",
         gap: "16px",
         zIndex: 40,
       }}
