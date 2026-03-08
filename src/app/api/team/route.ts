@@ -63,16 +63,25 @@ interface OpenClawSessionsPayload {
   }>;
 }
 
+interface TeamCacheEntry {
+  team: TeamAgent[];
+  updatedAt: number;
+}
+
+const TEAM_CACHE_TTL_MS = 15_000;
+let teamCache: TeamCacheEntry | null = null;
+let teamRefreshInFlight: Promise<TeamAgent[]> | null = null;
+
 const OPENCLAW_CMD = "openclaw";
 const OPENCLAW_POWERSHELL_SCRIPT =
   process.platform === "win32" && process.env.APPDATA
     ? path.join(process.env.APPDATA, "npm", "openclaw.ps1")
     : null;
 
-function runOpenClaw(args: string[]): string {
+function runOpenClaw(args: string[], timeoutMs = 12000): string {
   const execOptions = {
     encoding: "utf-8" as BufferEncoding,
-    timeout: 15000,
+    timeout: timeoutMs,
     windowsHide: true,
   };
 
@@ -207,7 +216,7 @@ async function saveTeamOverlay(team: TeamOverlay[]): Promise<void> {
 }
 
 function listOpenClawAgents(): OpenClawAgent[] {
-  const output = runOpenClaw(["agents", "list", "--json"]);
+  const output = runOpenClaw(["agents", "list", "--json"], 7000);
   const parsed = JSON.parse(output);
 
   if (!Array.isArray(parsed)) return [];
@@ -223,7 +232,7 @@ function listOpenClawAgents(): OpenClawAgent[] {
 
 function listOpenClawSessions(): OpenClawSessionsPayload {
   try {
-    const output = runOpenClaw(["sessions", "--all-agents", "--json"]);
+    const output = runOpenClaw(["sessions", "--all-agents", "--json"], 5000);
     const parsed = JSON.parse(output);
     if (!parsed || typeof parsed !== "object") return {};
     return parsed as OpenClawSessionsPayload;
@@ -297,6 +306,29 @@ function mergeTeamAgent(
   };
 }
 
+function fallbackFromOverlay(overlay: TeamOverlay): TeamAgent {
+  return {
+    id: overlay.id,
+    name: overlay.name?.trim() || overlay.id,
+    role: overlay.role?.trim() || "OpenClaw Agent",
+    emoji: overlay.emoji || "🤖",
+    color: overlay.color || "#8E8E93",
+    description: overlay.description?.trim() || "Local OpenClaw agent profile.",
+    tags:
+      overlay.tags && overlay.tags.length > 0
+        ? overlay.tags
+        : [{ label: "Local", color: "#30D158" }],
+    status: normalizeStatus(overlay.status) || "offline",
+    tier: normalizeTier(overlay.tier),
+    specialBadge: overlay.specialBadge,
+    activeSessions: 0,
+    lastActiveAt: null,
+    model: "unknown",
+    workspace: defaultWorkspaceFor(overlay.id),
+    identitySource: "overlay",
+  };
+}
+
 function defaultWorkspaceFor(agentId: string): string {
   const home = process.env.USERPROFILE || process.env.HOME || process.cwd();
   return path.join(home, ".openclaw", `workspace-${agentId}`);
@@ -341,15 +373,28 @@ async function buildMergedTeam(): Promise<TeamAgent[]> {
   const overlay = await loadTeamOverlay();
   const overlayMap = new Map(overlay.map((item) => [item.id, item]));
 
-  const realAgents = listOpenClawAgents().filter((agent) => agent.id !== "main");
+  let realAgents: OpenClawAgent[] = [];
+  try {
+    realAgents = listOpenClawAgents().filter((agent) => agent.id !== "main");
+  } catch {
+    realAgents = [];
+  }
+
   const sessionStatsMap = buildSessionStatsMap(listOpenClawSessions());
+
+  if (realAgents.length === 0 && overlay.length > 0) {
+    return overlay.map(fallbackFromOverlay);
+  }
 
   const merged: TeamAgent[] = [];
 
   // Keep existing card order from overlay for UX consistency.
   for (const entry of overlay) {
     const real = realAgents.find((agent) => agent.id === entry.id);
-    if (!real) continue;
+    if (!real) {
+      merged.push(fallbackFromOverlay(entry));
+      continue;
+    }
 
     merged.push(
       mergeTeamAgent(
@@ -375,13 +420,77 @@ async function buildMergedTeam(): Promise<TeamAgent[]> {
   return merged;
 }
 
+function cloneTeam(team: TeamAgent[]): TeamAgent[] {
+  return team.map((agent) => ({
+    ...agent,
+    tags: agent.tags.map((tag) => ({ ...tag })),
+  }));
+}
+
+function getFreshTeamCache(): TeamAgent[] | null {
+  if (!teamCache) return null;
+  if (Date.now() - teamCache.updatedAt > TEAM_CACHE_TTL_MS) return null;
+  return cloneTeam(teamCache.team);
+}
+
+function setTeamCache(team: TeamAgent[]): void {
+  teamCache = {
+    team: cloneTeam(team),
+    updatedAt: Date.now(),
+  };
+}
+
+function invalidateTeamCache(): void {
+  teamCache = null;
+  teamRefreshInFlight = null;
+}
+
+async function refreshTeamCache(): Promise<TeamAgent[]> {
+  if (teamRefreshInFlight) {
+    return teamRefreshInFlight;
+  }
+
+  teamRefreshInFlight = (async () => {
+    const nextTeam = await buildMergedTeam();
+    setTeamCache(nextTeam);
+    return nextTeam;
+  })().finally(() => {
+    teamRefreshInFlight = null;
+  });
+
+  return teamRefreshInFlight;
+}
+
+async function resolveTeamForGet(): Promise<TeamAgent[]> {
+  const cached = getFreshTeamCache();
+  if (cached) {
+    return cached;
+  }
+
+  try {
+    const refreshed = await refreshTeamCache();
+    return cloneTeam(refreshed);
+  } catch {
+    if (teamCache?.team) {
+      return cloneTeam(teamCache.team);
+    }
+
+    const overlay = await loadTeamOverlay();
+    if (overlay.length > 0) {
+      return overlay.map(fallbackFromOverlay);
+    }
+
+    return [];
+  }
+}
+
 // GET — list all team members, optional ?tier= filter
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const tierParam = searchParams.get("tier");
 
-    const team = await buildMergedTeam();
+    const team = await resolveTeamForGet();
 
     if (!tierParam) {
       return NextResponse.json({ team });
@@ -390,7 +499,7 @@ export async function GET(request: NextRequest) {
     const tier = normalizeTier(tierParam);
     return NextResponse.json({ team: team.filter((agent) => agent.tier === tier) });
   } catch {
-    return NextResponse.json({ error: "Failed to load team" }, { status: 500 });
+    return NextResponse.json({ team: [] });
   }
 }
 
@@ -458,6 +567,7 @@ export async function POST(request: NextRequest) {
 
     overlays.push(newOverlay);
     await saveTeamOverlay(overlays);
+    invalidateTeamCache();
 
     const sessionStatsMap = buildSessionStatsMap(listOpenClawSessions());
     return NextResponse.json(
@@ -521,6 +631,7 @@ export async function PUT(request: NextRequest) {
 
     overlays[index] = nextOverlay;
     await saveTeamOverlay(overlays);
+    invalidateTeamCache();
 
     const sessionStatsMap = buildSessionStatsMap(listOpenClawSessions());
     return NextResponse.json(
@@ -552,6 +663,7 @@ export async function DELETE(request: NextRequest) {
     const overlays = await loadTeamOverlay();
     const next = overlays.filter((entry) => entry.id !== id);
     await saveTeamOverlay(next);
+    invalidateTeamCache();
 
     const realAgents = listOpenClawAgents();
     if (realAgents.some((agent) => agent.id === id)) {
