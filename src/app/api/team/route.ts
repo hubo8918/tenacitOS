@@ -100,10 +100,31 @@ interface CachedLoadResult<T> {
   cacheAgeMs: number | null;
 }
 
-const TEAM_CACHE_TTL_MS = 15_000;
-const AGENTS_CACHE_TTL_MS = 120_000;
-const SESSIONS_CACHE_TTL_MS = 45_000;
-const TEAM_TRACE_SLOW_MS = 6_000;
+const DEFAULT_TEAM_CACHE_TTL_MS = 15_000;
+const DEFAULT_AGENTS_CACHE_TTL_MS = 120_000;
+const DEFAULT_SESSIONS_CACHE_TTL_MS = 45_000;
+const DEFAULT_TEAM_TRACE_SLOW_MS = 6_000;
+
+function readEnvMs(name: string, fallbackMs: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallbackMs;
+
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return fallbackMs;
+  }
+
+  return parsed;
+}
+
+const TEAM_CACHE_TTL_MS = readEnvMs("MC_TEAM_CACHE_TTL_MS", DEFAULT_TEAM_CACHE_TTL_MS);
+const AGENTS_CACHE_TTL_MS = readEnvMs("MC_TEAM_AGENTS_CACHE_TTL_MS", DEFAULT_AGENTS_CACHE_TTL_MS);
+const SESSIONS_CACHE_TTL_MS = readEnvMs(
+  "MC_TEAM_SESSIONS_CACHE_TTL_MS",
+  DEFAULT_SESSIONS_CACHE_TTL_MS
+);
+const TEAM_TRACE_SLOW_MS = readEnvMs("MC_TEAM_TRACE_SLOW_MS", DEFAULT_TEAM_TRACE_SLOW_MS);
+
 let teamCache: TeamCacheEntry | null = null;
 let agentsCache: TimedCache<OpenClawAgent[]> | null = null;
 let sessionsCache: TimedCache<OpenClawSessionsPayload> | null = null;

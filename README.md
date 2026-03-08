@@ -105,6 +105,13 @@ AUTH_SECRET=your-random-32-char-secret-here
 # --- OpenClaw paths (optional — defaults work for standard installs) ---
 # OPENCLAW_DIR=/root/.openclaw
 
+# --- Team API performance tuning (optional, milliseconds) ---
+# MC_TEAM_CACHE_TTL_MS=15000
+# MC_TEAM_AGENTS_CACHE_TTL_MS=120000
+# MC_TEAM_SESSIONS_CACHE_TTL_MS=45000
+# MC_TEAM_TRACE=0
+# MC_TEAM_TRACE_SLOW_MS=6000
+
 # --- Branding (customize for your instance) ---
 NEXT_PUBLIC_AGENT_NAME=Mission Control
 NEXT_PUBLIC_AGENT_EMOJI=🤖
