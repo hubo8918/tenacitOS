@@ -11,6 +11,14 @@ const OPENCLAW_POWERSHELL_SCRIPT =
     ? path.join(process.env.APPDATA, "npm", "openclaw.ps1")
     : null;
 
+const CLI_NOISE_PREFIXES = [
+  "[secrets]",
+  "Gateway target:",
+  "Source:",
+  "Config:",
+  "Bind:",
+];
+
 function runOpenClaw(args: string[]): string {
   const execOptions = {
     encoding: "utf-8" as BufferEncoding,
@@ -66,48 +74,86 @@ function runOpenClaw(args: string[]): string {
   return stdoutText.trim();
 }
 
+function stripCliNoise(raw: string): string {
+  return raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter(
+      (line) => !CLI_NOISE_PREFIXES.some((prefix) => line.startsWith(prefix))
+    )
+    .join("\n")
+    .trim();
+}
+
+function extractJsonBlock(text: string): string | null {
+  const start = text.search(/[\[{]/);
+  if (start === -1) return null;
+
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+
+  for (let i = start; i < text.length; i += 1) {
+    const ch = text[i];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === "\\") {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (ch === "{" || ch === "[") {
+      stack.push(ch === "{" ? "}" : "]");
+      continue;
+    }
+
+    if ((ch === "}" || ch === "]") && stack.length > 0) {
+      const expected = stack[stack.length - 1];
+      if (ch === expected) {
+        stack.pop();
+        if (stack.length === 0) {
+          return text.slice(start, i + 1);
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
 function parseJsonFromCliOutput(raw: string): unknown {
-  const text = raw.trim();
-  if (!text) return null;
+  const cleaned = stripCliNoise(raw);
+  const candidates = [cleaned, raw.trim()].filter(Boolean);
 
-  const parsedCandidates: unknown[] = [];
-
-  try {
-    parsedCandidates.push(JSON.parse(text));
-  } catch {
-    // continue
-  }
-
-  const lines = text.split(/\r?\n/);
-  for (let i = 0; i < lines.length; i += 1) {
-    const snippet = lines.slice(i).join("\n").trim();
-    if (!snippet.startsWith("{") && !snippet.startsWith("[")) continue;
-
+  for (const candidate of candidates) {
     try {
-      parsedCandidates.push(JSON.parse(snippet));
+      return JSON.parse(candidate);
     } catch {
-      // continue trying later lines
+      // continue
+    }
+
+    const block = extractJsonBlock(candidate);
+    if (block) {
+      try {
+        return JSON.parse(block);
+      } catch {
+        // continue
+      }
     }
   }
 
-  if (parsedCandidates.length === 0) {
-    throw new Error("CLI returned non-JSON output");
-  }
-
-  const preferred = parsedCandidates.find((candidate) => {
-    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
-      return false;
-    }
-
-    const obj = candidate as Record<string, unknown>;
-    return (
-      "result" in obj ||
-      "runId" in obj ||
-      ("status" in obj && ("summary" in obj || "payloads" in obj))
-    );
-  });
-
-  return preferred ?? parsedCandidates[0];
+  throw new Error("CLI returned non-JSON output");
 }
 
 function sanitizeAgentId(value: unknown): string | null {
@@ -122,29 +168,73 @@ function listAgentIds(): string[] {
   if (!Array.isArray(parsed)) return [];
 
   return parsed
-    .map((item) => (item && typeof item === "object" ? (item as { id?: unknown }).id : null))
+    .map((item) =>
+      item && typeof item === "object" ? (item as { id?: unknown }).id : null
+    )
     .filter((id): id is string => typeof id === "string");
 }
 
 function summarizeText(raw: string): string {
-  const lines = raw
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .filter(
-      (line) =>
-        !line.startsWith("[secrets]") &&
-        !line.startsWith("Gateway target:") &&
-        !line.startsWith("Source:") &&
-        !line.startsWith("Config:") &&
-        !line.startsWith("Bind:")
-    );
-
-  const text = lines.join("\n").trim();
+  const text = stripCliNoise(raw);
   if (!text) return "Action completed.";
+  return text.length > 500 ? `${text.slice(0, 500)}…` : text;
+}
 
-  const compact = text.length > 500 ? `${text.slice(0, 500)}…` : text;
-  return compact;
+function normalizeAgentText(text: string): string {
+  return text
+    .replace(/�\?\?/g, "'")
+    .replace(/\uFFFD/g, "")
+    .trim();
+}
+
+function summarizeAgentRun(parsed: unknown, rawOutput: string) {
+  const fallback = {
+    text: summarizeText(rawOutput),
+    sessionId: null as string | null,
+    durationMs: null as number | null,
+    model: null as string | null,
+    runId: null as string | null,
+  };
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return fallback;
+  }
+
+  const root = parsed as Record<string, unknown>;
+  const result =
+    root.result && typeof root.result === "object"
+      ? (root.result as Record<string, unknown>)
+      : root;
+
+  const payloads = Array.isArray(result.payloads)
+    ? (result.payloads as Array<Record<string, unknown>>)
+    : [];
+
+  const payloadText = payloads
+    .map((payload) => (typeof payload?.text === "string" ? payload.text.trim() : ""))
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+
+  const meta = result.meta && typeof result.meta === "object"
+    ? (result.meta as Record<string, unknown>)
+    : null;
+
+  const agentMeta =
+    meta?.agentMeta && typeof meta.agentMeta === "object"
+      ? (meta.agentMeta as Record<string, unknown>)
+      : null;
+
+  const durationMs = typeof meta?.durationMs === "number" ? meta.durationMs : null;
+
+  return {
+    text: normalizeAgentText(payloadText || fallback.text),
+    sessionId:
+      agentMeta && typeof agentMeta.sessionId === "string" ? agentMeta.sessionId : null,
+    durationMs,
+    model: agentMeta && typeof agentMeta.model === "string" ? agentMeta.model : null,
+    runId: typeof root.runId === "string" ? root.runId : null,
+  };
 }
 
 function buildPrompt(action: string, agentId: string): string {
@@ -153,6 +243,7 @@ function buildPrompt(action: string, agentId: string): string {
       `You are agent ${agentId}.`,
       "Quick team check-in:",
       "Reply in 1-2 short sentences with what you're currently focused on and your next step.",
+      "Use plain ASCII punctuation and avoid smart quotes.",
     ].join("\n");
   }
 
@@ -160,6 +251,7 @@ function buildPrompt(action: string, agentId: string): string {
     `You are agent ${agentId}.`,
     "Wake up and confirm readiness.",
     "Reply in one short sentence ending with READY.",
+    "Use plain ASCII punctuation and avoid smart quotes.",
   ].join("\n");
 }
 
@@ -196,16 +288,19 @@ export async function POST(request: NextRequest) {
       "minimal",
       "--timeout",
       "90",
+      "--json",
     ]);
+
+    const parsed = parseJsonFromCliOutput(output);
+    const summary = summarizeAgentRun(parsed, output);
 
     return NextResponse.json({
       ok: true,
       id,
       action,
-      text: summarizeText(output),
-      sessionId: null,
-      durationMs: Date.now() - startedAt,
-      model: null,
+      ...summary,
+      durationMs: summary.durationMs ?? Date.now() - startedAt,
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to run team action";

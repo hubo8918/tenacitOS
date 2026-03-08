@@ -286,10 +286,7 @@ function mergeTeamAgent(
       overlay?.description?.trim() ||
       "Local OpenClaw agent connected to Mission Control.",
     tags: overlay?.tags && overlay.tags.length > 0 ? overlay.tags : fallbackTags,
-    status:
-      sessionStats.activeSessions > 0
-        ? "online"
-        : normalizeStatus(overlay?.status) || "offline",
+    status: sessionStats.activeSessions > 0 ? "online" : "offline",
     tier: normalizeTier(overlay?.tier),
     specialBadge: overlay?.specialBadge,
     activeSessions: sessionStats.activeSessions,
@@ -514,7 +511,6 @@ export async function PUT(request: NextRequest) {
       description: coerceString(body.description) ?? overlays[index].description,
       specialBadge: coerceString(body.specialBadge) ?? overlays[index].specialBadge,
       tier: body.tier ? normalizeTier(body.tier) : overlays[index].tier,
-      status: normalizeStatus(body.status) ?? overlays[index].status,
       tags: body.tags ? normalizeTags(body.tags) : overlays[index].tags,
     };
 

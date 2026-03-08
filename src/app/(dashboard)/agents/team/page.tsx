@@ -1,15 +1,37 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AgentCard } from "@/components/AgentCard";
 import { TierDivider } from "@/components/TierDivider";
 import { tierConfig } from "@/data/mockTeamData";
 import { useFetch } from "@/lib/useFetch";
 import type { TeamAgent } from "@/data/mockTeamData";
 
+type TierFilter = "all" | TeamAgent["tier"];
+type ActivityFilter = "all" | "active" | "idle" | "never";
+
+function getActivityState(agent: TeamAgent): Exclude<ActivityFilter, "all"> {
+  if ((agent.activeSessions ?? 0) > 0) return "active";
+  if (agent.lastActiveAt) return "idle";
+  return "never";
+}
+
+function workspaceLabel(workspace?: string): string {
+  if (!workspace) return "unknown";
+  const normalized = workspace.replace(/\\/g, "/");
+  const parts = normalized.split("/").filter(Boolean);
+  return parts[parts.length - 1] || workspace;
+}
+
 export default function TeamPage() {
   const { data, loading, error, refetch } = useFetch<{ team: TeamAgent[] }>("/api/team");
-  const teamAgents = data?.team || [];
+  const teamAgents = useMemo(() => data?.team || [], [data]);
+
+  const [query, setQuery] = useState("");
+  const [tierFilter, setTierFilter] = useState<TierFilter>("all");
+  const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
+  const [modelFilter, setModelFilter] = useState("all");
+  const [workspaceFilter, setWorkspaceFilter] = useState("all");
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -19,21 +41,90 @@ export default function TeamPage() {
     return () => clearInterval(timer);
   }, [refetch]);
 
-  if (loading) {
+  const modelOptions = useMemo(() => {
+    return Array.from(new Set(teamAgents.map((agent) => agent.model || "unknown"))).sort();
+  }, [teamAgents]);
+
+  const workspaceOptions = useMemo(() => {
+    return Array.from(new Set(teamAgents.map((agent) => workspaceLabel(agent.workspace)))).sort();
+  }, [teamAgents]);
+
+  const filteredAgents = useMemo(() => {
+    const q = query.trim().toLowerCase();
+
+    return teamAgents.filter((agent) => {
+      if (tierFilter !== "all" && agent.tier !== tierFilter) return false;
+
+      const activity = getActivityState(agent);
+      if (activityFilter !== "all" && activity !== activityFilter) return false;
+
+      const model = agent.model || "unknown";
+      if (modelFilter !== "all" && model !== modelFilter) return false;
+
+      const workspace = workspaceLabel(agent.workspace);
+      if (workspaceFilter !== "all" && workspace !== workspaceFilter) return false;
+
+      if (!q) return true;
+
+      const haystack = [
+        agent.id,
+        agent.name,
+        agent.role,
+        agent.description,
+        agent.model || "",
+        agent.workspace || "",
+        agent.tags.map((tag) => tag.label).join(" "),
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(q);
+    });
+  }, [teamAgents, query, tierFilter, activityFilter, modelFilter, workspaceFilter]);
+
+  const summary = useMemo(() => {
+    const active = filteredAgents.filter((agent) => getActivityState(agent) === "active").length;
+    const idle = filteredAgents.filter((agent) => getActivityState(agent) === "idle").length;
+    const never = filteredAgents.filter((agent) => getActivityState(agent) === "never").length;
+
+    return {
+      total: filteredAgents.length,
+      active,
+      idle,
+      never,
+    };
+  }, [filteredAgents]);
+
+  if (loading && !data) {
     return (
       <div className="p-4 md:p-8 flex items-center justify-center min-h-[400px]">
-        <div className="text-sm" style={{ color: "var(--text-muted)" }}>Loading team...</div>
+        <div className="text-sm" style={{ color: "var(--text-muted)" }}>
+          Loading team...
+        </div>
       </div>
     );
   }
 
-  if (error) {
+  if (error && !data) {
     return (
       <div className="p-4 md:p-8 flex items-center justify-center min-h-[400px]">
-        <div className="text-sm" style={{ color: "var(--negative, #FF453A)" }}>Failed to load team: {error}</div>
+        <div className="text-sm" style={{ color: "var(--negative, #FF453A)" }}>
+          Failed to load team: {error}
+        </div>
       </div>
     );
   }
+
+  const controlStyle: React.CSSProperties = {
+    backgroundColor: "var(--surface-elevated)",
+    border: "1px solid var(--border)",
+    color: "var(--text-primary)",
+    borderRadius: "0.5rem",
+    fontSize: "0.8125rem",
+    padding: "0.5rem 0.625rem",
+    width: "100%",
+    outline: "none",
+  };
 
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto">
@@ -43,7 +134,8 @@ export default function TeamPage() {
         style={{
           backgroundColor: "var(--surface-elevated)",
           border: "1px solid var(--border)",
-          backgroundImage: "linear-gradient(135deg, rgba(255, 59, 48, 0.05), rgba(191, 90, 242, 0.05))",
+          backgroundImage:
+            "linear-gradient(135deg, rgba(255, 59, 48, 0.05), rgba(191, 90, 242, 0.05))",
         }}
       >
         <p
@@ -59,7 +151,7 @@ export default function TeamPage() {
       </div>
 
       {/* Title Section */}
-      <div className="text-center mb-10 md:mb-16">
+      <div className="text-center mb-8 md:mb-10">
         <h1
           className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4"
           style={{
@@ -93,23 +185,107 @@ export default function TeamPage() {
         </p>
         <p className="text-xs mt-3" style={{ color: "var(--text-muted)" }}>
           Live sync enabled · Team status refreshes every 20s
+          {loading ? " · syncing..." : ""}
         </p>
+      </div>
+
+      {/* Filters */}
+      <div
+        className="rounded-xl p-4 mb-8"
+        style={{
+          backgroundColor: "var(--surface-elevated)",
+          border: "1px solid var(--border)",
+        }}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search name, role, skill, model..."
+            style={controlStyle}
+            aria-label="Search team"
+          />
+
+          <select
+            value={tierFilter}
+            onChange={(e) => setTierFilter(e.target.value as TierFilter)}
+            style={controlStyle}
+            aria-label="Filter by tier"
+          >
+            <option value="all">All tiers</option>
+            <option value="leadership">Leadership</option>
+            <option value="operations">Operations</option>
+            <option value="io">Input/Output</option>
+            <option value="meta">Meta</option>
+          </select>
+
+          <select
+            value={activityFilter}
+            onChange={(e) => setActivityFilter(e.target.value as ActivityFilter)}
+            style={controlStyle}
+            aria-label="Filter by activity"
+          >
+            <option value="all">All activity</option>
+            <option value="active">Active</option>
+            <option value="idle">Idle</option>
+            <option value="never">Never active</option>
+          </select>
+
+          <select
+            value={modelFilter}
+            onChange={(e) => setModelFilter(e.target.value)}
+            style={controlStyle}
+            aria-label="Filter by model"
+          >
+            <option value="all">All models</option>
+            {modelOptions.map((model) => (
+              <option key={model} value={model}>
+                {model}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={workspaceFilter}
+            onChange={(e) => setWorkspaceFilter(e.target.value)}
+            style={controlStyle}
+            aria-label="Filter by workspace"
+          >
+            <option value="all">All workspaces</option>
+            {workspaceOptions.map((workspace) => (
+              <option key={workspace} value={workspace}>
+                {workspace}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex flex-wrap gap-3 mt-3 text-xs" style={{ color: "var(--text-muted)" }}>
+          <span>
+            shown <strong style={{ color: "var(--text-secondary)" }}>{summary.total}</strong>
+          </span>
+          <span>
+            active <strong style={{ color: "#4ade80" }}>{summary.active}</strong>
+          </span>
+          <span>
+            idle <strong style={{ color: "#f59e0b" }}>{summary.idle}</strong>
+          </span>
+          <span>
+            never <strong style={{ color: "#9ca3af" }}>{summary.never}</strong>
+          </span>
+        </div>
       </div>
 
       {/* Tier Sections */}
       {tierConfig.map((tier) => {
-        const agents = teamAgents.filter((a) => a.tier === tier.id);
+        const agents = filteredAgents.filter((agent) => agent.tier === tier.id);
         if (agents.length === 0) return null;
 
         return (
           <div key={tier.id}>
-            {/* Divider (skip for first tier) */}
             {tier.label && <TierDivider label={tier.label} />}
 
-            {/* Cards Grid */}
-            <div
-              className={`grid ${tier.gridCols} gap-4 md:gap-6 mx-auto ${tier.maxWidth || ""}`}
-            >
+            <div className={`grid ${tier.gridCols} gap-4 md:gap-6 mx-auto ${tier.maxWidth || ""}`}>
               {agents.map((agent) => (
                 <AgentCard key={agent.id} agent={agent} onUpdate={refetch} />
               ))}
@@ -118,7 +294,19 @@ export default function TeamPage() {
         );
       })}
 
-      {/* Bottom spacing */}
+      {filteredAgents.length === 0 && (
+        <div
+          className="rounded-xl p-8 text-center"
+          style={{
+            backgroundColor: "var(--surface-elevated)",
+            border: "1px solid var(--border)",
+            color: "var(--text-muted)",
+          }}
+        >
+          No agents matched the current filters.
+        </div>
+      )}
+
       <div className="h-12" />
     </div>
   );

@@ -21,10 +21,21 @@ interface TeamAgent {
   identitySource?: string;
 }
 
+interface AgentActionResult {
+  action: "wake" | "check-in";
+  text: string;
+  durationMs?: number | null;
+  model?: string | null;
+  sessionId?: string | null;
+  timestamp?: string | null;
+}
+
 interface AgentCardProps {
   agent: TeamAgent;
   onUpdate?: () => void;
 }
+
+type PresenceState = "active" | "idle" | "never";
 
 function formatLastActive(lastActiveAt?: string | null): string {
   if (!lastActiveAt) return "never";
@@ -45,6 +56,18 @@ function formatLastActive(lastActiveAt?: string | null): string {
   return `${days}d ago`;
 }
 
+function formatActionTime(timestamp?: string | null): string {
+  if (!timestamp) return "";
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
 function formatWorkspace(workspace?: string): string {
   if (!workspace) return "unknown";
 
@@ -53,9 +76,43 @@ function formatWorkspace(workspace?: string): string {
   return parts[parts.length - 1] || workspace;
 }
 
-function formatModel(model?: string): string {
+function formatModel(model?: string | null): string {
   if (!model) return "unknown";
   return model.length > 24 ? `${model.slice(0, 24)}…` : model;
+}
+
+function getPresenceState(agent: TeamAgent): PresenceState {
+  if ((agent.activeSessions ?? 0) > 0) return "active";
+  if (agent.lastActiveAt) return "idle";
+  return "never";
+}
+
+function getPresenceMeta(state: PresenceState): {
+  label: string;
+  color: string;
+  glow: string;
+} {
+  if (state === "active") {
+    return {
+      label: "Active",
+      color: "#4ade80",
+      glow: "0 0 6px #4ade8060",
+    };
+  }
+
+  if (state === "idle") {
+    return {
+      label: "Idle",
+      color: "#f59e0b",
+      glow: "none",
+    };
+  }
+
+  return {
+    label: "Never",
+    color: "#6b7280",
+    glow: "none",
+  };
 }
 
 export function AgentCard({ agent, onUpdate }: AgentCardProps) {
@@ -64,23 +121,31 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
   const [emoji, setEmoji] = useState(agent.emoji);
   const [role, setRole] = useState(agent.role);
   const [description, setDescription] = useState(agent.description);
-  const [status, setStatus] = useState<"online" | "offline">(agent.status);
   const [saving, setSaving] = useState(false);
   const [actionRunning, setActionRunning] = useState<"wake" | "check-in" | null>(null);
-  const [actionResult, setActionResult] = useState<string | null>(null);
+  const [actionResult, setActionResult] = useState<AgentActionResult | null>(null);
+
+  const presence = getPresenceMeta(getPresenceState(agent));
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await fetch("/api/team", {
+      const response = await fetch("/api/team", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: agent.id, name, emoji, role, description, status }),
+        body: JSON.stringify({ id: agent.id, name, emoji, role, description }),
       });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body?.error || "Failed to save agent");
+      }
+
       setEditing(false);
       onUpdate?.();
     } catch (err) {
-      console.error("Failed to update agent:", err);
+      const message = err instanceof Error ? err.message : String(err);
+      setActionResult({ action: "check-in", text: `error: ${message}` });
     } finally {
       setSaving(false);
     }
@@ -91,7 +156,6 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
     setEmoji(agent.emoji);
     setRole(agent.role);
     setDescription(agent.description);
-    setStatus(agent.status);
     setEditing(false);
   };
 
@@ -111,12 +175,18 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
         throw new Error(data?.error || `Failed to run ${action}`);
       }
 
-      const duration = typeof data.durationMs === "number" ? ` (${Math.round(data.durationMs / 1000)}s)` : "";
-      setActionResult(`${action}: ${data.text || "done"}${duration}`);
+      setActionResult({
+        action,
+        text: typeof data.text === "string" ? data.text : "done",
+        durationMs: typeof data.durationMs === "number" ? data.durationMs : null,
+        model: typeof data.model === "string" ? data.model : null,
+        sessionId: typeof data.sessionId === "string" ? data.sessionId : null,
+        timestamp: typeof data.timestamp === "string" ? data.timestamp : null,
+      });
       onUpdate?.();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setActionResult(`error: ${message}`);
+      setActionResult({ action, text: `error: ${message}` });
     } finally {
       setActionRunning(null);
     }
@@ -133,6 +203,15 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
     outline: "none",
   };
 
+  const actionDetailParts: string[] = [];
+  if (actionResult?.model) actionDetailParts.push(`model ${formatModel(actionResult.model)}`);
+  if (actionResult?.sessionId) actionDetailParts.push(`session ${actionResult.sessionId.slice(0, 8)}`);
+  if (typeof actionResult?.durationMs === "number") {
+    actionDetailParts.push(`${Math.max(1, Math.round(actionResult.durationMs / 1000))}s`);
+  }
+  const actionTime = formatActionTime(actionResult?.timestamp);
+  if (actionTime) actionDetailParts.push(actionTime);
+
   return (
     <div
       className="rounded-xl overflow-hidden transition-all duration-200 hover:scale-[1.02] relative"
@@ -141,7 +220,7 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
         border: "1px solid var(--border)",
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = agent.color + "60";
+        e.currentTarget.style.borderColor = `${agent.color}60`;
         e.currentTarget.style.boxShadow = `0 4px 20px ${agent.color}15`;
       }}
       onMouseLeave={(e) => {
@@ -157,10 +236,7 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
             style={{ backgroundColor: "var(--card)" }}
           >
             <div className="flex items-center justify-between mb-1">
-              <span
-                className="text-sm font-bold"
-                style={{ color: "var(--text-primary)" }}
-              >
+              <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
                 Edit Agent
               </span>
               <button
@@ -172,6 +248,7 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
                 <X className="w-4 h-4" />
               </button>
             </div>
+
             <input
               type="text"
               value={name}
@@ -205,36 +282,7 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
               style={{ ...inputStyle, resize: "none" }}
               aria-label="Agent description"
             />
-            <div className="flex items-center gap-2">
-              <span
-                className="text-xs"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                Status:
-              </span>
-              <button
-                onClick={() =>
-                  setStatus((s) => (s === "online" ? "offline" : "online"))
-                }
-                className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-lg transition-colors"
-                style={{
-                  backgroundColor: "var(--surface-elevated)",
-                  border: "1px solid var(--border)",
-                  color:
-                    status === "online" ? "#4ade80" : "var(--text-muted)",
-                }}
-                aria-label={`Toggle status, currently ${status}`}
-              >
-                <div
-                  className="w-2 h-2 rounded-full"
-                  style={{
-                    backgroundColor:
-                      status === "online" ? "#4ade80" : "#6b7280",
-                  }}
-                />
-                {status === "online" ? "Online" : "Offline"}
-              </button>
-            </div>
+
             <div className="flex justify-end gap-2 mt-auto">
               <button
                 onClick={handleCancel}
@@ -263,9 +311,8 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
           </div>
         )}
 
-        {/* Top row: avatar + name + status */}
+        {/* Top row */}
         <div className="flex items-start gap-3 mb-3">
-          {/* Avatar */}
           <div
             className="flex-shrink-0 flex items-center justify-center rounded-xl text-2xl"
             style={{
@@ -278,7 +325,6 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
             {agent.emoji}
           </div>
 
-          {/* Name, role, status */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <h3
@@ -303,33 +349,36 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
                 </span>
               )}
             </div>
-            <p
-              className="text-sm"
-              style={{ color: agent.color, fontWeight: 500 }}
-            >
-              {agent.role}
-            </p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <p className="text-sm" style={{ color: agent.color, fontWeight: 500 }}>
+                {agent.role}
+              </p>
+              <span
+                className="text-[10px] px-1.5 py-0.5 rounded-md"
+                style={{
+                  color: presence.color,
+                  border: `1px solid ${presence.color}55`,
+                  backgroundColor: `${presence.color}15`,
+                }}
+              >
+                {presence.label}
+              </span>
+            </div>
           </div>
 
-          {/* Status dot */}
           <div
             className="flex-shrink-0 w-2.5 h-2.5 rounded-full mt-1"
             style={{
-              backgroundColor: agent.status === "online" ? "#4ade80" : "#6b7280",
-              boxShadow: agent.status === "online" ? "0 0 6px #4ade8060" : "none",
+              backgroundColor: presence.color,
+              boxShadow: presence.glow,
             }}
           />
         </div>
 
-        {/* Description */}
-        <p
-          className="text-sm mb-3 line-clamp-2"
-          style={{ color: "var(--text-secondary)" }}
-        >
+        <p className="text-sm mb-3 line-clamp-2" style={{ color: "var(--text-secondary)" }}>
           {agent.description}
         </p>
 
-        {/* Tags */}
         <div className="flex flex-wrap gap-1.5 mb-3">
           {agent.tags.map((tag) => (
             <span
@@ -345,7 +394,6 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
           ))}
         </div>
 
-        {/* Footer: activity + actions */}
         <div className="flex items-start justify-between gap-3">
           <div className="text-[11px] leading-tight" style={{ color: "var(--text-muted)" }}>
             <p>
@@ -419,13 +467,12 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
             </div>
 
             {actionResult && (
-              <p
-                className="text-[11px] max-w-[260px] text-right"
-                style={{ color: "var(--text-muted)", lineHeight: 1.35 }}
-                title={actionResult}
-              >
-                {actionResult}
-              </p>
+              <div className="text-[11px] max-w-[290px] text-right" style={{ color: "var(--text-muted)", lineHeight: 1.35 }}>
+                <p title={actionResult.text}>
+                  {actionResult.action}: {actionResult.text}
+                </p>
+                {actionDetailParts.length > 0 && <p>{actionDetailParts.join(" · ")}</p>}
+              </div>
             )}
           </div>
         </div>
