@@ -23,9 +23,20 @@ function workspaceLabel(workspace?: string): string {
   return parts[parts.length - 1] || workspace;
 }
 
+function describeTeamError(error: string | null): string {
+  if (!error) return "Unknown error";
+  if (error.startsWith("Request timed out")) {
+    return "Team data is temporarily unavailable (request timed out).";
+  }
+  return error;
+}
+
 export default function TeamPage() {
-  const { data, loading, error, refetch } = useFetch<{ team: TeamAgent[] }>("/api/team");
+  const { data, loading, error, refetch } = useFetch<{ team: TeamAgent[] }>("/api/team", {
+    timeoutMs: 10_000,
+  });
   const teamAgents = useMemo(() => data?.team || [], [data]);
+  const friendlyError = useMemo(() => describeTeamError(error), [error]);
 
   const [query, setQuery] = useState("");
   const [tierFilter, setTierFilter] = useState<TierFilter>("all");
@@ -108,8 +119,27 @@ export default function TeamPage() {
   if (error && !data) {
     return (
       <div className="p-4 md:p-8 flex items-center justify-center min-h-[400px]">
-        <div className="text-sm" style={{ color: "var(--negative, #FF453A)" }}>
-          Failed to load team: {error}
+        <div
+          className="rounded-xl px-5 py-4 text-center max-w-md"
+          style={{
+            border: "1px solid var(--negative, #FF453A)",
+            backgroundColor: "color-mix(in srgb, var(--negative, #FF453A) 8%, transparent)",
+          }}
+        >
+          <p className="text-sm mb-3" style={{ color: "var(--negative, #FF453A)" }}>
+            {friendlyError}
+          </p>
+          <button
+            onClick={() => refetch()}
+            className="text-xs px-3 py-1.5 rounded-md"
+            style={{
+              color: "var(--text-secondary)",
+              border: "1px solid var(--border)",
+              backgroundColor: "var(--surface-elevated)",
+            }}
+          >
+            Retry now
+          </button>
         </div>
       </div>
     );
@@ -185,9 +215,34 @@ export default function TeamPage() {
         </p>
         <p className="text-xs mt-3" style={{ color: "var(--text-muted)" }}>
           Live sync enabled · Team status refreshes every 20s
-          {loading ? " · syncing..." : ""}
+          {loading ? " · syncing..." : error ? " · sync delayed" : ""}
         </p>
       </div>
+
+      {error && data && (
+        <div
+          className="rounded-lg px-4 py-3 mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
+          style={{
+            border: "1px solid var(--negative, #FF453A)",
+            backgroundColor: "color-mix(in srgb, var(--negative, #FF453A) 6%, transparent)",
+          }}
+        >
+          <p className="text-xs" style={{ color: "var(--negative, #FF453A)" }}>
+            Live sync delayed: {friendlyError}
+          </p>
+          <button
+            onClick={() => refetch()}
+            className="text-xs px-2.5 py-1 rounded-md"
+            style={{
+              color: "var(--text-secondary)",
+              border: "1px solid var(--border)",
+              backgroundColor: "var(--surface-elevated)",
+            }}
+          >
+            Retry now
+          </button>
+        </div>
+      )}
 
       {/* Filters */}
       <div
