@@ -126,79 +126,25 @@ function listAgentIds(): string[] {
     .filter((id): id is string => typeof id === "string");
 }
 
-function summarizeReply(
-  parsed: unknown,
-  rawOutput?: string
-): {
-  text: string;
-  sessionId: string | null;
-  durationMs: number | null;
-  model: string | null;
-} {
-  const fallback = {
-    text: "Action completed.",
-    sessionId: null,
-    durationMs: null,
-    model: null,
-  };
-
-  if (!parsed || typeof parsed !== "object") return fallback;
-
-  const root = parsed as Record<string, unknown>;
-  const result =
-    root.result && typeof root.result === "object"
-      ? (root.result as Record<string, unknown>)
-      : null;
-
-  const payloads =
-    result && Array.isArray(result.payloads)
-      ? (result.payloads as Array<Record<string, unknown>>)
-      : [];
-
-  const text = payloads
-    .map((payload) => (typeof payload?.text === "string" ? payload.text.trim() : ""))
+function summarizeText(raw: string): string {
+  const lines = raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
     .filter(Boolean)
-    .join("\n")
-    .trim();
+    .filter(
+      (line) =>
+        !line.startsWith("[secrets]") &&
+        !line.startsWith("Gateway target:") &&
+        !line.startsWith("Source:") &&
+        !line.startsWith("Config:") &&
+        !line.startsWith("Bind:")
+    );
 
-  const agentMeta =
-    result?.meta &&
-    typeof result.meta === "object" &&
-    (result.meta as Record<string, unknown>).agentMeta &&
-    typeof (result.meta as Record<string, unknown>).agentMeta === "object"
-      ? ((result.meta as Record<string, unknown>).agentMeta as Record<string, unknown>)
-      : null;
+  const text = lines.join("\n").trim();
+  if (!text) return "Action completed.";
 
-  const durationMs =
-    result?.meta &&
-    typeof result.meta === "object" &&
-    typeof (result.meta as Record<string, unknown>).durationMs === "number"
-      ? ((result.meta as Record<string, unknown>).durationMs as number)
-      : null;
-
-  let outputText = text || (typeof root.summary === "string" ? root.summary : "");
-
-  if (!outputText && rawOutput) {
-    const match = rawOutput.match(/"text"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
-    if (match?.[1]) {
-      outputText = match[1]
-        .replace(/\\n/g, "\n")
-        .replace(/\\r/g, "")
-        .replace(/\\\"/g, '"');
-    }
-  }
-
-  if (!outputText) {
-    outputText = fallback.text;
-  }
-
-  return {
-    text: outputText.length > 500 ? `${outputText.slice(0, 500)}…` : outputText,
-    sessionId:
-      agentMeta && typeof agentMeta.sessionId === "string" ? agentMeta.sessionId : null,
-    durationMs,
-    model: agentMeta && typeof agentMeta.model === "string" ? agentMeta.model : null,
-  };
+  const compact = text.length > 500 ? `${text.slice(0, 500)}…` : text;
+  return compact;
 }
 
 function buildPrompt(action: string, agentId: string): string {
@@ -239,6 +185,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Unknown agent: ${id}` }, { status: 404 });
     }
 
+    const startedAt = Date.now();
     const output = runOpenClaw([
       "agent",
       "--agent",
@@ -249,17 +196,16 @@ export async function POST(request: NextRequest) {
       "minimal",
       "--timeout",
       "90",
-      "--json",
     ]);
-
-    const parsed = parseJsonFromCliOutput(output);
-    const summary = summarizeReply(parsed);
 
     return NextResponse.json({
       ok: true,
       id,
       action,
-      ...summary,
+      text: summarizeText(output),
+      sessionId: null,
+      durationMs: Date.now() - startedAt,
+      model: null,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to run team action";
