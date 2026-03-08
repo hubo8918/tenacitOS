@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { AgentCard } from "@/components/AgentCard";
 import { TierDivider } from "@/components/TierDivider";
 import { tierConfig } from "@/data/mockTeamData";
@@ -9,6 +10,14 @@ import type { TeamAgent } from "@/data/mockTeamData";
 export default function TeamPage() {
   const { data, loading, error, refetch } = useFetch<{ team: TeamAgent[] }>("/api/team");
   const teamAgents = data?.team || [];
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      refetch();
+    }, 20_000);
+
+    return () => clearInterval(timer);
+  }, [refetch]);
 
   if (loading) {
     return (
@@ -81,6 +90,9 @@ export default function TeamPage() {
           We wanted to see what happens when AI doesn&apos;t just answer questions — but actually runs a
           company. Research markets. Write content. Post on social media. Ship products. All without being
           told what to do.
+        </p>
+        <p className="text-xs mt-3" style={{ color: "var(--text-muted)" }}>
+          Live sync enabled · Team status refreshes every 20s
         </p>
       </div>
 

@@ -16,6 +16,9 @@ interface TeamAgent {
   specialBadge?: string;
   activeSessions?: number;
   lastActiveAt?: string | null;
+  model?: string;
+  workspace?: string;
+  identitySource?: string;
 }
 
 interface AgentCardProps {
@@ -40,6 +43,19 @@ function formatLastActive(lastActiveAt?: string | null): string {
 
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
+}
+
+function formatWorkspace(workspace?: string): string {
+  if (!workspace) return "unknown";
+
+  const normalized = workspace.replace(/\\/g, "/");
+  const parts = normalized.split("/").filter(Boolean);
+  return parts[parts.length - 1] || workspace;
+}
+
+function formatModel(model?: string): string {
+  if (!model) return "unknown";
+  return model.length > 24 ? `${model.slice(0, 24)}…` : model;
 }
 
 export function AgentCard({ agent, onUpdate }: AgentCardProps) {
@@ -303,6 +319,18 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
         {/* Footer: activity + edit link */}
         <div className="flex items-center justify-between gap-3">
           <div className="text-[11px] leading-tight" style={{ color: "var(--text-muted)" }}>
+            <p>
+              model:{" "}
+              <span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>
+                {formatModel(agent.model)}
+              </span>
+            </p>
+            <p>
+              workspace:{" "}
+              <span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>
+                {formatWorkspace(agent.workspace)}
+              </span>
+            </p>
             <p>
               live sessions:{" "}
               <span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>

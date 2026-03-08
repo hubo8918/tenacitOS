@@ -41,6 +41,9 @@ interface TeamAgent {
   specialBadge?: string;
   activeSessions: number;
   lastActiveAt: string | null;
+  model: string;
+  workspace: string;
+  identitySource?: string;
 }
 
 interface OpenClawAgent {
@@ -48,7 +51,9 @@ interface OpenClawAgent {
   name?: string;
   identityName?: string;
   identityEmoji?: string;
+  identitySource?: string;
   workspace?: string;
+  model?: string;
 }
 
 interface OpenClawSessionsPayload {
@@ -289,6 +294,9 @@ function mergeTeamAgent(
     specialBadge: overlay?.specialBadge,
     activeSessions: sessionStats.activeSessions,
     lastActiveAt: sessionStats.lastActiveAt,
+    model: realAgent.model || "unknown",
+    workspace: realAgent.workspace || defaultWorkspaceFor(realAgent.id),
+    identitySource: realAgent.identitySource,
   };
 }
 

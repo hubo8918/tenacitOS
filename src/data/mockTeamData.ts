@@ -11,6 +11,9 @@ export interface TeamAgent {
   specialBadge?: string; // e.g. "The Engineer" for Codex
   activeSessions?: number;
   lastActiveAt?: string | null;
+  model?: string;
+  workspace?: string;
+  identitySource?: string;
 }
 
 export interface TierConfig {
