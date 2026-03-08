@@ -73,6 +73,10 @@ interface TeamBuildTrace {
   realAgentCount: number;
   sessionCount: number;
   fallbackOverlayOnly: boolean;
+  agentsSource: "cli" | "cache" | "stale-cache" | "none";
+  sessionsSource: "cli" | "cache" | "stale-cache" | "none";
+  agentsCacheAgeMs: number | null;
+  sessionsCacheAgeMs: number | null;
 }
 
 interface TeamBuildResult {
@@ -85,9 +89,24 @@ interface TeamCacheEntry {
   updatedAt: number;
 }
 
+interface TimedCache<T> {
+  value: T;
+  updatedAt: number;
+}
+
+interface CachedLoadResult<T> {
+  value: T;
+  source: "cli" | "cache" | "stale-cache" | "none";
+  cacheAgeMs: number | null;
+}
+
 const TEAM_CACHE_TTL_MS = 15_000;
+const AGENTS_CACHE_TTL_MS = 120_000;
+const SESSIONS_CACHE_TTL_MS = 45_000;
 const TEAM_TRACE_SLOW_MS = 6_000;
 let teamCache: TeamCacheEntry | null = null;
+let agentsCache: TimedCache<OpenClawAgent[]> | null = null;
+let sessionsCache: TimedCache<OpenClawSessionsPayload> | null = null;
 let teamRefreshInFlight: Promise<TeamBuildResult> | null = null;
 
 const OPENCLAW_CMD = "openclaw";
@@ -262,13 +281,107 @@ function listOpenClawAgents(): OpenClawAgent[] {
 }
 
 function listOpenClawSessions(): OpenClawSessionsPayload {
+  const output = runOpenClaw(["sessions", "--all-agents", "--json"], 5000);
+  const parsed = JSON.parse(output);
+  if (!parsed || typeof parsed !== "object") return {};
+  return parsed as OpenClawSessionsPayload;
+}
+
+function cloneOpenClawAgents(agents: OpenClawAgent[]): OpenClawAgent[] {
+  return agents.map((agent) => ({ ...agent }));
+}
+
+function cloneOpenClawSessions(payload: OpenClawSessionsPayload): OpenClawSessionsPayload {
+  const sessions = Array.isArray(payload.sessions)
+    ? payload.sessions.map((session) => ({ ...session }))
+    : [];
+
+  return { sessions };
+}
+
+function loadAgentsWithCache(): CachedLoadResult<OpenClawAgent[]> {
+  const now = Date.now();
+
+  if (agentsCache) {
+    const ageMs = now - agentsCache.updatedAt;
+    if (ageMs <= AGENTS_CACHE_TTL_MS) {
+      return {
+        value: cloneOpenClawAgents(agentsCache.value),
+        source: "cache",
+        cacheAgeMs: ageMs,
+      };
+    }
+  }
+
   try {
-    const output = runOpenClaw(["sessions", "--all-agents", "--json"], 5000);
-    const parsed = JSON.parse(output);
-    if (!parsed || typeof parsed !== "object") return {};
-    return parsed as OpenClawSessionsPayload;
+    const fresh = listOpenClawAgents().filter((agent) => agent.id !== "main");
+    agentsCache = {
+      value: cloneOpenClawAgents(fresh),
+      updatedAt: now,
+    };
+
+    return {
+      value: fresh,
+      source: "cli",
+      cacheAgeMs: 0,
+    };
   } catch {
-    return {};
+    if (agentsCache) {
+      return {
+        value: cloneOpenClawAgents(agentsCache.value),
+        source: "stale-cache",
+        cacheAgeMs: now - agentsCache.updatedAt,
+      };
+    }
+
+    return {
+      value: [],
+      source: "none",
+      cacheAgeMs: null,
+    };
+  }
+}
+
+function loadSessionsWithCache(): CachedLoadResult<OpenClawSessionsPayload> {
+  const now = Date.now();
+
+  if (sessionsCache) {
+    const ageMs = now - sessionsCache.updatedAt;
+    if (ageMs <= SESSIONS_CACHE_TTL_MS) {
+      return {
+        value: cloneOpenClawSessions(sessionsCache.value),
+        source: "cache",
+        cacheAgeMs: ageMs,
+      };
+    }
+  }
+
+  try {
+    const fresh = listOpenClawSessions();
+    sessionsCache = {
+      value: cloneOpenClawSessions(fresh),
+      updatedAt: now,
+    };
+
+    return {
+      value: fresh,
+      source: "cli",
+      cacheAgeMs: 0,
+    };
+  } catch {
+    if (sessionsCache) {
+      return {
+        value: cloneOpenClawSessions(sessionsCache.value),
+        source: "stale-cache",
+        cacheAgeMs: now - sessionsCache.updatedAt,
+      };
+    }
+
+    return {
+      value: { sessions: [] },
+      source: "none",
+      cacheAgeMs: null,
+    };
   }
 }
 
@@ -409,18 +522,13 @@ async function buildMergedTeam(): Promise<TeamBuildResult> {
   const overlayMap = new Map(overlay.map((item) => [item.id, item]));
 
   const agentsStart = Date.now();
-  let realAgents: OpenClawAgent[] = [];
-  let agentsLoadFailed = false;
-  try {
-    realAgents = listOpenClawAgents().filter((agent) => agent.id !== "main");
-  } catch {
-    agentsLoadFailed = true;
-    realAgents = [];
-  }
+  const agentsLoad = loadAgentsWithCache();
+  const realAgents = agentsLoad.value;
   const agentsMs = Date.now() - agentsStart;
 
   const sessionsStart = Date.now();
-  const sessionsPayload = listOpenClawSessions();
+  const sessionsLoad = loadSessionsWithCache();
+  const sessionsPayload = sessionsLoad.value;
   const sessionsMs = Date.now() - sessionsStart;
   const sessionCount = Array.isArray(sessionsPayload.sessions)
     ? sessionsPayload.sessions.length
@@ -478,13 +586,19 @@ async function buildMergedTeam(): Promise<TeamBuildResult> {
     realAgentCount: realAgents.length,
     sessionCount,
     fallbackOverlayOnly,
+    agentsSource: agentsLoad.source,
+    sessionsSource: sessionsLoad.source,
+    agentsCacheAgeMs: agentsLoad.cacheAgeMs,
+    sessionsCacheAgeMs: sessionsLoad.cacheAgeMs,
   };
 
-  if (agentsLoadFailed) {
-    logTeamTrace("build.agents_failed", trace);
-  } else {
-    logTeamTrace("build.completed", trace);
-  }
+  const degraded =
+    agentsLoad.source === "stale-cache" ||
+    agentsLoad.source === "none" ||
+    sessionsLoad.source === "stale-cache" ||
+    sessionsLoad.source === "none";
+
+  logTeamTrace(degraded ? "build.completed_degraded" : "build.completed", trace);
 
   return { team: merged, trace };
 }
@@ -511,6 +625,8 @@ function setTeamCache(team: TeamAgent[]): void {
 
 function invalidateTeamCache(): void {
   teamCache = null;
+  agentsCache = null;
+  sessionsCache = null;
   teamRefreshInFlight = null;
 }
 
@@ -642,7 +758,7 @@ export async function POST(request: NextRequest) {
     await saveTeamOverlay(overlays);
     invalidateTeamCache();
 
-    const sessionStatsMap = buildSessionStatsMap(listOpenClawSessions());
+    const sessionStatsMap = buildSessionStatsMap(loadSessionsWithCache().value);
     return NextResponse.json(
       mergeTeamAgent(
         newOverlay,
@@ -706,7 +822,7 @@ export async function PUT(request: NextRequest) {
     await saveTeamOverlay(overlays);
     invalidateTeamCache();
 
-    const sessionStatsMap = buildSessionStatsMap(listOpenClawSessions());
+    const sessionStatsMap = buildSessionStatsMap(loadSessionsWithCache().value);
     return NextResponse.json(
       mergeTeamAgent(
         nextOverlay,
