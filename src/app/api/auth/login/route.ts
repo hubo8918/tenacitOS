@@ -69,6 +69,20 @@ function clearAttempts(ip: string): void {
   attempts.delete(ip);
 }
 
+function shouldUseSecureCookie(request: NextRequest): boolean {
+  const forwardedProto = request.headers
+    .get("x-forwarded-proto")
+    ?.split(",")[0]
+    ?.trim()
+    .toLowerCase();
+
+  if (forwardedProto) {
+    return forwardedProto === "https";
+  }
+
+  return request.nextUrl.protocol === "https:";
+}
+
 export async function POST(request: NextRequest) {
   const ip = getClientIp(request);
 
@@ -93,10 +107,10 @@ export async function POST(request: NextRequest) {
     const response = NextResponse.json({ success: true });
 
     // Set auth cookie (7 days expiry)
-    // secure=true in production (HTTPS), false in dev (HTTP localhost)
+    // secure=true when request is HTTPS (including reverse-proxy forwarded HTTPS)
     response.cookies.set("mc_auth", process.env.AUTH_SECRET!, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: shouldUseSecureCookie(request),
       sameSite: "lax",
       maxAge: 60 * 60 * 24 * 7, // 7 days
       path: "/",
