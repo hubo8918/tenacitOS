@@ -24,6 +24,7 @@ interface AgentCardProps {
 export function AgentCard({ agent, onUpdate }: AgentCardProps) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(agent.name);
+  const [emoji, setEmoji] = useState(agent.emoji);
   const [role, setRole] = useState(agent.role);
   const [description, setDescription] = useState(agent.description);
   const [status, setStatus] = useState<"online" | "offline">(agent.status);
@@ -35,7 +36,7 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
       await fetch("/api/team", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: agent.id, name, role, description, status }),
+        body: JSON.stringify({ id: agent.id, name, emoji, role, description, status }),
       });
       setEditing(false);
       onUpdate?.();
@@ -48,6 +49,7 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
 
   const handleCancel = () => {
     setName(agent.name);
+    setEmoji(agent.emoji);
     setRole(agent.role);
     setDescription(agent.description);
     setStatus(agent.status);
@@ -111,6 +113,15 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
               placeholder="Name"
               style={inputStyle}
               aria-label="Agent name"
+            />
+            <input
+              type="text"
+              value={emoji}
+              onChange={(e) => setEmoji(e.target.value)}
+              placeholder="Emoji"
+              style={inputStyle}
+              aria-label="Agent emoji"
+              maxLength={4}
             />
             <input
               type="text"

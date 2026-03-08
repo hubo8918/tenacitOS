@@ -56,30 +56,65 @@ interface OpenClawSessionsPayload {
   }>;
 }
 
-const OPENCLAW_CMD =
+const OPENCLAW_CMD = "openclaw";
+const OPENCLAW_POWERSHELL_SCRIPT =
   process.platform === "win32" && process.env.APPDATA
-    ? path.join(process.env.APPDATA, "npm", "openclaw.cmd")
-    : "openclaw";
+    ? path.join(process.env.APPDATA, "npm", "openclaw.ps1")
+    : null;
 
 function runOpenClaw(args: string[]): string {
-  const result = spawnSync(OPENCLAW_CMD, args, {
-    encoding: "utf-8",
+  const execOptions = {
+    encoding: "utf-8" as BufferEncoding,
     timeout: 15000,
     windowsHide: true,
-    shell: process.platform === "win32",
-  });
+  };
+
+  let result = null as ReturnType<typeof spawnSync> | null;
+
+  if (OPENCLAW_POWERSHELL_SCRIPT) {
+    result = spawnSync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        OPENCLAW_POWERSHELL_SCRIPT,
+        ...args,
+      ],
+      execOptions
+    );
+  }
+
+  if (!result || result.error?.message?.includes("ENOENT")) {
+    result = spawnSync(OPENCLAW_CMD, args, {
+      ...execOptions,
+      shell: process.platform === "win32",
+    });
+  }
 
   if (result.error) {
     throw result.error;
   }
 
+  const stdoutText =
+    typeof result.stdout === "string"
+      ? result.stdout
+      : result.stdout
+      ? result.stdout.toString("utf-8")
+      : "";
+  const stderrText =
+    typeof result.stderr === "string"
+      ? result.stderr
+      : result.stderr
+      ? result.stderr.toString("utf-8")
+      : "";
+
   if (result.status !== 0) {
-    throw new Error(
-      (result.stderr || result.stdout || "openclaw command failed").trim()
-    );
+    throw new Error((stderrText || stdoutText || "openclaw command failed").trim());
   }
 
-  return (result.stdout || "").trim();
+  return stdoutText.trim();
 }
 
 function normalizeTier(value: unknown): TeamTier {
@@ -256,6 +291,29 @@ function coerceString(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function syncAgentIdentity(realAgent: OpenClawAgent, name?: string, emoji?: string): void {
+  const identityName = name || realAgent.identityName || realAgent.name || realAgent.id;
+  const workspace = realAgent.workspace || defaultWorkspaceFor(realAgent.id);
+
+  const args = [
+    "agents",
+    "set-identity",
+    "--agent",
+    realAgent.id,
+    "--workspace",
+    workspace,
+    "--name",
+    identityName,
+    "--json",
+  ];
+
+  if (emoji) {
+    args.push("--emoji", emoji);
+  }
+
+  runOpenClaw(args);
+}
+
 async function buildMergedTeam(): Promise<TeamAgent[]> {
   const overlay = await loadTeamOverlay();
   const overlayMap = new Map(overlay.map((item) => [item.id, item]));
@@ -399,11 +457,14 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Agent not found in OpenClaw" }, { status: 404 });
     }
 
+    const requestedName = coerceString(body.name);
+    const requestedEmoji = coerceString(body.emoji);
+
     const nextOverlay: TeamOverlay = {
       ...overlays[index],
-      name: coerceString(body.name) ?? overlays[index].name,
+      name: requestedName ?? overlays[index].name,
       role: coerceString(body.role) ?? overlays[index].role,
-      emoji: coerceString(body.emoji) ?? overlays[index].emoji,
+      emoji: requestedEmoji ?? overlays[index].emoji,
       color: coerceString(body.color) ?? overlays[index].color,
       description: coerceString(body.description) ?? overlays[index].description,
       specialBadge: coerceString(body.specialBadge) ?? overlays[index].specialBadge,
@@ -411,6 +472,11 @@ export async function PUT(request: NextRequest) {
       status: normalizeStatus(body.status) ?? overlays[index].status,
       tags: body.tags ? normalizeTags(body.tags) : overlays[index].tags,
     };
+
+    const shouldSyncIdentity = requestedName !== undefined || requestedEmoji !== undefined;
+    if (shouldSyncIdentity) {
+      syncAgentIdentity(real, nextOverlay.name, nextOverlay.emoji);
+    }
 
     overlays[index] = nextOverlay;
     await saveTeamOverlay(overlays);
