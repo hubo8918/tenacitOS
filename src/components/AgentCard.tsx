@@ -66,6 +66,8 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
   const [description, setDescription] = useState(agent.description);
   const [status, setStatus] = useState<"online" | "offline">(agent.status);
   const [saving, setSaving] = useState(false);
+  const [actionRunning, setActionRunning] = useState<"wake" | "check-in" | null>(null);
+  const [actionResult, setActionResult] = useState<string | null>(null);
 
   const handleSave = async () => {
     setSaving(true);
@@ -91,6 +93,33 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
     setDescription(agent.description);
     setStatus(agent.status);
     setEditing(false);
+  };
+
+  const runAgentAction = async (action: "wake" | "check-in") => {
+    setActionRunning(action);
+    setActionResult(null);
+
+    try {
+      const res = await fetch("/api/team/actions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: agent.id, action }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error || `Failed to run ${action}`);
+      }
+
+      const duration = typeof data.durationMs === "number" ? ` (${Math.round(data.durationMs / 1000)}s)` : "";
+      setActionResult(`${action}: ${data.text || "done"}${duration}`);
+      onUpdate?.();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setActionResult(`error: ${message}`);
+    } finally {
+      setActionRunning(null);
+    }
   };
 
   const inputStyle: React.CSSProperties = {
@@ -316,8 +345,8 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
           ))}
         </div>
 
-        {/* Footer: activity + edit link */}
-        <div className="flex items-center justify-between gap-3">
+        {/* Footer: activity + actions */}
+        <div className="flex items-start justify-between gap-3">
           <div className="text-[11px] leading-tight" style={{ color: "var(--text-muted)" }}>
             <p>
               model:{" "}
@@ -345,20 +374,60 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
             </p>
           </div>
 
-          <button
-            onClick={() => setEditing(true)}
-            className="flex items-center gap-1 text-xs transition-colors"
-            style={{ color: "var(--text-muted)" }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = "var(--text-secondary)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = "var(--text-muted)";
-            }}
-          >
-            <Edit3 className="w-3 h-3" />
-            edit {agent.id}
-          </button>
+          <div className="flex flex-col items-end gap-2">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => runAgentAction("wake")}
+                disabled={Boolean(actionRunning) || editing}
+                className="text-[11px] px-2 py-1 rounded-md"
+                style={{
+                  color: "var(--text-secondary)",
+                  border: "1px solid var(--border)",
+                  opacity: actionRunning ? 0.6 : 1,
+                }}
+              >
+                {actionRunning === "wake" ? "waking..." : "wake"}
+              </button>
+
+              <button
+                onClick={() => runAgentAction("check-in")}
+                disabled={Boolean(actionRunning) || editing}
+                className="text-[11px] px-2 py-1 rounded-md"
+                style={{
+                  color: "var(--text-secondary)",
+                  border: "1px solid var(--border)",
+                  opacity: actionRunning ? 0.6 : 1,
+                }}
+              >
+                {actionRunning === "check-in" ? "checking..." : "check-in"}
+              </button>
+
+              <button
+                onClick={() => setEditing(true)}
+                className="flex items-center gap-1 text-xs transition-colors"
+                style={{ color: "var(--text-muted)" }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = "var(--text-secondary)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = "var(--text-muted)";
+                }}
+              >
+                <Edit3 className="w-3 h-3" />
+                edit {agent.id}
+              </button>
+            </div>
+
+            {actionResult && (
+              <p
+                className="text-[11px] max-w-[260px] text-right"
+                style={{ color: "var(--text-muted)", lineHeight: 1.35 }}
+                title={actionResult}
+              >
+                {actionResult}
+              </p>
+            )}
+          </div>
         </div>
       </div>
     </div>
