@@ -12,6 +12,7 @@ type SortField = "title" | "status" | "priority" | "dueDate";
 type SortDir = "asc" | "desc";
 
 const priorityOrder = { high: 0, medium: 1, low: 2 };
+const statusOrder = { blocked: 0, in_progress: 1, pending: 2, completed: 3 };
 
 interface TasksPageClientProps {
   initialTasks: Task[];
@@ -26,7 +27,7 @@ export default function TasksPageClient({ initialTasks }: TasksPageClientProps) 
   const tasks = useMemo(() => data?.tasks || [], [data]);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [sortField, setSortField] = useState<SortField>("dueDate");
+  const [sortField, setSortField] = useState<SortField>("status");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
   const filteredTasks = useMemo(() => {
@@ -42,9 +43,13 @@ export default function TasksPageClient({ initialTasks }: TasksPageClientProps) 
         case "title":
           cmp = a.title.localeCompare(b.title);
           break;
-        case "status":
-          cmp = a.status.localeCompare(b.status);
+        case "status": {
+          cmp = statusOrder[a.status] - statusOrder[b.status];
+          if (cmp === 0) {
+            cmp = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+          }
           break;
+        }
         case "priority":
           cmp = priorityOrder[a.priority] - priorityOrder[b.priority];
           break;
