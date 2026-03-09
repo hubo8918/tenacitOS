@@ -80,7 +80,7 @@ export default function AgentsPageClient({ initialAgents }: AgentsPageClientProp
   useEffect(() => {
     const interval = setInterval(() => {
       refetch();
-    }, 10000);
+    }, 30000);
 
     return () => clearInterval(interval);
   }, [refetch]);
