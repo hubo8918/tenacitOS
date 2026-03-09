@@ -101,12 +101,16 @@ export function Notepad() {
         >
           Notepad
         </span>
-        {isDirty && <span style={{ fontSize: "0.65rem", color: "var(--text-muted)" }}>saving...</span>}
-        {!isDirty && lastSaved && (
-          <span style={{ fontSize: "0.65rem", color: "var(--text-muted)" }}>
-            saved {lastSaved.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-          </span>
-        )}
+        <span
+          suppressHydrationWarning
+          style={{ fontSize: "0.65rem", color: "var(--text-muted)", minWidth: "72px", textAlign: "right" }}
+        >
+          {isDirty
+            ? "saving..."
+            : lastSaved
+            ? `saved ${lastSaved.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+            : ""}
+        </span>
         <button
           onClick={clear}
           title="Clear"
@@ -125,6 +129,7 @@ export function Notepad() {
 
       {/* Textarea */}
       <textarea
+        suppressHydrationWarning
         value={text}
         onChange={(e) => {
           setText(e.target.value);
