@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 interface PixelCharacterProps {
   agent: {
@@ -20,18 +20,6 @@ export function PixelCharacter({
   deskType = "normal",
 }: PixelCharacterProps) {
   const [showBubble, setShowBubble] = useState(false);
-  const [typing, setTyping] = useState(false);
-
-  useEffect(() => {
-    if (agent.isActive) {
-      const typingInterval = setInterval(() => {
-        setTyping((prev) => !prev);
-      }, 800);
-      return () => clearInterval(typingInterval);
-    } else {
-      setTyping(false);
-    }
-  }, [agent.isActive]);
 
   const getDeskStyle = () => {
     switch (deskType) {
@@ -226,7 +214,7 @@ export function PixelCharacter({
           left: deskType === "large" ? "40px" : "30px",
           fontSize: "48px",
           filter: agent.isActive ? "none" : "grayscale(50%) opacity(70%)",
-          animation: typing ? "pixel-typing 0.8s infinite" : "pixel-idle 3s infinite",
+          animation: agent.isActive ? "pixel-typing 0.8s infinite" : "pixel-idle 3s infinite",
         }}
       >
         {agent.emoji}

@@ -38,14 +38,13 @@ import {
   BarChart3,
   FileBarChart,
   Puzzle,
-  User,
 } from "lucide-react";
-import { getAgentDisplayName } from "@/config/branding";
+import type { LucideIcon } from "lucide-react";
 
 interface NavItem {
   href: string;
   label: string;
-  icon: any;
+  icon: LucideIcon;
   highlight?: boolean;
   disabled?: boolean;
 }
@@ -108,13 +107,6 @@ export function Sidebar() {
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
-
-  // Close sidebar when navigating on mobile
-  useEffect(() => {
-    if (isMobile) {
-      setIsOpen(false);
-    }
-  }, [pathname, isMobile]);
 
   // Prevent scroll when sidebar is open on mobile
   useEffect(() => {
@@ -285,6 +277,11 @@ export function Sidebar() {
                 <li key={item.href + item.label}>
                   <Link
                     href={item.href}
+                    onClick={() => {
+                      if (isMobile) {
+                        closeSidebar();
+                      }
+                    }}
                     className={`nav-item w-full ${isActive ? "active" : ""}`}
                     style={
                       !isActive
@@ -325,6 +322,11 @@ export function Sidebar() {
         >
           <Link
             href="/settings"
+            onClick={() => {
+              if (isMobile) {
+                closeSidebar();
+              }
+            }}
             className={`nav-item w-full mb-2 ${pathname === "/settings" ? "active" : ""}`}
             style={
               pathname !== "/settings"

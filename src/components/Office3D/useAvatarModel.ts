@@ -1,4 +1,3 @@
-import { useGLTF } from '@react-three/drei';
 import { useState, useEffect } from 'react';
 
 export function useAvatarModel(agentId: string) {
@@ -6,9 +5,8 @@ export function useAvatarModel(agentId: string) {
   const modelPath = `/models/${agentId}.glb`;
 
   useEffect(() => {
-    // Check if model file exists
     fetch(modelPath, { method: 'HEAD' })
-      .then(response => {
+      .then((response) => {
         setModelExists(response.ok);
       })
       .catch(() => {
@@ -16,17 +14,10 @@ export function useAvatarModel(agentId: string) {
       });
   }, [modelPath]);
 
-  // Only try to load if we know the model exists
-  let model = null;
-  if (modelExists === true) {
-    try {
-      const gltf = useGLTF(modelPath);
-      model = gltf.scene;
-    } catch (error) {
-      // Failed to load, use fallback
-      model = null;
-    }
-  }
-
-  return { model, loading: modelExists === null };
+  return {
+    model: null,
+    modelPath,
+    modelExists,
+    loading: modelExists === null,
+  };
 }

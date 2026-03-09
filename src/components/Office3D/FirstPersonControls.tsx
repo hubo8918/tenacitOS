@@ -11,8 +11,8 @@ interface FirstPersonControlsProps {
 
 export default function FirstPersonControls({ moveSpeed = 5 }: FirstPersonControlsProps) {
   const { camera } = useThree();
-  const controlsRef = useRef<any>(null);
-  
+  const controlsRef = useRef<{ isLocked?: boolean } | null>(null);
+
   const moveState = useRef({
     forward: false,
     backward: false,
@@ -23,7 +23,6 @@ export default function FirstPersonControls({ moveSpeed = 5 }: FirstPersonContro
   });
 
   const velocity = useRef(new THREE.Vector3());
-  const direction = useRef(new THREE.Vector3());
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -122,10 +121,17 @@ export default function FirstPersonControls({ moveSpeed = 5 }: FirstPersonContro
     camera.position.add(movement);
 
     // Boundaries (keep camera inside office)
-    camera.position.x = Math.max(-9, Math.min(9, camera.position.x));
-    camera.position.y = Math.max(1, Math.min(8, camera.position.y));
-    camera.position.z = Math.max(-8, Math.min(8, camera.position.z));
+    const clampedX = Math.max(-9, Math.min(9, camera.position.x));
+    const clampedY = Math.max(1, Math.min(8, camera.position.y));
+    const clampedZ = Math.max(-8, Math.min(8, camera.position.z));
+    camera.position.set(clampedX, clampedY, clampedZ);
   });
 
-  return <PointerLockControls ref={controlsRef} />;
+  return (
+    <PointerLockControls
+      ref={(instance) => {
+        controlsRef.current = instance as unknown as { isLocked?: boolean } | null;
+      }}
+    />
+  );
 }

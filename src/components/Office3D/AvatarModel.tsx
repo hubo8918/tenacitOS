@@ -1,7 +1,6 @@
 'use client';
 
-import { useGLTF } from '@react-three/drei';
-import { Sphere } from '@react-three/drei';
+import { useGLTF, Sphere } from '@react-three/drei';
 import type { AgentConfig } from './agentsConfig';
 import { useEffect, useState } from 'react';
 
@@ -10,25 +9,39 @@ interface AvatarModelProps {
   position: [number, number, number];
 }
 
+interface LoadedAvatarModelProps {
+  modelPath: string;
+  position: [number, number, number];
+}
+
+function LoadedAvatarModel({ modelPath, position }: LoadedAvatarModelProps) {
+  const { scene } = useGLTF(modelPath);
+
+  return (
+    <primitive
+      object={scene.clone()}
+      position={position}
+      scale={0.8}
+      rotation={[0, Math.PI, 0]}
+      castShadow
+      receiveShadow
+    />
+  );
+}
+
 export default function AvatarModel({ agent, position }: AvatarModelProps) {
   const modelPath = `/models/${agent.id}.glb`;
-  const [exists, setExists] = useState<boolean>(false);
+  const [exists, setExists] = useState<boolean | null>(null);
 
-  // Check if file exists before trying to load
   useEffect(() => {
     fetch(modelPath, { method: 'HEAD' })
-      .then(res => setExists(res.ok))
+      .then((res) => setExists(res.ok))
       .catch(() => setExists(false));
   }, [modelPath]);
 
-  // If model doesn't exist, return fallback sphere
-  if (!exists) {
+  if (exists !== true) {
     return (
-      <Sphere
-        args={[0.3, 16, 16]}
-        position={position}
-        castShadow
-      >
+      <Sphere args={[0.3, 16, 16]} position={position} castShadow>
         <meshStandardMaterial
           color={agent.color}
           emissive={agent.color}
@@ -38,17 +51,5 @@ export default function AvatarModel({ agent, position }: AvatarModelProps) {
     );
   }
 
-  // Load and display the GLB model
-  const { scene } = useGLTF(modelPath);
-  
-  return (
-    <primitive
-      object={scene.clone()}
-      position={position}
-      scale={0.8} // Ready Player Me avatars are ~1.8m tall, scale to fit desk
-      rotation={[0, Math.PI, 0]} // Face forward
-      castShadow
-      receiveShadow
-    />
-  );
+  return <LoadedAvatarModel modelPath={modelPath} position={position} />;
 }

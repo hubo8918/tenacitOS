@@ -26,14 +26,6 @@ interface FileTreeProps {
   onSelect: (path: string) => void;
 }
 
-const getFileIcon = (name: string) => {
-  const lower = name.toLowerCase();
-  if (lower === "memory.md") return Brain;
-  if (lower === "soul.md") return Ghost;
-  if (lower === "user.md") return User;
-  if (lower === "agents.md") return BookOpen;
-  return FileText;
-};
 
 function TreeNode({
   node,
@@ -58,11 +50,13 @@ function TreeNode({
     }
   };
 
-  const Icon = isFolder
-    ? isExpanded
-      ? FolderOpen
-      : Folder
-    : getFileIcon(node.name);
+  const iconColor = isFolder
+    ? "#F59E0B"
+    : isSelected
+    ? "var(--text-primary)"
+    : "#60A5FA";
+
+  const lowerName = node.name.toLowerCase();
 
   return (
     <div>
@@ -97,16 +91,23 @@ function TreeNode({
           </span>
         )}
         {!isFolder && <span className="w-3.5 md:w-4" />}
-        <Icon
-          className="w-3.5 h-3.5 md:w-4 md:h-4"
-          style={{
-            color: isFolder
-              ? "#F59E0B"
-              : isSelected
-              ? "var(--text-primary)"
-              : "#60A5FA",
-          }}
-        />
+        {isFolder ? (
+          isExpanded ? (
+            <FolderOpen className="w-3.5 h-3.5 md:w-4 md:h-4" style={{ color: iconColor }} />
+          ) : (
+            <Folder className="w-3.5 h-3.5 md:w-4 md:h-4" style={{ color: iconColor }} />
+          )
+        ) : lowerName === "memory.md" ? (
+          <Brain className="w-3.5 h-3.5 md:w-4 md:h-4" style={{ color: iconColor }} />
+        ) : lowerName === "soul.md" ? (
+          <Ghost className="w-3.5 h-3.5 md:w-4 md:h-4" style={{ color: iconColor }} />
+        ) : lowerName === "user.md" ? (
+          <User className="w-3.5 h-3.5 md:w-4 md:h-4" style={{ color: iconColor }} />
+        ) : lowerName === "agents.md" ? (
+          <BookOpen className="w-3.5 h-3.5 md:w-4 md:h-4" style={{ color: iconColor }} />
+        ) : (
+          <FileText className="w-3.5 h-3.5 md:w-4 md:h-4" style={{ color: iconColor }} />
+        )}
         <span className="truncate">{node.name}</span>
       </button>
 

@@ -207,26 +207,35 @@ function SessionDetail({
   onClose: () => void;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(() => Boolean(session.sessionId));
+  const [error, setError] = useState<string | null>(() =>
+    session.sessionId ? null : "No session file available"
+  );
 
   useEffect(() => {
     if (!session.sessionId) {
-      setLoading(false);
-      setError("No session file available");
       return;
     }
 
-    setLoading(true);
-    setError(null);
-    fetch(`/api/sessions?id=${session.sessionId}`)
+    const abortController = new AbortController();
+
+    fetch(`/api/sessions?id=${session.sessionId}`, { signal: abortController.signal })
       .then((r) => r.json())
       .then((data) => {
         setMessages(data.messages || []);
-        if (data.error) setError(data.error);
+        setError(data.error || null);
       })
-      .catch(() => setError("Failed to load messages"))
-      .finally(() => setLoading(false));
+      .catch((err) => {
+        if (abortController.signal.aborted) return;
+        setError(err instanceof Error ? err.message : "Failed to load messages");
+      })
+      .finally(() => {
+        if (!abortController.signal.aborted) {
+          setLoading(false);
+        }
+      });
+
+    return () => abortController.abort();
   }, [session.sessionId]);
 
   const userCount = messages.filter((m) => m.type === "user").length;
@@ -957,6 +966,7 @@ export default function SessionsPage() {
       {/* Detail panel */}
       {selectedSession && (
         <SessionDetail
+          key={selectedSession.sessionId || selectedSession.key}
           session={selectedSession}
           onClose={() => setSelectedSession(null)}
         />
