@@ -41,8 +41,8 @@ export function WeatherWidget() {
       })
       .catch(() => setLoading(false));
 
-    // Update clock every second
-    const timer = setInterval(() => setNow(new Date()), 1000);
+    // Update clock every minute
+    const timer = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(timer);
   }, []);
 
