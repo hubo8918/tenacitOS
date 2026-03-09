@@ -205,7 +205,8 @@ export default function TeamPageClient({ initialTeam }: TeamPageClientProps) {
             fontWeight: 500,
           }}
         >
-          Organization view • {teamAgents.length} agent profiles with roles, identity, and collaboration context.
+          Organization view • {teamAgents.length} team profiles (excluding the main system controller) with roles,
+          identity, and collaboration context.
         </p>
         <p
           className="text-sm max-w-2xl mx-auto"
@@ -215,7 +216,8 @@ export default function TeamPageClient({ initialTeam }: TeamPageClientProps) {
           }}
         >
           This page is for understanding who each agent is, what they are responsible for, and how the team is
-          organized.{" "}
+          organized. Presence labels here mean <strong>active now</strong>, <strong>recently seen</strong>, or
+          <strong> no activity yet</strong> — not the same thing as runtime online/offline.{" "}
           <Link href="/agents" style={{ color: "var(--accent)", fontWeight: 600 }}>
             Need models, workspaces, permissions, or runtime status? Open Agents →
           </Link>
@@ -284,12 +286,12 @@ export default function TeamPageClient({ initialTeam }: TeamPageClientProps) {
             value={activityFilter}
             onChange={(e) => setActivityFilter(e.target.value as ActivityFilter)}
             style={controlStyle}
-            aria-label="Filter by activity"
+            aria-label="Filter by presence"
           >
-            <option value="all">All activity</option>
-            <option value="active">Active</option>
-            <option value="idle">Idle</option>
-            <option value="never">Never active</option>
+            <option value="all">All presence</option>
+            <option value="active">Active now</option>
+            <option value="idle">Recently seen</option>
+            <option value="never">No activity yet</option>
           </select>
 
           <select
@@ -326,13 +328,13 @@ export default function TeamPageClient({ initialTeam }: TeamPageClientProps) {
             shown <strong style={{ color: "var(--text-secondary)" }}>{summary.total}</strong>
           </span>
           <span>
-            active <strong style={{ color: "#4ade80" }}>{summary.active}</strong>
+            active now <strong style={{ color: "#4ade80" }}>{summary.active}</strong>
           </span>
           <span>
-            idle <strong style={{ color: "#f59e0b" }}>{summary.idle}</strong>
+            recently seen <strong style={{ color: "#f59e0b" }}>{summary.idle}</strong>
           </span>
           <span>
-            never <strong style={{ color: "#9ca3af" }}>{summary.never}</strong>
+            no activity yet <strong style={{ color: "#9ca3af" }}>{summary.never}</strong>
           </span>
         </div>
       </div>

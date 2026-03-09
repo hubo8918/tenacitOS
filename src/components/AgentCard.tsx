@@ -94,7 +94,7 @@ function getPresenceMeta(state: PresenceState): {
 } {
   if (state === "active") {
     return {
-      label: "Active",
+      label: "Active now",
       color: "#4ade80",
       glow: "0 0 6px #4ade8060",
     };
@@ -102,14 +102,14 @@ function getPresenceMeta(state: PresenceState): {
 
   if (state === "idle") {
     return {
-      label: "Idle",
+      label: "Recently seen",
       color: "#f59e0b",
       glow: "none",
     };
   }
 
   return {
-    label: "Never",
+    label: "No activity yet",
     color: "#6b7280",
     glow: "none",
   };
