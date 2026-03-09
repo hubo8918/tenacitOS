@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 
 // Match absolute paths to image files
@@ -16,13 +17,18 @@ function ImageInline({ src }: { src: string }) {
 
   return (
     <>
-      <img
+      <Image
         src={src}
         alt=""
+        width={1200}
+        height={800}
+        unoptimized
         onClick={() => setFullscreen(true)}
         style={{
           maxWidth: "100%",
           maxHeight: "400px",
+          width: "auto",
+          height: "auto",
           borderRadius: "0.5rem",
           marginTop: "0.5rem",
           cursor: "pointer",
@@ -43,10 +49,19 @@ function ImageInline({ src }: { src: string }) {
             cursor: "zoom-out",
           }}
         >
-          <img
+          <Image
             src={src}
             alt=""
-            style={{ maxWidth: "95vw", maxHeight: "95vh", borderRadius: "0.5rem" }}
+            width={1920}
+            height={1080}
+            unoptimized
+            style={{
+              maxWidth: "95vw",
+              maxHeight: "95vh",
+              width: "auto",
+              height: "auto",
+              borderRadius: "0.5rem",
+            }}
           />
         </div>
       )}
