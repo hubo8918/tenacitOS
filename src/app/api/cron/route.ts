@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
-import { OPENCLAW_CONFIG, OPENCLAW_DIR } from "@/lib/paths";
+import { OPENCLAW_DIR } from "@/lib/paths";
 
 const CRON_JOBS_FILE = path.join(process.cwd(), "data", "cron-jobs.json");
 const REAL_CRON_JOBS_FILE = path.join(OPENCLAW_DIR, "cron", "jobs.json");
@@ -14,19 +14,6 @@ function runCron(args: string[]) {
     encoding: "utf-8",
     windowsHide: true,
   });
-}
-
-function getGatewayConfig() {
-  try {
-    const configRaw = fs.readFileSync(OPENCLAW_CONFIG, "utf-8");
-    const config = JSON.parse(configRaw);
-    return {
-      token: config.gateway?.auth?.token || "",
-      port: config.gateway?.port || 18789,
-    };
-  } catch {
-    return { token: "", port: 18789 };
-  }
 }
 
 function readLocalCronJobs() {

@@ -15,7 +15,7 @@ const priorityOrder = { high: 0, medium: 1, low: 2 };
 
 export default function TasksPage() {
   const { data, loading, error, refetch } = useFetch<{ tasks: Task[] }>("/api/agent-tasks");
-  const tasks = data?.tasks || [];
+  const tasks = useMemo(() => data?.tasks || [], [data]);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sortField, setSortField] = useState<SortField>("dueDate");

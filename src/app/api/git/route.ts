@@ -129,7 +129,7 @@ async function getRepoStatus(repoPath: string): Promise<RepoStatus> {
       remoteUrl,
       isDirty: staged.length > 0 || unstaged.length > 0 || untracked.length > 0,
     };
-  } catch (error) {
+  } catch {
     return {
       name,
       path: repoPath,
@@ -156,8 +156,6 @@ export async function GET() {
     return NextResponse.json({ error: 'Failed to get repos' }, { status: 500 });
   }
 }
-
-const ALLOWED_REPOS = [WORKSPACE + '/mission-control', WORKSPACE];
 
 export async function POST(request: NextRequest) {
   try {

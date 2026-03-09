@@ -1,7 +1,5 @@
 "use client";
 
-import { BRANDING } from "@/config/branding";
-
 interface Workflow {
   id: string;
   emoji: string;

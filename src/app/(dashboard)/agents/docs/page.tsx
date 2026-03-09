@@ -8,7 +8,7 @@ import { useFetch } from "@/lib/useFetch";
 
 export default function DocsPage() {
   const [activeFolder, setActiveFolder] = useState("general");
-  const { data, loading, error, refetch } = useFetch<{ folders: DocFolder[]; files: DocFile[] }>("/api/docs");
+  const { data, loading, error } = useFetch<{ folders: DocFolder[]; files: DocFile[] }>("/api/docs");
   const folders = data?.folders || [];
   const files = data?.files || [];
   const activeFiles = files.filter((f) => f.folderId === activeFolder);
