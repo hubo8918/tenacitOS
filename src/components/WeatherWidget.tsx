@@ -50,17 +50,16 @@ export function WeatherWidget() {
     return (
       <div
         style={{
-          padding: "1.25rem",
+          padding: "0.875rem 1rem",
           backgroundColor: "var(--card)",
           borderRadius: "0.75rem",
           border: "1px solid var(--border)",
-          minHeight: "120px",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
         }}
       >
-        <span style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>Loading weather...</span>
+        <span style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>Loading weather...</span>
       </div>
     );
   }
@@ -73,25 +72,23 @@ export function WeatherWidget() {
     return (
       <div
         style={{
-          padding: "1.25rem",
+          padding: "0.875rem 1rem",
           backgroundColor: "var(--card)",
           borderRadius: "0.75rem",
           border: "1px solid var(--border)",
-          minHeight: "120px",
           display: "flex",
-          flexDirection: "column",
           alignItems: "center",
-          justifyContent: "center",
-          textAlign: "center",
-          gap: "0.5rem",
+          gap: "0.75rem",
         }}
       >
-        <CloudOff style={{ width: "22px", height: "22px", color: "var(--text-muted)" }} />
-        <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-secondary)" }}>
-          Weather unavailable
-        </div>
-        <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-          {weather.reason || "Location not configured"}
+        <CloudOff style={{ width: "18px", height: "18px", color: "var(--text-muted)", flexShrink: 0 }} />
+        <div>
+          <div style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-secondary)" }}>
+            Weather unavailable
+          </div>
+          <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
+            {weather.reason || "Location not configured"}
+          </div>
         </div>
       </div>
     );
