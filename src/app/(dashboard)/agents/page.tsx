@@ -38,7 +38,7 @@ interface Agent {
 export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"cards" | "organigrama">("cards");
+  const [activeTab, setActiveTab] = useState<"cards" | "orgChart">("cards");
 
   useEffect(() => {
     fetchAgents();
@@ -108,7 +108,7 @@ export default function AgentsPage() {
       <div className="flex gap-2 mb-6 border-b" style={{ borderColor: "var(--border)" }}>
         {[
           { id: "cards" as const, label: "Agent Cards", icon: LayoutGrid },
-          { id: "organigrama" as const, label: "Organigrama", icon: GitBranch },
+          { id: "orgChart" as const, label: "Org Chart", icon: GitBranch },
         ].map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -130,8 +130,8 @@ export default function AgentsPage() {
         ))}
       </div>
 
-      {/* Organigrama View */}
-      {activeTab === "organigrama" && (
+      {/* Org Chart View */}
+      {activeTab === "orgChart" && (
         <div className="rounded-xl" style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}>
           <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
             <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>Agent Hierarchy</h2>
