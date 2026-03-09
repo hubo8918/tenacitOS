@@ -153,6 +153,31 @@ export default function AgentsPageClient({ initialAgents }: AgentsPageClientProp
         </p>
       </div>
 
+      {error && agents.length > 0 && (
+        <div
+          className="rounded-lg px-4 py-3 mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
+          style={{
+            border: "1px solid var(--negative, #FF453A)",
+            backgroundColor: "color-mix(in srgb, var(--negative, #FF453A) 6%, transparent)",
+          }}
+        >
+          <p className="text-xs" style={{ color: "var(--negative, #FF453A)" }}>
+            Live sync delayed: {error}
+          </p>
+          <button
+            onClick={() => refetch()}
+            className="text-xs px-2.5 py-1 rounded-md"
+            style={{
+              color: "var(--text-secondary)",
+              border: "1px solid var(--border)",
+              backgroundColor: "var(--surface-elevated)",
+            }}
+          >
+            Retry now
+          </button>
+        </div>
+      )}
+
       <div className="flex gap-2 mb-6 border-b" style={{ borderColor: "var(--border)" }}>
         {[
           { id: "cards" as const, label: "Agent Cards", icon: LayoutGrid },
