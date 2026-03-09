@@ -70,6 +70,7 @@ export async function GET() {
 
     // Firewall Status (UFW on Linux only)
     let firewallActive = true;
+    const firewallLabel = isLinux ? "UFW" : "Firewall";
     if (isLinux) {
       try {
         const { stdout } = await execAsync("ufw status 2>/dev/null | head -1 || true");
@@ -91,8 +92,10 @@ export async function GET() {
       disk: { used: diskUsed, total: diskTotal },
       vpnActive,
       firewallActive,
+      firewallLabel,
       activeServices,
       totalServices,
+      servicesAvailable: isLinux,
       uptime,
     });
   } catch (error) {

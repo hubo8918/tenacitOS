@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
-import { Wind, Droplets, Thermometer } from "lucide-react";
+import { Wind, Droplets, Thermometer, CloudOff } from "lucide-react";
 
 interface Forecast {
   day: string;
@@ -12,16 +12,19 @@ interface Forecast {
 }
 
 interface WeatherData {
-  city: string;
-  temp: number;
-  feels_like: number;
-  humidity: number;
-  wind: number;
-  precipitation: number;
-  condition: string;
-  emoji: string;
-  forecast: Forecast[];
-  updated: string;
+  city?: string;
+  temp?: number;
+  feels_like?: number;
+  humidity?: number;
+  wind?: number;
+  precipitation?: number;
+  condition?: string;
+  emoji?: string;
+  forecast?: Forecast[];
+  updated?: string;
+  unavailable?: boolean;
+  reason?: string;
+  error?: string;
 }
 
 export function WeatherWidget() {
@@ -32,7 +35,10 @@ export function WeatherWidget() {
   useEffect(() => {
     fetch("/api/weather")
       .then((r) => r.json())
-      .then((d) => { setWeather(d); setLoading(false); })
+      .then((d) => {
+        setWeather(d);
+        setLoading(false);
+      })
       .catch(() => setLoading(false));
 
     // Update clock every second
@@ -42,31 +48,66 @@ export function WeatherWidget() {
 
   if (loading) {
     return (
-      <div style={{
-        padding: "1.25rem",
-        backgroundColor: "var(--card)",
-        borderRadius: "0.75rem",
-        border: "1px solid var(--border)",
-        minHeight: "120px",
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}>
+      <div
+        style={{
+          padding: "1.25rem",
+          backgroundColor: "var(--card)",
+          borderRadius: "0.75rem",
+          border: "1px solid var(--border)",
+          minHeight: "120px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
         <span style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>Loading weather...</span>
       </div>
     );
   }
 
-  if (!weather || (weather as unknown as Record<string, unknown>).error) {
+  if (!weather || weather.error) {
     return null;
   }
 
+  if (weather.unavailable) {
+    return (
+      <div
+        style={{
+          padding: "1.25rem",
+          backgroundColor: "var(--card)",
+          borderRadius: "0.75rem",
+          border: "1px solid var(--border)",
+          minHeight: "120px",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          textAlign: "center",
+          gap: "0.5rem",
+        }}
+      >
+        <CloudOff style={{ width: "22px", height: "22px", color: "var(--text-muted)" }} />
+        <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-secondary)" }}>
+          Weather unavailable
+        </div>
+        <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+          {weather.reason || "Location not configured"}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div style={{
-      padding: "1.25rem",
-      backgroundColor: "var(--card)",
-      borderRadius: "0.75rem",
-      border: "1px solid var(--border)",
-      background: "linear-gradient(135deg, var(--card) 0%, color-mix(in srgb, var(--accent) 5%, var(--card)) 100%)",
-    }}>
+    <div
+      style={{
+        padding: "1.25rem",
+        backgroundColor: "var(--card)",
+        borderRadius: "0.75rem",
+        border: "1px solid var(--border)",
+        background:
+          "linear-gradient(135deg, var(--card) 0%, color-mix(in srgb, var(--accent) 5%, var(--card)) 100%)",
+      }}
+    >
       {/* Header: city + clock */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "0.75rem" }}>
         <div>
@@ -111,13 +152,15 @@ export function WeatherWidget() {
 
       {/* 3-day forecast */}
       <div style={{ display: "flex", gap: "0.5rem" }}>
-        {weather.forecast.map((day, i) => {
+        {(weather.forecast || []).map((day, i) => {
           const dayName = i === 0 ? "Today" : i === 1 ? "Tmrw" : format(new Date(day.day), "EEE");
           return (
             <div
               key={day.day}
               style={{
-                flex: 1, textAlign: "center", padding: "0.5rem 0.375rem",
+                flex: 1,
+                textAlign: "center",
+                padding: "0.5rem 0.375rem",
                 backgroundColor: i === 0 ? "rgba(255,59,48,0.08)" : "var(--card-elevated)",
                 borderRadius: "0.5rem",
                 border: i === 0 ? "1px solid rgba(255,59,48,0.2)" : "1px solid var(--border)",

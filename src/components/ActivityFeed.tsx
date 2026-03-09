@@ -65,9 +65,10 @@ const statusConfig: Record<string, {
 interface ActivityFeedProps {
   limit?: number;
   initialActivities?: Activity[];
+  hasRecentActivity?: boolean;
 }
 
-export function ActivityFeed({ limit = 10, initialActivities }: ActivityFeedProps) {
+export function ActivityFeed({ limit = 10, initialActivities, hasRecentActivity = true }: ActivityFeedProps) {
   const [activities, setActivities] = useState<Activity[] | null>(initialActivities ?? null);
 
   useEffect(() => {
@@ -98,6 +99,18 @@ export function ActivityFeed({ limit = 10, initialActivities }: ActivityFeedProp
       <div className="text-center py-12" style={{ color: 'var(--text-secondary)' }}>
         <Zap className="w-12 h-12 mx-auto mb-4 opacity-50" />
         <p>No activities logged yet</p>
+      </div>
+    );
+  }
+
+  if (!hasRecentActivity) {
+    return (
+      <div className="text-center py-12" style={{ color: 'var(--text-secondary)' }}>
+        <Clock className="w-12 h-12 mx-auto mb-4 opacity-50" />
+        <p>No recent activity in the last 24 hours</p>
+        <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
+          Older history is still available on the Activity page.
+        </p>
       </div>
     );
   }

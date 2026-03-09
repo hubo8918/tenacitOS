@@ -10,8 +10,10 @@ interface SystemStats {
   disk: { used: number; total: number };
   vpnActive: boolean;
   firewallActive: boolean;
+  firewallLabel: string;
   activeServices: number;
   totalServices: number;
+  servicesAvailable: boolean;
   uptime: string;
 }
 
@@ -79,8 +81,10 @@ export function StatusBar() {
     disk: { used: 0, total: 100 },
     vpnActive: false,
     firewallActive: true,
+    firewallLabel: "Firewall",
     activeServices: 0,
     totalServices: 4,
+    servicesAvailable: false,
     uptime: "0d 0h",
   });
 
@@ -189,7 +193,7 @@ export function StatusBar() {
             color: "var(--text-muted)",
           }}
         >
-          UFW
+          {stats.firewallLabel}
         </span>
       </div>
 
@@ -204,7 +208,7 @@ export function StatusBar() {
             color: "var(--text-muted)",
           }}
         >
-          SVC: {stats.activeServices}/{stats.totalServices}
+          SVC: {stats.servicesAvailable ? `${stats.activeServices}/${stats.totalServices}` : "n/a"}
         </span>
       </div>
 

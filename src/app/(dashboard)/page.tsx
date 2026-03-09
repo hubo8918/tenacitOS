@@ -229,7 +229,11 @@ export default async function DashboardPage() {
             </a>
           </div>
           <div className="p-0">
-            <ActivityFeed limit={5} initialActivities={recentActivities} />
+            <ActivityFeed
+              limit={5}
+              initialActivities={recentActivities}
+              hasRecentActivity={stats.today > 0}
+            />
           </div>
         </div>
 
