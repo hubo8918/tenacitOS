@@ -252,26 +252,12 @@ export function Sidebar() {
         <nav className="flex-1 pt-4">
           <ul className="space-y-0.5">
             {navItems.map((item) => {
+              if (item.disabled) {
+                return null;
+              }
+
               const isActive = isItemActive(item);
               const Icon = item.icon;
-
-              if (item.disabled) {
-                return (
-                  <li key={item.href + item.label}>
-                    <div
-                      className="nav-item w-full"
-                      style={{
-                        color: "var(--text-muted)",
-                        opacity: 0.4,
-                        cursor: "not-allowed",
-                      }}
-                    >
-                      <Icon className="w-5 h-5" style={{ color: "var(--text-muted)" }} />
-                      {item.label}
-                    </div>
-                  </li>
-                );
-              }
 
               return (
                 <li key={item.href + item.label}>
