@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 
-interface UseFetchOptions {
+interface UseFetchOptions<T> {
   timeoutMs?: number;
+  initialData?: T | null;
+  fetchOnMount?: boolean;
 }
 
 interface UseFetchResult<T> {
@@ -18,11 +20,12 @@ function normalizeError(err: unknown): string {
   return "Unknown error";
 }
 
-export function useFetch<T>(url: string, options?: UseFetchOptions): UseFetchResult<T> {
+export function useFetch<T>(url: string, options?: UseFetchOptions<T>): UseFetchResult<T> {
   const timeoutMs = options?.timeoutMs ?? 10_000;
+  const fetchOnMount = options?.fetchOnMount ?? true;
 
-  const [data, setData] = useState<T | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<T | null>(options?.initialData ?? null);
+  const [loading, setLoading] = useState(fetchOnMount && !options?.initialData);
   const [error, setError] = useState<string | null>(null);
 
   const controllerRef = useRef<AbortController | null>(null);
@@ -86,8 +89,9 @@ export function useFetch<T>(url: string, options?: UseFetchOptions): UseFetchRes
   }, [timeoutMs, url]);
 
   useEffect(() => {
+    if (!fetchOnMount) return;
     fetchData();
-  }, [fetchData]);
+  }, [fetchData, fetchOnMount]);
 
   return { data, loading, error, refetch: fetchData };
 }
