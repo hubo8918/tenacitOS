@@ -103,14 +103,19 @@ export default async function DashboardPage() {
             <div
               className="px-3 py-2 rounded-lg"
               style={{
-                backgroundColor: activeSessions > 0 ? "color-mix(in srgb, var(--accent) 12%, transparent)" : "var(--card-elevated)",
+                backgroundColor:
+                  activeSessions > 0
+                    ? "color-mix(in srgb, var(--accent) 12%, transparent)"
+                    : "var(--card-elevated)",
                 color: "var(--text-secondary)",
               }}
             >
               <div className="text-[11px] uppercase" style={{ letterSpacing: "0.08em", fontWeight: 700 }}>
                 Active sessions
               </div>
-              <div className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>{activeSessions}</div>
+              <div className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>
+                {activeSessions}
+              </div>
             </div>
             <div
               className="px-3 py-2 rounded-lg"
@@ -129,7 +134,9 @@ export default async function DashboardPage() {
             <div
               className="px-3 py-2 rounded-lg"
               style={{
-                backgroundColor: weatherConfigured ? "var(--card-elevated)" : "color-mix(in srgb, var(--warning) 10%, transparent)",
+                backgroundColor: weatherConfigured
+                  ? "var(--card-elevated)"
+                  : "color-mix(in srgb, var(--warning) 10%, transparent)",
                 color: weatherConfigured ? "var(--text-secondary)" : "var(--warning)",
               }}
             >
@@ -141,42 +148,6 @@ export default async function DashboardPage() {
               </div>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Stats Grid + Weather */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-4 md:mb-6">
-        {/* Stats */}
-        <div className="lg:col-span-3 grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatsCard
-            title="Total Activities"
-            value={stats.total.toLocaleString()}
-            icon={<Activity className="w-5 h-5" />}
-            iconColor="var(--info)"
-          />
-          <StatsCard
-            title="Today"
-            value={stats.today.toLocaleString()}
-            icon={<Zap className="w-5 h-5" />}
-            iconColor="var(--accent)"
-          />
-          <StatsCard
-            title="Successful"
-            value={stats.success.toLocaleString()}
-            icon={<CheckCircle className="w-5 h-5" />}
-            iconColor="var(--success)"
-          />
-          <StatsCard
-            title="Errors"
-            value={stats.error.toLocaleString()}
-            icon={<XCircle className="w-5 h-5" />}
-            iconColor="var(--error)"
-          />
-        </div>
-
-        {/* Weather Widget */}
-        <div className="lg:col-span-1">
-          <WeatherWidget />
         </div>
       </div>
 
@@ -217,11 +188,7 @@ export default async function DashboardPage() {
               <Gamepad2 className="inline-block w-4 h-4 mr-1 mb-0.5" />
               Open Office
             </Link>
-            <Link
-              href="/agents"
-              className="text-sm font-medium"
-              style={{ color: "var(--accent)" }}
-            >
+            <Link href="/agents" className="text-sm font-medium" style={{ color: "var(--accent)" }}>
               View all →
             </Link>
           </div>
@@ -257,19 +224,12 @@ export default async function DashboardPage() {
                 >
                   {agent.name}
                 </div>
-                <div
-                  className="text-xs truncate mb-1"
-                  style={{ color: "var(--text-muted)" }}
-                  title={agent.model}
-                >
+                <div className="text-xs truncate mb-1" style={{ color: "var(--text-muted)" }} title={agent.model}>
                   <Bot className="inline-block w-3 h-3 mr-1" />
                   {agent.model.split("/").pop()}
                 </div>
                 {agent.botToken && (
-                  <div
-                    className="text-xs mt-1 flex items-center gap-1"
-                    style={{ color: "#0088cc" }}
-                  >
+                  <div className="text-xs mt-1 flex items-center gap-1" style={{ color: "#0088cc" }}>
                     <MessageSquare className="w-3 h-3" />
                     Connected
                   </div>
@@ -306,76 +266,101 @@ export default async function DashboardPage() {
                 Recent Activity
               </h2>
             </div>
-            <a
-              href="/activity"
-              className="text-sm font-medium"
-              style={{ color: "var(--accent)" }}
-            >
+            <a href="/activity" className="text-sm font-medium" style={{ color: "var(--accent)" }}>
               View all →
             </a>
           </div>
           <div className="p-0">
-            <ActivityFeed
-              limit={5}
-              initialActivities={recentActivities}
-              hasRecentActivity={stats.today > 0}
-            />
+            <ActivityFeed limit={5} initialActivities={recentActivities} hasRecentActivity={stats.today > 0} />
           </div>
         </div>
 
-        {/* Quick Links */}
-        <div
-          className="rounded-xl overflow-hidden"
-          style={{
-            backgroundColor: "var(--card)",
-            border: "1px solid var(--border)",
-          }}
-        >
-          <div
-            className="flex items-center justify-between px-5 py-4"
-            style={{ borderBottom: "1px solid var(--border)" }}
-          >
-            <div className="flex items-center gap-3">
-              <div className="accent-line" />
-              <h2
-                className="text-base font-semibold"
-                style={{
-                  fontFamily: "var(--font-heading)",
-                  color: "var(--text-primary)",
-                }}
-              >
-                Quick Links
-              </h2>
-            </div>
-          </div>
-          <div className="p-4 grid grid-cols-2 gap-2">
-            {[
-              { href: "/cron", icon: Calendar, label: "Cron Jobs", color: "#a78bfa" },
-              { href: "/actions", icon: Zap, label: "Quick Actions", color: "var(--accent)" },
-              { href: "/system", icon: Server, label: "System", color: "var(--success)" },
-              { href: "/logs", icon: Terminal, label: "Live Logs", color: "#60a5fa" },
-              { href: "/memory", icon: Brain, label: "Memory", color: "#f59e0b" },
-              { href: "/skills", icon: Puzzle, label: "Skills", color: "#4ade80" },
-            ].map(({ href, icon: Icon, label, color }) => (
-              <Link
-                key={href}
-                href={href}
-                className="p-3 rounded-lg transition-all hover:scale-[1.02]"
-                style={{ backgroundColor: "var(--card-elevated)", border: "1px solid var(--border)" }}
-              >
-                <div className="flex items-center gap-2">
-                  <Icon className="w-4 h-4" style={{ color }} />
-                  <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                    {label}
-                  </span>
-                </div>
-              </Link>
-            ))}
+        {/* Secondary Sidebar */}
+        <div className="flex flex-col gap-4">
+          {/* Stats */}
+          <div className="grid grid-cols-2 gap-3">
+            <StatsCard
+              title="Total Activities"
+              value={stats.total.toLocaleString()}
+              icon={<Activity className="w-5 h-5" />}
+              iconColor="var(--info)"
+            />
+            <StatsCard
+              title="Today"
+              value={stats.today.toLocaleString()}
+              icon={<Zap className="w-5 h-5" />}
+              iconColor="var(--accent)"
+            />
+            <StatsCard
+              title="Successful"
+              value={stats.success.toLocaleString()}
+              icon={<CheckCircle className="w-5 h-5" />}
+              iconColor="var(--success)"
+            />
+            <StatsCard
+              title="Errors"
+              value={stats.error.toLocaleString()}
+              icon={<XCircle className="w-5 h-5" />}
+              iconColor="var(--error)"
+            />
           </div>
 
-          {/* Notepad */}
-          <div style={{ margin: "1rem", marginTop: "0.5rem" }}>
-            <Notepad />
+          {/* Weather Widget */}
+          <WeatherWidget />
+
+          {/* Quick Links */}
+          <div
+            className="rounded-xl overflow-hidden"
+            style={{
+              backgroundColor: "var(--card)",
+              border: "1px solid var(--border)",
+            }}
+          >
+            <div
+              className="flex items-center justify-between px-5 py-4"
+              style={{ borderBottom: "1px solid var(--border)" }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="accent-line" />
+                <h2
+                  className="text-base font-semibold"
+                  style={{
+                    fontFamily: "var(--font-heading)",
+                    color: "var(--text-primary)",
+                  }}
+                >
+                  Quick Links
+                </h2>
+              </div>
+            </div>
+            <div className="p-4 grid grid-cols-2 gap-2">
+              {[
+                { href: "/cron", icon: Calendar, label: "Cron Jobs", color: "#a78bfa" },
+                { href: "/actions", icon: Zap, label: "Quick Actions", color: "var(--accent)" },
+                { href: "/system", icon: Server, label: "System", color: "var(--success)" },
+                { href: "/logs", icon: Terminal, label: "Live Logs", color: "#60a5fa" },
+                { href: "/memory", icon: Brain, label: "Memory", color: "#f59e0b" },
+                { href: "/skills", icon: Puzzle, label: "Skills", color: "#4ade80" },
+              ].map(({ href, icon: Icon, label, color }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className="p-3 rounded-lg transition-all hover:scale-[1.02]"
+                  style={{ backgroundColor: "var(--card-elevated)", border: "1px solid var(--border)" }}
+                >
+                  <div className="flex items-center gap-2">
+                    <Icon className="w-4 h-4" style={{ color }} />
+                    <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                      {label}
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+
+            <div style={{ margin: "1rem", marginTop: "0.5rem" }}>
+              <Notepad />
+            </div>
           </div>
         </div>
       </div>
