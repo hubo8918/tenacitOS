@@ -382,7 +382,7 @@ export default async function DashboardPage() {
           </div>
 
           {/* Weather Widget */}
-          <WeatherWidget />
+          {weatherConfigured && <WeatherWidget />}
 
           {/* Quick Links */}
           <div
