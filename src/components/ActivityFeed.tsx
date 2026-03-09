@@ -66,9 +66,15 @@ interface ActivityFeedProps {
   limit?: number;
   initialActivities?: Activity[];
   hasRecentActivity?: boolean;
+  compactEmptyState?: boolean;
 }
 
-export function ActivityFeed({ limit = 10, initialActivities, hasRecentActivity = true }: ActivityFeedProps) {
+export function ActivityFeed({
+  limit = 10,
+  initialActivities,
+  hasRecentActivity = true,
+  compactEmptyState = false,
+}: ActivityFeedProps) {
   const [activities, setActivities] = useState<Activity[] | null>(initialActivities ?? null);
 
   useEffect(() => {
@@ -104,6 +110,25 @@ export function ActivityFeed({ limit = 10, initialActivities, hasRecentActivity 
   }
 
   if (!hasRecentActivity) {
+    if (compactEmptyState) {
+      return (
+        <div className="px-4 py-4 md:px-5 md:py-5" style={{ color: 'var(--text-secondary)' }}>
+          <div
+            className="rounded-lg px-4 py-3 flex items-start gap-3"
+            style={{ backgroundColor: 'var(--card-elevated)', border: '1px solid var(--border)' }}
+          >
+            <Clock className="w-4 h-4 mt-0.5 flex-shrink-0 opacity-70" />
+            <div>
+              <p className="text-sm font-medium">No recent activity in the last 24 hours</p>
+              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                Older history is still available on the Activity page.
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="text-center py-12" style={{ color: 'var(--text-secondary)' }}>
         <Clock className="w-12 h-12 mx-auto mb-4 opacity-50" />
