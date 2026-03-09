@@ -38,6 +38,8 @@ yarn-error.log*
 /data/*.json
 !data/*.example.json
 /data/*.db
+/data/*.db-wal
+/data/*.db-shm
 /data/*.sqlite
 /data/*.sqlite3
 
