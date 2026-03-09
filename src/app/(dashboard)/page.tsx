@@ -9,7 +9,6 @@ import {
   CheckCircle,
   XCircle,
   Calendar,
-  Circle,
   Bot,
   MessageSquare,
   Users,
@@ -23,6 +22,23 @@ import {
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
+
+function formatLastActivity(timestamp?: string): string {
+  if (!timestamp) return "No recent activity";
+
+  const date = new Date(timestamp);
+  const diffMs = Date.now() - date.getTime();
+  if (diffMs < 60_000) return "Active just now";
+
+  const minutes = Math.floor(diffMs / 60_000);
+  if (minutes < 60) return `Active ${minutes}m ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Active ${hours}h ago`;
+
+  const days = Math.floor(hours / 24);
+  return `Active ${days}d ago`;
+}
 
 export default async function DashboardPage() {
   const [activityStats, agents, recentActivities] = await Promise.all([
@@ -194,47 +210,60 @@ export default async function DashboardPage() {
         </div>
         <div className="p-5">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            {agents.map((agent) => (
-              <div
-                key={agent.id}
-                className="p-3 rounded-lg transition-all hover:scale-105"
-                style={{
-                  backgroundColor: "var(--card-elevated)",
-                  border: `2px solid ${agent.color}`,
-                  cursor: "pointer",
-                }}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-2xl">{agent.emoji}</div>
-                  <Circle
-                    className="w-2 h-2"
-                    style={{
-                      fill: agent.status === "online" ? "#4ade80" : "#6b7280",
-                      color: agent.status === "online" ? "#4ade80" : "#6b7280",
-                    }}
-                  />
-                </div>
+            {agents.map((agent) => {
+              const isOnline = agent.status === "online";
+              return (
                 <div
-                  className="text-sm font-bold mb-1"
+                  key={agent.id}
+                  className="p-3 rounded-lg transition-all hover:scale-105"
                   style={{
-                    fontFamily: "var(--font-heading)",
-                    color: "var(--text-primary)",
+                    backgroundColor: "var(--card-elevated)",
+                    border: `2px solid ${agent.color}`,
+                    cursor: "pointer",
                   }}
                 >
-                  {agent.name}
-                </div>
-                <div className="text-xs truncate mb-1" style={{ color: "var(--text-muted)" }} title={agent.model}>
-                  <Bot className="inline-block w-3 h-3 mr-1" />
-                  {agent.model.split("/").pop()}
-                </div>
-                {agent.botToken && (
-                  <div className="text-xs mt-1 flex items-center gap-1" style={{ color: "#0088cc" }}>
-                    <MessageSquare className="w-3 h-3" />
-                    Connected
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-2xl">{agent.emoji}</div>
+                    <div
+                      className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                      style={{
+                        backgroundColor: isOnline
+                          ? "color-mix(in srgb, var(--success) 12%, transparent)"
+                          : "var(--card)",
+                        color: isOnline ? "var(--success)" : "var(--text-muted)",
+                        border: `1px solid ${isOnline ? 'var(--success)' : 'var(--border)'}`,
+                      }}
+                    >
+                      {isOnline ? "Online" : "Offline"}
+                    </div>
                   </div>
-                )}
-              </div>
-            ))}
+                  <div
+                    className="text-sm font-bold mb-1"
+                    style={{
+                      fontFamily: "var(--font-heading)",
+                      color: "var(--text-primary)",
+                    }}
+                  >
+                    {agent.name}
+                  </div>
+                  <div className="text-xs mb-2" style={{ color: "var(--text-secondary)" }}>
+                    {agent.activeSessions > 0
+                      ? `${agent.activeSessions} active session${agent.activeSessions > 1 ? 's' : ''}`
+                      : formatLastActivity(agent.lastActivity)}
+                  </div>
+                  <div className="text-xs truncate mb-1" style={{ color: "var(--text-muted)" }} title={agent.model}>
+                    <Bot className="inline-block w-3 h-3 mr-1" />
+                    {agent.model.split("/").pop()}
+                  </div>
+                  {agent.botToken && (
+                    <div className="text-xs mt-1 flex items-center gap-1" style={{ color: "#0088cc" }}>
+                      <MessageSquare className="w-3 h-3" />
+                      Connected
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
