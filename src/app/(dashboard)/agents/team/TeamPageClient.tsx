@@ -37,10 +37,12 @@ function describeTeamError(error: string | null): string {
 }
 
 export default function TeamPageClient({ initialTeam }: TeamPageClientProps) {
+  const hasInitialTeam = initialTeam.length > 0;
+
   const { data, loading, error, refetch } = useFetch<{ team: TeamAgent[] }>("/api/team", {
     timeoutMs: 10_000,
-    initialData: { team: initialTeam },
-    fetchOnMount: false,
+    initialData: hasInitialTeam ? { team: initialTeam } : null,
+    fetchOnMount: !hasInitialTeam,
   });
   const teamAgents = useMemo(() => data?.team || [], [data]);
   const friendlyError = useMemo(() => describeTeamError(error), [error]);
