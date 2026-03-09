@@ -1,31 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs/promises';
 import path from 'path';
+import { getAgentTasks, type AgentTask } from '@/lib/agent-tasks-data';
 
 const DATA_PATH = path.join(process.cwd(), 'data', 'agent-tasks.json');
-
-export interface AgentTask {
-  id: string;
-  title: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'blocked';
-  priority: 'high' | 'medium' | 'low';
-  agent: {
-    emoji: string;
-    name: string;
-    color: string;
-  };
-  project: string;
-  dueDate: string;
-}
-
-async function loadTasks(): Promise<AgentTask[]> {
-  try {
-    const data = await fs.readFile(DATA_PATH, 'utf-8');
-    return JSON.parse(data);
-  } catch {
-    return [];
-  }
-}
 
 async function saveTasks(tasks: AgentTask[]): Promise<void> {
   const dir = path.dirname(DATA_PATH);
@@ -50,7 +28,7 @@ export async function GET(request: NextRequest) {
     const priority = searchParams.get('priority');
     const agent = searchParams.get('agent');
 
-    let tasks = await loadTasks();
+    let tasks = await getAgentTasks();
 
     if (status) {
       tasks = tasks.filter((t) => t.status === status);
@@ -80,7 +58,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const tasks = await loadTasks();
+    const tasks = await getAgentTasks();
 
     const newTask: AgentTask = {
       id: generateId(tasks),
@@ -113,7 +91,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const tasks = await loadTasks();
+    const tasks = await getAgentTasks();
     const task = tasks.find((t) => t.id === body.id);
 
     if (!task) {
@@ -145,7 +123,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required query param: id' }, { status: 400 });
     }
 
-    const tasks = await loadTasks();
+    const tasks = await getAgentTasks();
     const index = tasks.findIndex((t) => t.id === id);
 
     if (index === -1) {
