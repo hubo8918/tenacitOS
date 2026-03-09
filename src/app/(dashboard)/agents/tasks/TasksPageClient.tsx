@@ -134,7 +134,11 @@ export default function TasksPageClient({ initialTasks }: TasksPageClientProps) 
           Tasks
         </h1>
         <p style={{ color: "var(--text-secondary)", fontSize: "14px" }}>
-          {tasks.length} total &bull; {inProgressCount} in progress &bull; {completedCount} completed
+          Coordination board &bull; {tasks.length} tracked &bull; {inProgressCount} in progress &bull; {completedCount} completed
+        </p>
+        <p className="mt-2 text-sm" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+          Use this page to track shared work across agents and projects. Task status here reflects backlog progress,
+          not live runtime online/offline state.
         </p>
       </div>
 
