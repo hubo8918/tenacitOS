@@ -39,6 +39,7 @@ interface Agent {
 export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"cards" | "orgChart">("cards");
 
   useEffect(() => {
@@ -49,11 +50,17 @@ export default function AgentsPage() {
 
   const fetchAgents = async () => {
     try {
+      setError(null);
       const res = await fetch("/api/agents");
+      if (!res.ok) {
+        throw new Error(`Failed to fetch agents (${res.status})`);
+      }
+
       const data = await res.json();
       setAgents(data.agents || []);
     } catch (error) {
       console.error("Error fetching agents:", error);
+      setError(error instanceof Error ? error.message : "Failed to load agents");
     } finally {
       setLoading(false);
     }
@@ -79,6 +86,40 @@ export default function AgentsPage() {
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="animate-pulse text-lg" style={{ color: "var(--text-muted)" }}>
             Loading agents...
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && agents.length === 0) {
+    return (
+      <div className="p-8">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div
+            className="rounded-xl px-5 py-4 text-center max-w-md"
+            style={{
+              border: "1px solid var(--negative, #FF453A)",
+              backgroundColor: "color-mix(in srgb, var(--negative, #FF453A) 8%, transparent)",
+            }}
+          >
+            <p className="text-sm mb-3" style={{ color: "var(--negative, #FF453A)" }}>
+              Agents data is temporarily unavailable: {error}
+            </p>
+            <button
+              onClick={() => {
+                setLoading(true);
+                fetchAgents();
+              }}
+              className="text-xs px-3 py-1.5 rounded-md"
+              style={{
+                color: "var(--text-secondary)",
+                border: "1px solid var(--border)",
+                backgroundColor: "var(--surface-elevated)",
+              }}
+            >
+              Retry now
+            </button>
           </div>
         </div>
       </div>
