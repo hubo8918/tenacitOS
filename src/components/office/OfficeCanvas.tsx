@@ -366,33 +366,6 @@ export function OfficeCanvas({ agents }: OfficeCanvasProps) {
     ctx.closePath();
   };
 
-  function render(ctx: CanvasRenderingContext2D, time: number) {
-    ctx.clearRect(0, 0, 1200, 675);
-
-    // 1. Draw background
-    if (bgImage) {
-      // Scale background to fit canvas (1920x1080 -> 1200x675)
-      ctx.drawImage(bgImage, 0, 0, bgImage.width, bgImage.height, 0, 0, 1200, 675);
-    }
-
-    // 2. Draw agents (sprites)
-    agents.forEach((agent) => {
-      const position = AGENT_POSITIONS[agent.id];
-      const sprite = spriteImages[agent.id];
-      if (position && sprite) {
-        drawAgentImpl(ctx, agent, sprite, position, time, hoveredAgent === agent.id);
-      }
-    });
-
-    // 3. Draw speech bubbles
-    agents.forEach((agent) => {
-      const position = AGENT_POSITIONS[agent.id];
-      if (position && (agent.isActive || hoveredAgent === agent.id)) {
-        drawSpeechBubbleImpl(ctx, agent, position);
-      }
-    });
-  }
-
   useEffect(() => {
     if (!imagesLoaded) return;
 
@@ -409,9 +382,36 @@ export function OfficeCanvas({ agents }: OfficeCanvasProps) {
     // Disable image smoothing for pixel-perfect rendering
     ctx.imageSmoothingEnabled = false;
 
+    const render = (time: number) => {
+      ctx.clearRect(0, 0, 1200, 675);
+
+      // 1. Draw background
+      if (bgImage) {
+        // Scale background to fit canvas (1920x1080 -> 1200x675)
+        ctx.drawImage(bgImage, 0, 0, bgImage.width, bgImage.height, 0, 0, 1200, 675);
+      }
+
+      // 2. Draw agents (sprites)
+      agents.forEach((agent) => {
+        const position = AGENT_POSITIONS[agent.id];
+        const sprite = spriteImages[agent.id];
+        if (position && sprite) {
+          drawAgentImpl(ctx, agent, sprite, position, time, hoveredAgent === agent.id);
+        }
+      });
+
+      // 3. Draw speech bubbles
+      agents.forEach((agent) => {
+        const position = AGENT_POSITIONS[agent.id];
+        if (position && (agent.isActive || hoveredAgent === agent.id)) {
+          drawSpeechBubbleImpl(ctx, agent, position);
+        }
+      });
+    };
+
     const animate = () => {
       timeRef.current += 0.016; // ~60fps
-      render(ctx, timeRef.current);
+      render(timeRef.current);
       animationFrameRef.current = requestAnimationFrame(animate);
     };
 
@@ -422,7 +422,7 @@ export function OfficeCanvas({ agents }: OfficeCanvasProps) {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [agents, hoveredAgent, imagesLoaded, bgImage, spriteImages]);
+  }, [agents, bgImage, hoveredAgent, imagesLoaded, spriteImages]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;

@@ -179,7 +179,7 @@ export default function ActivityPage() {
   useEffect(() => {
     setOffset(0);
     fetchActivities(false);
-  }, [sort, selectedTypes, filterStatus, startDate, endDate]);
+  }, [fetchActivities]);
 
   useEffect(() => {
     const end = format(endOfDay(new Date()), "yyyy-MM-dd");
