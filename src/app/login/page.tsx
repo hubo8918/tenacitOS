@@ -31,10 +31,10 @@ function LoginForm() {
         router.push(from);
         router.refresh();
       } else {
-        setError("Contraseña incorrecta");
+        setError("Incorrect password");
       }
     } catch {
-      setError("Error de conexión");
+      setError("Connection error");
     }
 
     setLoading(false);
@@ -71,7 +71,7 @@ function LoginForm() {
           className="text-sm"
           style={{ color: 'var(--text-secondary)' }}
         >
-          Introduce la contraseña para acceder
+          Enter the password to continue
         </p>
       </div>
 
@@ -92,7 +92,7 @@ function LoginForm() {
               border: '1px solid var(--border)',
               color: 'var(--text-primary)',
             }}
-            placeholder="Contraseña"
+            placeholder="Password"
             required
           />
         </div>
@@ -119,7 +119,7 @@ function LoginForm() {
             color: 'white',
           }}
         >
-          {loading ? "Verificando..." : "Entrar"}
+          {loading ? "Checking..." : "Log in"}
         </button>
       </form>
 
