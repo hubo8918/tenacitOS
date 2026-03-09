@@ -1,4 +1,3 @@
-import { StatsCard } from "@/components/StatsCard";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { WeatherWidget } from "@/components/WeatherWidget";
 import { BRANDING } from "@/config/branding";
@@ -277,32 +276,70 @@ export default async function DashboardPage() {
 
         {/* Secondary Sidebar */}
         <div className="flex flex-col gap-4">
-          {/* Stats */}
-          <div className="grid grid-cols-2 gap-3">
-            <StatsCard
-              title="Total Activities"
-              value={stats.total.toLocaleString()}
-              icon={<Activity className="w-5 h-5" />}
-              iconColor="var(--info)"
-            />
-            <StatsCard
-              title="Today"
-              value={stats.today.toLocaleString()}
-              icon={<Zap className="w-5 h-5" />}
-              iconColor="var(--accent)"
-            />
-            <StatsCard
-              title="Successful"
-              value={stats.success.toLocaleString()}
-              icon={<CheckCircle className="w-5 h-5" />}
-              iconColor="var(--success)"
-            />
-            <StatsCard
-              title="Errors"
-              value={stats.error.toLocaleString()}
-              icon={<XCircle className="w-5 h-5" />}
-              iconColor="var(--error)"
-            />
+          {/* Activity Counters */}
+          <div
+            className="rounded-xl overflow-hidden"
+            style={{
+              backgroundColor: "var(--card)",
+              border: "1px solid var(--border)",
+            }}
+          >
+            <div
+              className="flex items-center justify-between px-5 py-4"
+              style={{ borderBottom: "1px solid var(--border)" }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="accent-line" />
+                <h2
+                  className="text-base font-semibold"
+                  style={{
+                    fontFamily: "var(--font-heading)",
+                    color: "var(--text-primary)",
+                  }}
+                >
+                  Activity Counters
+                </h2>
+              </div>
+            </div>
+            <div className="p-4 space-y-2">
+              {[
+                {
+                  label: "Total activities",
+                  value: stats.total.toLocaleString(),
+                  icon: Activity,
+                  color: "var(--info)",
+                },
+                {
+                  label: "Successful runs",
+                  value: stats.success.toLocaleString(),
+                  icon: CheckCircle,
+                  color: "var(--success)",
+                },
+                {
+                  label: "Errors logged",
+                  value: stats.error.toLocaleString(),
+                  icon: XCircle,
+                  color: "var(--error)",
+                },
+              ].map(({ label, value, icon: Icon, color }) => (
+                <div
+                  key={label}
+                  className="flex items-center justify-between rounded-lg px-3 py-2"
+                  style={{ backgroundColor: "var(--card-elevated)" }}
+                >
+                  <div className="flex items-center gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+                    <Icon className="w-4 h-4" style={{ color }} />
+                    <span>{label}</span>
+                  </div>
+                  <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                    {value}
+                  </div>
+                </div>
+              ))}
+              <div className="pt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+                Historical counters are useful for trend reading, but the runtime summary above is the primary health signal.
+              </div>
+            </div>
           </div>
 
           {/* Weather Widget */}
