@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   Bot,
@@ -100,7 +101,14 @@ export default function AgentsPage() {
           Agents
         </h1>
         <p style={{ color: "var(--text-secondary)", fontSize: "14px" }}>
-          Multi-agent system overview • {agents.length} agents configured
+          Runtime & configuration view • {agents.length} agents configured
+        </p>
+        <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>
+          Use this page for models, workspaces, permissions, and recent activity.
+          {" "}
+          <Link href="/agents/team" style={{ color: "var(--accent)", fontWeight: 600 }}>
+            Looking for roles and personalities? Open Team →
+          </Link>
         </p>
       </div>
 

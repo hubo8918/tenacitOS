@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AgentCard } from "@/components/AgentCard";
 import { TierDivider } from "@/components/TierDivider";
@@ -200,7 +201,7 @@ export default function TeamPage() {
             fontWeight: 500,
           }}
         >
-          9 AI agents across 3 machines, each with a real role and a real personality.
+          Organization view • {teamAgents.length} agent profiles with roles, identity, and collaboration context.
         </p>
         <p
           className="text-sm max-w-2xl mx-auto"
@@ -209,9 +210,12 @@ export default function TeamPage() {
             lineHeight: 1.7,
           }}
         >
-          We wanted to see what happens when AI doesn&apos;t just answer questions — but actually runs a
-          company. Research markets. Write content. Post on social media. Ship products. All without being
-          told what to do.
+          This page is for understanding who each agent is, what they are responsible for, and how the team is
+          organized.
+          {" "}
+          <Link href="/agents" style={{ color: "var(--accent)", fontWeight: 600 }}>
+            Need models, workspaces, permissions, or runtime status? Open Agents →
+          </Link>
         </p>
         <p className="text-xs mt-3" style={{ color: "var(--text-muted)" }}>
           Live sync enabled · Team status refreshes every 20s
