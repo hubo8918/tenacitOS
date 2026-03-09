@@ -23,7 +23,7 @@ export default function Office3D() {
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [interactionModal, setInteractionModal] = useState<string | null>(null);
   const [controlMode, setControlMode] = useState<'orbit' | 'fps'>('orbit');
-  const [avatarPositions, setAvatarPositions] = useState<Map<string, any>>(new Map());
+  const [avatarPositions, setAvatarPositions] = useState<Map<string, Vector3>>(new Map());
   
   const defaultState = (id: string): AgentState => ({
     id,
@@ -63,8 +63,8 @@ export default function Office3D() {
     setInteractionModal(null);
   };
 
-  const handleAvatarPositionUpdate = (id: string, position: any) => {
-    setAvatarPositions(prev => new Map(prev).set(id, position));
+  const handleAvatarPositionUpdate = (id: string, position: Vector3) => {
+    setAvatarPositions((prev) => new Map(prev).set(id, position));
   };
 
   // Definir obstáculos (muebles)

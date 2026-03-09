@@ -5,22 +5,56 @@ import { OPENCLAW_DIR, OPENCLAW_CONFIG } from "@/lib/paths";
 
 export const dynamic = "force-dynamic";
 
+interface AgentConfigEntry {
+  id: string;
+  name?: string;
+  workspace: string;
+  model?: {
+    primary?: string;
+  };
+  subagents?: {
+    allowAgents?: string[];
+  };
+}
+
+interface OpenClawConfig {
+  agents?: {
+    list?: AgentConfigEntry[];
+    defaults?: {
+      workspace?: string;
+      model?: {
+        primary?: string;
+      };
+    };
+  };
+  channels?: {
+    telegram?: {
+      accounts?: Record<
+        string,
+        {
+          dmPolicy?: string;
+          botToken?: string;
+        }
+      >;
+    };
+  };
+}
+
 export async function GET(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
 
-    // Read openclaw config
     const configPath = OPENCLAW_CONFIG;
-    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    const config = JSON.parse(readFileSync(configPath, "utf-8")) as OpenClawConfig;
 
     const configuredAgents = Array.isArray(config?.agents?.list)
       ? config.agents.list
       : [];
 
-    const normalizedAgents =
+    const normalizedAgents: AgentConfigEntry[] =
       configuredAgents.length > 0
         ? configuredAgents
         : [
@@ -28,26 +62,21 @@ export async function GET(
               id: "main",
               name: process.env.NEXT_PUBLIC_AGENT_NAME || "main",
               workspace:
-                config?.agents?.defaults?.workspace ||
-                join(OPENCLAW_DIR, "workspace"),
+                config?.agents?.defaults?.workspace || join(OPENCLAW_DIR, "workspace"),
               model: {
-                primary:
-                  config?.agents?.defaults?.model?.primary || "unknown",
+                primary: config?.agents?.defaults?.model?.primary || "unknown",
               },
               subagents: { allowAgents: [] },
             },
           ];
 
-    // Find agent
-    const agent = normalizedAgents.find((a: any) => a.id === id);
+    const agent = normalizedAgents.find((entry) => entry.id === id);
     if (!agent) {
       return NextResponse.json({ error: "Agent not found" }, { status: 404 });
     }
 
-    // Get memory files
     const memoryPath = join(agent.workspace, "memory");
-    let recentFiles: Array<{ date: string; size: number; modified: string }> =
-      [];
+    let recentFiles: Array<{ date: string; size: number; modified: string }> = [];
 
     try {
       const files = readdirSync(memoryPath).filter((f) =>
@@ -64,22 +93,19 @@ export async function GET(
         })
         .sort((a, b) => b.date.localeCompare(a.date))
         .slice(0, 7);
-    } catch (e) {
-      // Memory directory doesn't exist
+    } catch {
+      // Memory directory doesn't exist.
     }
 
-    // Get session info (from OpenClaw API if available)
-    // For now, we return mock data
-    const sessions: Array<any> = [];
+    const sessions: Array<Record<string, unknown>> = [];
 
-    // Get telegram account info
     const telegramAccount = config.channels?.telegram?.accounts?.[id];
 
     return NextResponse.json({
       agent: {
         id: agent.id,
         name: agent.name,
-        model: agent.model?.primary || config.agents.defaults.model.primary,
+        model: agent.model?.primary || config.agents?.defaults?.model?.primary,
         workspace: agent.workspace,
         dmPolicy: telegramAccount?.dmPolicy,
         allowAgents: agent.subagents?.allowAgents || [],

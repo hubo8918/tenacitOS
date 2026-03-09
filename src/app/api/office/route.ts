@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { readFileSync, statSync, readdirSync } from "fs";
+import { readFileSync, statSync } from "fs";
 import { join } from "path";
 import { OPENCLAW_DIR, OPENCLAW_CONFIG } from "@/lib/paths";
 
@@ -59,12 +59,32 @@ interface AgentSession {
   createdAt?: string;
 }
 
+interface OpenClawAgentEntry {
+  id: string;
+  name?: string;
+  workspace: string;
+}
+
+interface OpenClawConfig {
+  agents?: {
+    list?: OpenClawAgentEntry[];
+    defaults?: {
+      workspace?: string;
+    };
+  };
+  gateway?: {
+    auth?: {
+      token?: string;
+    };
+  };
+}
+
 async function getAgentStatusFromGateway(): Promise<
   Record<string, { isActive: boolean; currentTask: string; lastSeen: number }>
 > {
   try {
     const configPath = OPENCLAW_CONFIG;
-    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    const config = JSON.parse(readFileSync(configPath, "utf-8")) as OpenClawConfig;
     const gatewayToken = config.gateway?.auth?.token;
 
     if (!gatewayToken) {
@@ -185,7 +205,7 @@ function getAgentStatusFromFiles(
 export async function GET() {
   try {
     const configPath = OPENCLAW_CONFIG;
-    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    const config = JSON.parse(readFileSync(configPath, "utf-8")) as OpenClawConfig;
 
     // Try gateway first, fallback to file-based
     const gatewayStatus = await getAgentStatusFromGateway();
@@ -194,7 +214,7 @@ export async function GET() {
       ? config.agents.list
       : [];
 
-    const normalizedAgents =
+    const normalizedAgents: OpenClawAgentEntry[] =
       configuredAgents.length > 0
         ? configuredAgents
         : [
@@ -207,7 +227,7 @@ export async function GET() {
             },
           ];
 
-    const agents = normalizedAgents.map((agent: any) => {
+    const agents = normalizedAgents.map((agent) => {
       const agentInfo = AGENT_CONFIG[agent.id as keyof typeof AGENT_CONFIG] || {
         emoji: "🤖",
         color: "#666",

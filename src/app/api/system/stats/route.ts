@@ -46,7 +46,7 @@ export async function GET() {
 
     // Systemd Services (count active ones) — Linux only
     let activeServices = 0;
-    let totalServices = SYSTEMD_SERVICES.length;
+    const totalServices = SYSTEMD_SERVICES.length;
     if (isLinux) {
       try {
         for (const name of SYSTEMD_SERVICES) {

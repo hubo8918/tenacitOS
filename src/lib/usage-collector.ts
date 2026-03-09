@@ -35,10 +35,28 @@ export interface UsageSnapshot {
   cost: number;
 }
 
+interface OpenClawStatus {
+  sessions?: {
+    byAgent?: Array<{
+      agentId: string;
+      recent?: Array<{
+        key: string;
+        sessionId: string;
+        model?: string;
+        inputTokens?: number;
+        outputTokens?: number;
+        totalTokens?: number;
+        updatedAt: number;
+        percentUsed?: number;
+      }>;
+    }>;
+  };
+}
+
 /**
  * Get current OpenClaw status with session data
  */
-export async function getOpenClawStatus(): Promise<any> {
+export async function getOpenClawStatus(): Promise<OpenClawStatus> {
   try {
     const { stdout } = await execAsync("openclaw status --json");
     return JSON.parse(stdout);
@@ -51,7 +69,7 @@ export async function getOpenClawStatus(): Promise<any> {
 /**
  * Extract session data from status
  */
-export function extractSessionData(status: any): SessionData[] {
+export function extractSessionData(status: OpenClawStatus): SessionData[] {
   const sessions: SessionData[] = [];
 
   if (!status.sessions?.byAgent) {
