@@ -54,7 +54,7 @@ export default function TeamPageClient({ initialTeam }: TeamPageClientProps) {
   useEffect(() => {
     const timer = setInterval(() => {
       refetch();
-    }, 30_000);
+    }, 45_000);
 
     return () => clearInterval(timer);
   }, [refetch]);
@@ -223,7 +223,7 @@ export default function TeamPageClient({ initialTeam }: TeamPageClientProps) {
           </Link>
         </p>
         <p className="text-xs mt-3" style={{ color: "var(--text-muted)" }}>
-          Live sync enabled · Team status refreshes every 30s
+          Live sync enabled · Team status refreshes every 45s
           {loading ? " · syncing..." : error ? " · sync delayed" : ""}
         </p>
       </div>

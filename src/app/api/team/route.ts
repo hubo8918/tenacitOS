@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import { spawnSync } from "child_process";
+import { getAgentsSummary, type AgentSummary } from "@/lib/agents-data";
 
 const DATA_PATH = path.join(process.cwd(), "data", "team.json");
 const ACTIVE_WINDOW_MS = 15 * 60 * 1000;
@@ -100,8 +101,7 @@ interface CachedLoadResult<T> {
   cacheAgeMs: number | null;
 }
 
-const DEFAULT_TEAM_CACHE_TTL_MS = 15_000;
-const DEFAULT_AGENTS_CACHE_TTL_MS = 120_000;
+const DEFAULT_TEAM_CACHE_TTL_MS = 45_000;
 const DEFAULT_SESSIONS_CACHE_TTL_MS = 45_000;
 const DEFAULT_TEAM_TRACE_SLOW_MS = 6_000;
 
@@ -118,7 +118,6 @@ function readEnvMs(name: string, fallbackMs: number): number {
 }
 
 const TEAM_CACHE_TTL_MS = readEnvMs("MC_TEAM_CACHE_TTL_MS", DEFAULT_TEAM_CACHE_TTL_MS);
-const AGENTS_CACHE_TTL_MS = readEnvMs("MC_TEAM_AGENTS_CACHE_TTL_MS", DEFAULT_AGENTS_CACHE_TTL_MS);
 const SESSIONS_CACHE_TTL_MS = readEnvMs(
   "MC_TEAM_SESSIONS_CACHE_TTL_MS",
   DEFAULT_SESSIONS_CACHE_TTL_MS
@@ -126,7 +125,6 @@ const SESSIONS_CACHE_TTL_MS = readEnvMs(
 const TEAM_TRACE_SLOW_MS = readEnvMs("MC_TEAM_TRACE_SLOW_MS", DEFAULT_TEAM_TRACE_SLOW_MS);
 
 let teamCache: TeamCacheEntry | null = null;
-let agentsCache: TimedCache<OpenClawAgent[]> | null = null;
 let sessionsCache: TimedCache<OpenClawSessionsPayload> | null = null;
 let teamRefreshInFlight: Promise<TeamBuildResult> | null = null;
 
@@ -308,59 +306,12 @@ function listOpenClawSessions(): OpenClawSessionsPayload {
   return parsed as OpenClawSessionsPayload;
 }
 
-function cloneOpenClawAgents(agents: OpenClawAgent[]): OpenClawAgent[] {
-  return agents.map((agent) => ({ ...agent }));
-}
-
 function cloneOpenClawSessions(payload: OpenClawSessionsPayload): OpenClawSessionsPayload {
   const sessions = Array.isArray(payload.sessions)
     ? payload.sessions.map((session) => ({ ...session }))
     : [];
 
   return { sessions };
-}
-
-function loadAgentsWithCache(): CachedLoadResult<OpenClawAgent[]> {
-  const now = Date.now();
-
-  if (agentsCache) {
-    const ageMs = now - agentsCache.updatedAt;
-    if (ageMs <= AGENTS_CACHE_TTL_MS) {
-      return {
-        value: cloneOpenClawAgents(agentsCache.value),
-        source: "cache",
-        cacheAgeMs: ageMs,
-      };
-    }
-  }
-
-  try {
-    const fresh = listOpenClawAgents().filter((agent) => agent.id !== "main");
-    agentsCache = {
-      value: cloneOpenClawAgents(fresh),
-      updatedAt: now,
-    };
-
-    return {
-      value: fresh,
-      source: "cli",
-      cacheAgeMs: 0,
-    };
-  } catch {
-    if (agentsCache) {
-      return {
-        value: cloneOpenClawAgents(agentsCache.value),
-        source: "stale-cache",
-        cacheAgeMs: now - agentsCache.updatedAt,
-      };
-    }
-
-    return {
-      value: [],
-      source: "none",
-      cacheAgeMs: null,
-    };
-  }
 }
 
 function loadSessionsWithCache(): CachedLoadResult<OpenClawSessionsPayload> {
@@ -494,6 +445,33 @@ function fallbackFromOverlay(overlay: TeamOverlay): TeamAgent {
   };
 }
 
+function mergeTeamAgentFromSummary(
+  overlay: TeamOverlay | undefined,
+  realAgent: AgentSummary
+): TeamAgent {
+  const fallbackTags: TeamTag[] = [{ label: "Local", color: "#30D158" }];
+
+  return {
+    id: realAgent.id,
+    name: overlay?.name?.trim() || realAgent.name || realAgent.id,
+    role: overlay?.role?.trim() || "OpenClaw Agent",
+    emoji: overlay?.emoji || realAgent.emoji || "🤖",
+    color: overlay?.color || realAgent.color || "#8E8E93",
+    description:
+      overlay?.description?.trim() ||
+      "Local OpenClaw agent connected to Mission Control.",
+    tags: overlay?.tags && overlay.tags.length > 0 ? overlay.tags : fallbackTags,
+    status: realAgent.status,
+    tier: normalizeTier(overlay?.tier),
+    specialBadge: overlay?.specialBadge,
+    activeSessions: realAgent.activeSessions,
+    lastActiveAt: realAgent.lastActivity || null,
+    model: realAgent.model || "unknown",
+    workspace: realAgent.workspace || defaultWorkspaceFor(realAgent.id),
+    identitySource: "summary",
+  };
+}
+
 function defaultWorkspaceFor(agentId: string): string {
   const home = process.env.USERPROFILE || process.env.HOME || process.cwd();
   return path.join(home, ".openclaw", `workspace-${agentId}`);
@@ -543,18 +521,16 @@ async function buildMergedTeam(): Promise<TeamBuildResult> {
   const overlayMap = new Map(overlay.map((item) => [item.id, item]));
 
   const agentsStart = Date.now();
-  const agentsLoad = loadAgentsWithCache();
-  const realAgents = agentsLoad.value;
+  let realAgents: AgentSummary[] = [];
+  try {
+    realAgents = (await getAgentsSummary()).filter((agent) => agent.id !== "main");
+  } catch {
+    realAgents = [];
+  }
   const agentsMs = Date.now() - agentsStart;
 
-  const sessionsStart = Date.now();
-  const sessionsLoad = loadSessionsWithCache();
-  const sessionsPayload = sessionsLoad.value;
-  const sessionsMs = Date.now() - sessionsStart;
-  const sessionCount = Array.isArray(sessionsPayload.sessions)
-    ? sessionsPayload.sessions.length
-    : 0;
-  const sessionStatsMap = buildSessionStatsMap(sessionsPayload);
+  const sessionsMs = 0;
+  const sessionCount = realAgents.reduce((sum, agent) => sum + (agent.activeSessions || 0), 0);
 
   const mergeStart = Date.now();
   let fallbackOverlayOnly = false;
@@ -572,25 +548,13 @@ async function buildMergedTeam(): Promise<TeamBuildResult> {
         continue;
       }
 
-      merged.push(
-        mergeTeamAgent(
-          entry,
-          real,
-          sessionStatsMap.get(entry.id) || { activeSessions: 0, lastActiveAt: null }
-        )
-      );
+      merged.push(mergeTeamAgentFromSummary(entry, real));
     }
 
     // Include real agents that exist locally but are not yet in overlay.
     for (const real of realAgents) {
       if (overlayMap.has(real.id)) continue;
-      merged.push(
-        mergeTeamAgent(
-          undefined,
-          real,
-          sessionStatsMap.get(real.id) || { activeSessions: 0, lastActiveAt: null }
-        )
-      );
+      merged.push(mergeTeamAgentFromSummary(undefined, real));
     }
   }
 
@@ -607,19 +571,13 @@ async function buildMergedTeam(): Promise<TeamBuildResult> {
     realAgentCount: realAgents.length,
     sessionCount,
     fallbackOverlayOnly,
-    agentsSource: agentsLoad.source,
-    sessionsSource: sessionsLoad.source,
-    agentsCacheAgeMs: agentsLoad.cacheAgeMs,
-    sessionsCacheAgeMs: sessionsLoad.cacheAgeMs,
+    agentsSource: "cache",
+    sessionsSource: "cache",
+    agentsCacheAgeMs: null,
+    sessionsCacheAgeMs: null,
   };
 
-  const degraded =
-    agentsLoad.source === "stale-cache" ||
-    agentsLoad.source === "none" ||
-    sessionsLoad.source === "stale-cache" ||
-    sessionsLoad.source === "none";
-
-  logTeamTrace(degraded ? "build.completed_degraded" : "build.completed", trace);
+  logTeamTrace("build.completed", trace);
 
   return { team: merged, trace };
 }
@@ -646,7 +604,6 @@ function setTeamCache(team: TeamAgent[]): void {
 
 function invalidateTeamCache(): void {
   teamCache = null;
-  agentsCache = null;
   sessionsCache = null;
   teamRefreshInFlight = null;
 }
