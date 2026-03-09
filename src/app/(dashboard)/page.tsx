@@ -39,6 +39,15 @@ export default async function DashboardPage() {
     error: activityStats.byStatus?.error || 0,
   };
 
+  const onlineAgents = agents.filter((agent) => agent.status === "online").length;
+  const activeSessions = agents.reduce((sum, agent) => sum + agent.activeSessions, 0);
+  const weatherConfigured = Boolean(
+    process.env.WEATHER_CITY &&
+      process.env.WEATHER_LAT &&
+      process.env.WEATHER_LON &&
+      process.env.WEATHER_TIMEZONE
+  );
+
   return (
     <div className="p-4 md:p-8">
       {/* Header */}
@@ -56,6 +65,83 @@ export default async function DashboardPage() {
         <p style={{ color: "var(--text-secondary)", fontSize: "14px" }}>
           Overview of {BRANDING.agentName} agent activity
         </p>
+      </div>
+
+      {/* Runtime Summary */}
+      <div
+        className="mb-4 md:mb-6 rounded-xl p-4 md:p-5"
+        style={{
+          backgroundColor: "var(--card)",
+          border: "1px solid var(--border)",
+        }}
+      >
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div
+              className="text-xs uppercase mb-1"
+              style={{ color: "var(--text-muted)", letterSpacing: "0.08em", fontWeight: 700 }}
+            >
+              Runtime summary
+            </div>
+            <div className="text-sm md:text-base" style={{ color: "var(--text-secondary)" }}>
+              Start here: agent availability, current workload, and whether the system has done anything recently.
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 md:justify-end">
+            <div
+              className="px-3 py-2 rounded-lg"
+              style={{
+                backgroundColor: onlineAgents > 0 ? "var(--success-bg)" : "var(--card-elevated)",
+                color: onlineAgents > 0 ? "var(--success)" : "var(--text-secondary)",
+              }}
+            >
+              <div className="text-[11px] uppercase" style={{ letterSpacing: "0.08em", fontWeight: 700 }}>
+                Agents online
+              </div>
+              <div className="text-lg font-bold">{onlineAgents}/{agents.length}</div>
+            </div>
+            <div
+              className="px-3 py-2 rounded-lg"
+              style={{
+                backgroundColor: activeSessions > 0 ? "color-mix(in srgb, var(--accent) 12%, transparent)" : "var(--card-elevated)",
+                color: "var(--text-secondary)",
+              }}
+            >
+              <div className="text-[11px] uppercase" style={{ letterSpacing: "0.08em", fontWeight: 700 }}>
+                Active sessions
+              </div>
+              <div className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>{activeSessions}</div>
+            </div>
+            <div
+              className="px-3 py-2 rounded-lg"
+              style={{
+                backgroundColor: stats.today > 0 ? "var(--success-bg)" : "var(--warning-bg)",
+                color: stats.today > 0 ? "var(--success)" : "var(--warning)",
+              }}
+            >
+              <div className="text-[11px] uppercase" style={{ letterSpacing: "0.08em", fontWeight: 700 }}>
+                Recent activity
+              </div>
+              <div className="text-sm font-semibold">
+                {stats.today > 0 ? `${stats.today} today` : "None today"}
+              </div>
+            </div>
+            <div
+              className="px-3 py-2 rounded-lg"
+              style={{
+                backgroundColor: weatherConfigured ? "var(--card-elevated)" : "color-mix(in srgb, var(--warning) 10%, transparent)",
+                color: weatherConfigured ? "var(--text-secondary)" : "var(--warning)",
+              }}
+            >
+              <div className="text-[11px] uppercase" style={{ letterSpacing: "0.08em", fontWeight: 700 }}>
+                Weather
+              </div>
+              <div className="text-sm font-semibold">
+                {weatherConfigured ? "Configured" : "Optional / unavailable"}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Stats Grid + Weather */}
