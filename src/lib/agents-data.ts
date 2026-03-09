@@ -1,0 +1,213 @@
+import { readFileSync, statSync } from "fs";
+import { join } from "path";
+import { OPENCLAW_DIR, OPENCLAW_CONFIG } from "@/lib/paths";
+
+export interface AgentSummary {
+  id: string;
+  name?: string;
+  emoji: string;
+  color: string;
+  model: string;
+  workspace: string;
+  dmPolicy?: string;
+  allowAgents?: string[];
+  allowAgentsDetails?: Array<{
+    id: string;
+    name: string;
+    emoji: string;
+    color: string;
+  }>;
+  botToken?: string;
+  status: "online" | "offline";
+  lastActivity?: string;
+  activeSessions: number;
+}
+
+interface OpenClawAgentConfig {
+  id: string;
+  name?: string;
+  workspace?: string;
+  model?: {
+    primary?: string;
+  };
+  subagents?: {
+    allowAgents?: string[];
+  };
+  ui?: {
+    emoji?: string;
+    color?: string;
+  };
+}
+
+interface OpenClawConfig {
+  agents?: {
+    list?: OpenClawAgentConfig[];
+    defaults?: {
+      workspace?: string;
+      model?: {
+        primary?: string;
+      };
+    };
+  };
+  channels?: {
+    telegram?: {
+      dmPolicy?: string;
+      accounts?: Record<
+        string,
+        {
+          dmPolicy?: string;
+          botToken?: string;
+        }
+      >;
+    };
+  };
+}
+
+const DEFAULT_AGENT_CONFIG: Record<string, { emoji: string; color: string; name?: string }> = {
+  main: {
+    emoji: process.env.NEXT_PUBLIC_AGENT_EMOJI || "🤖",
+    color: "#ff6b35",
+    name: process.env.NEXT_PUBLIC_AGENT_NAME || "Mission Control",
+  },
+};
+
+interface AgentCacheEntry {
+  agents: AgentSummary[];
+  updatedAt: number;
+}
+
+const AGENTS_CACHE_TTL_MS = 30_000;
+let agentsCache: AgentCacheEntry | null = null;
+
+function getAgentDisplayInfo(
+  agentId: string,
+  agentConfig?: OpenClawAgentConfig | null
+): { emoji: string; color: string; name: string } {
+  const configEmoji = agentConfig?.ui?.emoji;
+  const configColor = agentConfig?.ui?.color;
+  const configName = agentConfig?.name;
+
+  const defaults = DEFAULT_AGENT_CONFIG[agentId];
+
+  return {
+    emoji: configEmoji || defaults?.emoji || "🤖",
+    color: configColor || defaults?.color || "#666666",
+    name: configName || defaults?.name || agentId,
+  };
+}
+
+function cloneAgents(agents: AgentSummary[]): AgentSummary[] {
+  return agents.map((agent) => ({
+    ...agent,
+    allowAgents: agent.allowAgents ? [...agent.allowAgents] : [],
+    allowAgentsDetails: agent.allowAgentsDetails
+      ? agent.allowAgentsDetails.map((entry) => ({ ...entry }))
+      : [],
+  }));
+}
+
+function loadAgentsFromConfig(): AgentSummary[] {
+  const configPath = OPENCLAW_CONFIG;
+  const config = JSON.parse(readFileSync(configPath, "utf-8")) as OpenClawConfig;
+
+  const configuredAgents = Array.isArray(config?.agents?.list) ? config.agents.list : [];
+  const defaultWorkspace =
+    config?.agents?.defaults?.workspace || join(OPENCLAW_DIR, "workspace");
+
+  const normalizedAgents: OpenClawAgentConfig[] =
+    configuredAgents.length > 0
+      ? configuredAgents
+      : [
+          {
+            id: "main",
+            name: process.env.NEXT_PUBLIC_AGENT_NAME || "main",
+            workspace: defaultWorkspace,
+            model: {
+              primary: config?.agents?.defaults?.model?.primary || "unknown",
+            },
+            subagents: { allowAgents: [] },
+            ui: {
+              emoji: process.env.NEXT_PUBLIC_AGENT_EMOJI || "🤖",
+            },
+          },
+        ];
+
+  return normalizedAgents.map((agent) => {
+    const agentInfo = getAgentDisplayInfo(agent.id, agent);
+    const telegramAccount = config.channels?.telegram?.accounts?.[agent.id];
+    const botToken = telegramAccount?.botToken;
+    const workspace =
+      typeof agent.workspace === "string" && agent.workspace.trim().length > 0
+        ? agent.workspace
+        : defaultWorkspace;
+
+    const memoryPath = join(workspace, "memory");
+    let lastActivity: string | undefined;
+    let status: "online" | "offline" = "offline";
+
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      const memoryFile = join(memoryPath, `${today}.md`);
+      const stat = statSync(memoryFile);
+      lastActivity = stat.mtime.toISOString();
+      status = Date.now() - stat.mtime.getTime() < 5 * 60 * 1000 ? "online" : "offline";
+    } catch {
+      // No recent activity.
+    }
+
+    const allowAgents = Array.isArray(agent.subagents?.allowAgents)
+      ? agent.subagents.allowAgents
+      : [];
+
+    const allowAgentsDetails = allowAgents.map((subagentId) => {
+      const subagentConfig = normalizedAgents.find((entry) => entry.id === subagentId);
+      if (subagentConfig) {
+        const subagentInfo = getAgentDisplayInfo(subagentId, subagentConfig);
+        return {
+          id: subagentId,
+          name: subagentConfig.name || subagentInfo.name,
+          emoji: subagentInfo.emoji,
+          color: subagentInfo.color,
+        };
+      }
+
+      const fallbackInfo = getAgentDisplayInfo(subagentId, null);
+      return {
+        id: subagentId,
+        name: fallbackInfo.name,
+        emoji: fallbackInfo.emoji,
+        color: fallbackInfo.color,
+      };
+    });
+
+    return {
+      id: agent.id,
+      name: agent.name || agentInfo.name,
+      emoji: agentInfo.emoji,
+      color: agentInfo.color,
+      model: agent.model?.primary || config.agents?.defaults?.model?.primary || "unknown",
+      workspace,
+      dmPolicy: telegramAccount?.dmPolicy || config.channels?.telegram?.dmPolicy || "pairing",
+      allowAgents,
+      allowAgentsDetails,
+      botToken: botToken ? "configured" : undefined,
+      status,
+      lastActivity,
+      activeSessions: 0,
+    } satisfies AgentSummary;
+  });
+}
+
+export async function getAgentsSummary(): Promise<AgentSummary[]> {
+  if (agentsCache && Date.now() - agentsCache.updatedAt < AGENTS_CACHE_TTL_MS) {
+    return cloneAgents(agentsCache.agents);
+  }
+
+  const agents = loadAgentsFromConfig();
+  agentsCache = {
+    agents: cloneAgents(agents),
+    updatedAt: Date.now(),
+  };
+
+  return agents;
+}

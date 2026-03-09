@@ -64,17 +64,20 @@ const statusConfig: Record<string, {
 
 interface ActivityFeedProps {
   limit?: number;
+  initialActivities?: Activity[];
 }
 
-export function ActivityFeed({ limit = 10 }: ActivityFeedProps) {
-  const [activities, setActivities] = useState<Activity[] | null>(null);
+export function ActivityFeed({ limit = 10, initialActivities }: ActivityFeedProps) {
+  const [activities, setActivities] = useState<Activity[] | null>(initialActivities ?? null);
 
   useEffect(() => {
+    if (initialActivities) return;
+
     fetch(`/api/activities?limit=${limit}&sort=newest`)
       .then((res) => res.json())
       .then((data: ActivitiesResponse) => setActivities(data.activities))
       .catch(() => setActivities([]));
-  }, [limit]);
+  }, [initialActivities, limit]);
 
   if (!activities) {
     return (
