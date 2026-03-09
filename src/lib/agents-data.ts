@@ -1,5 +1,6 @@
-import { readFileSync, statSync } from "fs";
+import { readFileSync } from "fs";
 import { join } from "path";
+import { spawnSync } from "child_process";
 import { OPENCLAW_DIR, OPENCLAW_CONFIG } from "@/lib/paths";
 
 export interface AgentSummary {
@@ -63,6 +64,18 @@ interface OpenClawConfig {
   };
 }
 
+interface OpenClawSessionsPayload {
+  sessions?: Array<{
+    agentId?: string;
+    updatedAt?: number;
+  }>;
+}
+
+interface AgentSessionStats {
+  activeSessions: number;
+  lastActiveAt: string | undefined;
+}
+
 const DEFAULT_AGENT_CONFIG: Record<string, { emoji: string; color: string; name?: string }> = {
   main: {
     emoji: process.env.NEXT_PUBLIC_AGENT_EMOJI || "🤖",
@@ -76,8 +89,22 @@ interface AgentCacheEntry {
   updatedAt: number;
 }
 
+interface SessionsCacheEntry {
+  payload: OpenClawSessionsPayload;
+  updatedAt: number;
+}
+
 const AGENTS_CACHE_TTL_MS = 30_000;
+const SESSIONS_CACHE_TTL_MS = 45_000;
+const ACTIVE_WINDOW_MS = 15 * 60 * 1000;
+const OPENCLAW_CMD = "openclaw";
+const OPENCLAW_POWERSHELL_SCRIPT =
+  process.platform === "win32" && process.env.APPDATA
+    ? join(process.env.APPDATA, "npm", "openclaw.ps1")
+    : null;
+
 let agentsCache: AgentCacheEntry | null = null;
+let sessionsCache: SessionsCacheEntry | null = null;
 
 function getAgentDisplayInfo(
   agentId: string,
@@ -106,13 +133,121 @@ function cloneAgents(agents: AgentSummary[]): AgentSummary[] {
   }));
 }
 
+function runOpenClaw(args: string[], timeoutMs = 5000): string {
+  const execOptions = {
+    encoding: "utf-8" as BufferEncoding,
+    timeout: timeoutMs,
+    windowsHide: true,
+  };
+
+  let result = null as ReturnType<typeof spawnSync> | null;
+
+  if (OPENCLAW_POWERSHELL_SCRIPT) {
+    result = spawnSync(
+      "powershell.exe",
+      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", OPENCLAW_POWERSHELL_SCRIPT, ...args],
+      execOptions
+    );
+  }
+
+  if (!result || result.error?.message?.includes("ENOENT")) {
+    result = spawnSync(OPENCLAW_CMD, args, {
+      ...execOptions,
+      shell: process.platform === "win32",
+    });
+  }
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  const stdoutText =
+    typeof result.stdout === "string"
+      ? result.stdout
+      : result.stdout
+      ? result.stdout.toString("utf-8")
+      : "";
+  const stderrText =
+    typeof result.stderr === "string"
+      ? result.stderr
+      : result.stderr
+      ? result.stderr.toString("utf-8")
+      : "";
+
+  if (result.status !== 0) {
+    throw new Error((stderrText || stdoutText || "openclaw command failed").trim());
+  }
+
+  return stdoutText.trim();
+}
+
+function listOpenClawSessions(): OpenClawSessionsPayload {
+  const output = runOpenClaw(["sessions", "--all-agents", "--json"]);
+  const parsed = JSON.parse(output);
+  if (!parsed || typeof parsed !== "object") return {};
+  return parsed as OpenClawSessionsPayload;
+}
+
+function cloneSessions(payload: OpenClawSessionsPayload): OpenClawSessionsPayload {
+  return {
+    sessions: Array.isArray(payload.sessions)
+      ? payload.sessions.map((session) => ({ ...session }))
+      : [],
+  };
+}
+
+function getSessionsPayload(): OpenClawSessionsPayload {
+  if (sessionsCache && Date.now() - sessionsCache.updatedAt < SESSIONS_CACHE_TTL_MS) {
+    return cloneSessions(sessionsCache.payload);
+  }
+
+  try {
+    const payload = listOpenClawSessions();
+    sessionsCache = {
+      payload: cloneSessions(payload),
+      updatedAt: Date.now(),
+    };
+    return payload;
+  } catch {
+    return sessionsCache ? cloneSessions(sessionsCache.payload) : { sessions: [] };
+  }
+}
+
+function buildSessionStatsMap(payload: OpenClawSessionsPayload): Map<string, AgentSessionStats> {
+  const sessions = Array.isArray(payload.sessions) ? payload.sessions : [];
+  const map = new Map<string, AgentSessionStats>();
+  const now = Date.now();
+
+  for (const session of sessions) {
+    if (!session || typeof session !== "object") continue;
+    const agentId = session.agentId;
+    const updatedAt = session.updatedAt;
+
+    if (typeof agentId !== "string" || typeof updatedAt !== "number") continue;
+
+    const stats = map.get(agentId) || { activeSessions: 0, lastActiveAt: undefined };
+
+    if (!stats.lastActiveAt || updatedAt > Date.parse(stats.lastActiveAt)) {
+      stats.lastActiveAt = new Date(updatedAt).toISOString();
+    }
+
+    if (now - updatedAt <= ACTIVE_WINDOW_MS) {
+      stats.activeSessions += 1;
+    }
+
+    map.set(agentId, stats);
+  }
+
+  return map;
+}
+
 function loadAgentsFromConfig(): AgentSummary[] {
   const configPath = OPENCLAW_CONFIG;
   const config = JSON.parse(readFileSync(configPath, "utf-8")) as OpenClawConfig;
 
   const configuredAgents = Array.isArray(config?.agents?.list) ? config.agents.list : [];
-  const defaultWorkspace =
-    config?.agents?.defaults?.workspace || join(OPENCLAW_DIR, "workspace");
+  const defaultWorkspace = config?.agents?.defaults?.workspace || join(OPENCLAW_DIR, "workspace");
+  const sessionStatsMap = buildSessionStatsMap(getSessionsPayload());
 
   const normalizedAgents: OpenClawAgentConfig[] =
     configuredAgents.length > 0
@@ -141,19 +276,10 @@ function loadAgentsFromConfig(): AgentSummary[] {
         ? agent.workspace
         : defaultWorkspace;
 
-    const memoryPath = join(workspace, "memory");
-    let lastActivity: string | undefined;
-    let status: "online" | "offline" = "offline";
-
-    try {
-      const today = new Date().toISOString().split("T")[0];
-      const memoryFile = join(memoryPath, `${today}.md`);
-      const stat = statSync(memoryFile);
-      lastActivity = stat.mtime.toISOString();
-      status = Date.now() - stat.mtime.getTime() < 5 * 60 * 1000 ? "online" : "offline";
-    } catch {
-      // No recent activity.
-    }
+    const sessionStats = sessionStatsMap.get(agent.id) || {
+      activeSessions: 0,
+      lastActiveAt: undefined,
+    };
 
     const allowAgents = Array.isArray(agent.subagents?.allowAgents)
       ? agent.subagents.allowAgents
@@ -191,9 +317,9 @@ function loadAgentsFromConfig(): AgentSummary[] {
       allowAgents,
       allowAgentsDetails,
       botToken: botToken ? "configured" : undefined,
-      status,
-      lastActivity,
-      activeSessions: 0,
+      status: sessionStats.activeSessions > 0 ? "online" : "offline",
+      lastActivity: sessionStats.lastActiveAt,
+      activeSessions: sessionStats.activeSessions,
     } satisfies AgentSummary;
   });
 }
