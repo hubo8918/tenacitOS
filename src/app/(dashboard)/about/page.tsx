@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import {
   Terminal,
   Calendar,
@@ -118,9 +119,12 @@ export default function AboutPage() {
             }}
           >
             {BRANDING.agentAvatar ? (
-              <img
+              <Image
                 src={BRANDING.agentAvatar}
                 alt={agentName}
+                width={96}
+                height={96}
+                unoptimized
                 className="w-full h-full object-cover"
               />
             ) : (
