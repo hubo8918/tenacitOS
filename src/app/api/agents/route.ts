@@ -29,7 +29,7 @@ interface Agent {
 interface OpenClawAgentConfig {
   id: string;
   name?: string;
-  workspace: string;
+  workspace?: string;
   model?: {
     primary?: string;
   };
@@ -97,6 +97,8 @@ export async function GET() {
     const config = JSON.parse(readFileSync(configPath, "utf-8")) as OpenClawConfig;
 
     const configuredAgents = Array.isArray(config?.agents?.list) ? config.agents.list : [];
+    const defaultWorkspace =
+      config?.agents?.defaults?.workspace || join(OPENCLAW_DIR, "workspace");
 
     const normalizedAgents: OpenClawAgentConfig[] =
       configuredAgents.length > 0
@@ -105,7 +107,7 @@ export async function GET() {
             {
               id: "main",
               name: process.env.NEXT_PUBLIC_AGENT_NAME || "main",
-              workspace: config?.agents?.defaults?.workspace || join(OPENCLAW_DIR, "workspace"),
+              workspace: defaultWorkspace,
               model: {
                 primary: config?.agents?.defaults?.model?.primary || "unknown",
               },
@@ -121,8 +123,12 @@ export async function GET() {
 
       const telegramAccount = config.channels?.telegram?.accounts?.[agent.id];
       const botToken = telegramAccount?.botToken;
+      const workspace =
+        typeof agent.workspace === "string" && agent.workspace.trim().length > 0
+          ? agent.workspace
+          : defaultWorkspace;
 
-      const memoryPath = join(agent.workspace, "memory");
+      const memoryPath = join(workspace, "memory");
       let lastActivity: string | undefined;
       let status: "online" | "offline" = "offline";
 
@@ -167,7 +173,7 @@ export async function GET() {
         emoji: agentInfo.emoji,
         color: agentInfo.color,
         model: agent.model?.primary || config.agents?.defaults?.model?.primary || "unknown",
-        workspace: agent.workspace,
+        workspace,
         dmPolicy: telegramAccount?.dmPolicy || config.channels?.telegram?.dmPolicy || "pairing",
         allowAgents,
         allowAgentsDetails,

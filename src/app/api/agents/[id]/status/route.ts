@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 interface AgentConfigEntry {
   id: string;
   name?: string;
-  workspace: string;
+  workspace?: string;
   model?: {
     primary?: string;
   };
@@ -53,6 +53,8 @@ export async function GET(
     const configuredAgents = Array.isArray(config?.agents?.list)
       ? config.agents.list
       : [];
+    const defaultWorkspace =
+      config?.agents?.defaults?.workspace || join(OPENCLAW_DIR, "workspace");
 
     const normalizedAgents: AgentConfigEntry[] =
       configuredAgents.length > 0
@@ -61,8 +63,7 @@ export async function GET(
             {
               id: "main",
               name: process.env.NEXT_PUBLIC_AGENT_NAME || "main",
-              workspace:
-                config?.agents?.defaults?.workspace || join(OPENCLAW_DIR, "workspace"),
+              workspace: defaultWorkspace,
               model: {
                 primary: config?.agents?.defaults?.model?.primary || "unknown",
               },
@@ -75,7 +76,12 @@ export async function GET(
       return NextResponse.json({ error: "Agent not found" }, { status: 404 });
     }
 
-    const memoryPath = join(agent.workspace, "memory");
+    const workspace =
+      typeof agent.workspace === "string" && agent.workspace.trim().length > 0
+        ? agent.workspace
+        : defaultWorkspace;
+
+    const memoryPath = join(workspace, "memory");
     let recentFiles: Array<{ date: string; size: number; modified: string }> = [];
 
     try {
@@ -106,7 +112,7 @@ export async function GET(
         id: agent.id,
         name: agent.name,
         model: agent.model?.primary || config.agents?.defaults?.model?.primary,
-        workspace: agent.workspace,
+        workspace,
         dmPolicy: telegramAccount?.dmPolicy,
         allowAgents: agent.subagents?.allowAgents || [],
         telegramConfigured: !!telegramAccount?.botToken,
