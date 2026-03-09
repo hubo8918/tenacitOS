@@ -56,6 +56,11 @@ export default async function DashboardPage() {
 
   const onlineAgents = agents.filter((agent) => agent.status === "online").length;
   const activeSessions = agents.reduce((sum, agent) => sum + agent.activeSessions, 0);
+  const sortedAgents = [...agents].sort((a, b) => {
+    if (b.activeSessions !== a.activeSessions) return b.activeSessions - a.activeSessions;
+    if (a.status !== b.status) return a.status === "online" ? -1 : 1;
+    return (a.name || a.id).localeCompare(b.name || b.id);
+  });
   const weatherConfigured = Boolean(
     process.env.WEATHER_CITY &&
       process.env.WEATHER_LAT &&
@@ -210,7 +215,7 @@ export default async function DashboardPage() {
         </div>
         <div className="p-5">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            {agents.map((agent) => {
+            {sortedAgents.map((agent) => {
               const isOnline = agent.status === "online";
               return (
                 <div
