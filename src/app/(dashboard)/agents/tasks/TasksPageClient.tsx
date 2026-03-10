@@ -14,6 +14,19 @@ type SortDir = "asc" | "desc";
 const priorityOrder = { high: 0, medium: 1, low: 2 };
 const statusOrder = { blocked: 0, in_progress: 1, pending: 2, completed: 3 };
 
+function parseLocalDate(dateString: string) {
+  const [year, month, day] = dateString.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function isTaskOverdue(task: Task) {
+  if (task.status === "completed") return false;
+  const dueDate = parseLocalDate(task.dueDate);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  return dueDate < startOfToday;
+}
+
 interface TasksPageClientProps {
   initialTasks: Task[];
 }
@@ -74,6 +87,8 @@ export default function TasksPageClient({ initialTasks }: TasksPageClientProps) 
 
   const inProgressCount = tasks.filter((t) => t.status === "in_progress").length;
   const completedCount = tasks.filter((t) => t.status === "completed").length;
+  const blockedCount = tasks.filter((t) => t.status === "blocked").length;
+  const overdueCount = tasks.filter(isTaskOverdue).length;
 
   const filterButtons: { key: StatusFilter; label: string }[] = [
     { key: "all", label: "All" },
@@ -145,6 +160,43 @@ export default function TasksPageClient({ initialTasks }: TasksPageClientProps) 
           Use this page to track shared work across agents and projects. Task status here reflects backlog progress,
           not live runtime online/offline state.
         </p>
+        {(blockedCount > 0 || overdueCount > 0) && (
+          <div
+            className="mt-4 flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
+            style={{
+              backgroundColor: "var(--surface-elevated)",
+              border: "1px solid var(--border)",
+            }}
+          >
+            <span className="font-semibold" style={{ color: "var(--text-secondary)" }}>
+              Needs attention
+            </span>
+            {blockedCount > 0 && (
+              <span
+                className="rounded-full px-2 py-1 font-semibold"
+                style={{
+                  color: "var(--status-blocked)",
+                  backgroundColor: "color-mix(in srgb, var(--status-blocked) 14%, transparent)",
+                  border: "1px solid color-mix(in srgb, var(--status-blocked) 28%, transparent)",
+                }}
+              >
+                {blockedCount} blocked
+              </span>
+            )}
+            {overdueCount > 0 && (
+              <span
+                className="rounded-full px-2 py-1 font-semibold"
+                style={{
+                  color: "#FF9F0A",
+                  backgroundColor: "color-mix(in srgb, #FF9F0A 16%, transparent)",
+                  border: "1px solid color-mix(in srgb, #FF9F0A 30%, transparent)",
+                }}
+              >
+                {overdueCount} overdue
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-2 mb-6">
