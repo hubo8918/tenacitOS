@@ -281,6 +281,8 @@ async function loadTeamOverlay(): Promise<TeamOverlay[]> {
 }
 
 async function saveTeamOverlay(team: TeamOverlay[]): Promise<void> {
+  const dir = path.dirname(DATA_PATH);
+  await fs.mkdir(dir, { recursive: true });
   await fs.writeFile(DATA_PATH, JSON.stringify(team, null, 2));
 }
 
@@ -765,10 +767,6 @@ export async function PUT(request: NextRequest) {
     const overlays = await loadTeamOverlay();
     const index = overlays.findIndex((entry) => entry.id === id);
 
-    if (index === -1) {
-      return NextResponse.json({ error: "Agent not found in team overlay" }, { status: 404 });
-    }
-
     const realAgents = listOpenClawAgents();
     const real = realAgents.find((agent) => agent.id === id);
 
@@ -776,19 +774,20 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Agent not found in OpenClaw" }, { status: 404 });
     }
 
+    const existingOverlay: TeamOverlay = index === -1 ? { id } : overlays[index];
     const requestedName = coerceString(body.name);
     const requestedEmoji = coerceString(body.emoji);
 
     const nextOverlay: TeamOverlay = {
-      ...overlays[index],
-      name: requestedName ?? overlays[index].name,
-      role: coerceString(body.role) ?? overlays[index].role,
-      emoji: requestedEmoji ?? overlays[index].emoji,
-      color: coerceString(body.color) ?? overlays[index].color,
-      description: coerceString(body.description) ?? overlays[index].description,
-      specialBadge: coerceString(body.specialBadge) ?? overlays[index].specialBadge,
-      tier: body.tier ? normalizeTier(body.tier) : overlays[index].tier,
-      tags: body.tags ? normalizeTags(body.tags) : overlays[index].tags,
+      ...existingOverlay,
+      name: requestedName ?? existingOverlay.name,
+      role: coerceString(body.role) ?? existingOverlay.role,
+      emoji: requestedEmoji ?? existingOverlay.emoji,
+      color: coerceString(body.color) ?? existingOverlay.color,
+      description: coerceString(body.description) ?? existingOverlay.description,
+      specialBadge: coerceString(body.specialBadge) ?? existingOverlay.specialBadge,
+      tier: body.tier ? normalizeTier(body.tier) : existingOverlay.tier,
+      tags: body.tags ? normalizeTags(body.tags) : existingOverlay.tags,
     };
 
     const shouldSyncIdentity = requestedName !== undefined || requestedEmoji !== undefined;
@@ -796,7 +795,12 @@ export async function PUT(request: NextRequest) {
       syncAgentIdentity(real, nextOverlay.name, nextOverlay.emoji);
     }
 
-    overlays[index] = nextOverlay;
+    if (index === -1) {
+      overlays.push(nextOverlay);
+    } else {
+      overlays[index] = nextOverlay;
+    }
+
     await saveTeamOverlay(overlays);
     invalidateTeamCache();
 
