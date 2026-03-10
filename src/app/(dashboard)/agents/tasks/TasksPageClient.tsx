@@ -97,6 +97,8 @@ export default function TasksPageClient({ initialTasks }: TasksPageClientProps) 
     { key: "pending", label: "Pending" },
     { key: "blocked", label: "Blocked" },
   ];
+  const activeFilterLabel = filterButtons.find((btn) => btn.key === statusFilter)?.label ?? "Current";
+  const hasAnyTasks = tasks.length > 0;
 
   const columns: { key: SortField | null; label: string; flex: string }[] = [
     { key: "title", label: "Task", flex: "flex-[3]" },
@@ -199,79 +201,130 @@ export default function TasksPageClient({ initialTasks }: TasksPageClientProps) 
         )}
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-6">
-        {filterButtons.map((btn) => {
-          const isActive = statusFilter === btn.key;
-          const statusColor = btn.key !== "all" ? taskStatusConfig[btn.key]?.color : undefined;
-          return (
-            <button
-              key={btn.key}
-              onClick={() => setStatusFilter(btn.key)}
-              className="text-xs font-semibold px-3 py-1.5 rounded-full transition-all duration-150"
+      {hasAnyTasks ? (
+        <>
+          <div className="flex flex-wrap gap-2 mb-6">
+            {filterButtons.map((btn) => {
+              const isActive = statusFilter === btn.key;
+              const statusColor = btn.key !== "all" ? taskStatusConfig[btn.key]?.color : undefined;
+              return (
+                <button
+                  key={btn.key}
+                  onClick={() => setStatusFilter(btn.key)}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-full transition-all duration-150"
+                  style={{
+                    backgroundColor: isActive
+                      ? statusColor
+                        ? `color-mix(in srgb, ${statusColor} 20%, transparent)`
+                        : "var(--surface-elevated)"
+                      : "transparent",
+                    color: isActive ? statusColor || "var(--text-primary)" : "var(--text-muted)",
+                    border: isActive
+                      ? `1px solid ${statusColor ? `color-mix(in srgb, ${statusColor} 40%, transparent)` : "var(--border-strong)"}`
+                      : "1px solid var(--border)",
+                  }}
+                >
+                  {btn.label}
+                  {btn.key === "all" && ` (${tasks.length})`}
+                  {btn.key !== "all" && ` (${tasks.filter((t) => t.status === btn.key).length})`}
+                </button>
+              );
+            })}
+          </div>
+
+          <div
+            className="rounded-xl overflow-hidden"
+            style={{
+              backgroundColor: "var(--card)",
+              border: "1px solid var(--border)",
+            }}
+          >
+            <div
+              className="flex items-center gap-3 px-4 py-2.5"
               style={{
-                backgroundColor: isActive
-                  ? statusColor
-                    ? `color-mix(in srgb, ${statusColor} 20%, transparent)`
-                    : "var(--surface-elevated)"
-                  : "transparent",
-                color: isActive ? statusColor || "var(--text-primary)" : "var(--text-muted)",
-                border: isActive
-                  ? `1px solid ${statusColor ? `color-mix(in srgb, ${statusColor} 40%, transparent)` : "var(--border-strong)"}`
-                  : "1px solid var(--border)",
+                borderBottom: "1px solid var(--border)",
+                backgroundColor: "var(--surface-elevated)",
               }}
             >
-              {btn.label}
-              {btn.key === "all" && ` (${tasks.length})`}
-              {btn.key !== "all" && ` (${tasks.filter((t) => t.status === btn.key).length})`}
-            </button>
-          );
-        })}
-      </div>
+              {columns.map((col, i) => (
+                <div
+                  key={i}
+                  className={`${col.flex} flex items-center gap-1 ${col.key ? "cursor-pointer select-none" : ""}`}
+                  onClick={() => col.key && toggleSort(col.key)}
+                >
+                  <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                    {col.label}
+                  </span>
+                  {col.key && sortField === col.key && (
+                    <ArrowUpDown
+                      className="w-3 h-3"
+                      style={{
+                        color: "var(--text-secondary)",
+                        transform: sortDir === "desc" ? "scaleY(-1)" : undefined,
+                      }}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
 
-      <div
-        className="rounded-xl overflow-hidden"
-        style={{
-          backgroundColor: "var(--card)",
-          border: "1px solid var(--border)",
-        }}
-      >
+            {filteredTasks.length > 0 ? (
+              filteredTasks.map((task) => <TaskRow key={task.id} task={task} onUpdate={refetch} />)
+            ) : (
+              <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                    No {activeFilterLabel.toLowerCase()} tasks right now
+                  </p>
+                  <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                    The board still has {tasks.length} tracked task{tasks.length === 1 ? "" : "s"}; this filter just is not showing any of them.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setStatusFilter("all")}
+                  className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
+                  style={{
+                    backgroundColor: "var(--surface-elevated)",
+                    color: "var(--text-primary)",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  Show all tasks
+                </button>
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
         <div
-          className="flex items-center gap-3 px-4 py-2.5"
+          className="rounded-xl px-6 py-12 text-center"
           style={{
-            borderBottom: "1px solid var(--border)",
-            backgroundColor: "var(--surface-elevated)",
+            backgroundColor: "var(--card)",
+            border: "1px solid var(--border)",
           }}
         >
-          {columns.map((col, i) => (
-            <div
-              key={i}
-              className={`${col.flex} flex items-center gap-1 ${col.key ? "cursor-pointer select-none" : ""}`}
-              onClick={() => col.key && toggleSort(col.key)}
+          <div className="mx-auto max-w-md space-y-3">
+            <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+              No tracked tasks yet
+            </p>
+            <p className="text-sm" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+              This coordination board is ready, but nothing has been added yet. Once agents or projects start tracking work,
+              task status, priority, owner, and due dates will show up here.
+            </p>
+            <button
+              onClick={refetch}
+              className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
+              style={{
+                backgroundColor: "var(--surface-elevated)",
+                color: "var(--text-primary)",
+                border: "1px solid var(--border)",
+              }}
             >
-              <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
-                {col.label}
-              </span>
-              {col.key && sortField === col.key && (
-                <ArrowUpDown
-                  className="w-3 h-3"
-                  style={{
-                    color: "var(--text-secondary)",
-                    transform: sortDir === "desc" ? "scaleY(-1)" : undefined,
-                  }}
-                />
-              )}
-            </div>
-          ))}
-        </div>
-
-        {filteredTasks.length > 0 ? (
-          filteredTasks.map((task) => <TaskRow key={task.id} task={task} onUpdate={refetch} />)
-        ) : (
-          <div className="p-8 text-center text-sm" style={{ color: "var(--text-muted)" }}>
-            No tasks match the current filter.
+              Refresh board
+            </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
