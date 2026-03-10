@@ -3,6 +3,25 @@
 import { useState, useEffect, useRef } from "react";
 import { MoreHorizontal } from "lucide-react";
 
+function parseLocalDate(dateString: string) {
+  const [year, month, day] = dateString.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function formatDueDate(dateString: string) {
+  return parseLocalDate(dateString).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function isTaskOverdue(dateString: string) {
+  const dueDate = parseLocalDate(dateString);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  return dueDate < startOfToday;
+}
+
 interface Task {
   id: string;
   title: string;
@@ -38,7 +57,7 @@ export function TaskRow({ task, onUpdate }: TaskRowProps) {
 
   const status = statusConfig[task.status];
   const priority = priorityConfig[task.priority];
-  const isOverdue = new Date(task.dueDate) < new Date() && task.status !== "completed";
+  const isOverdue = isTaskOverdue(task.dueDate) && task.status !== "completed";
 
   useEffect(() => {
     if (!showMenu) return;
@@ -177,10 +196,7 @@ export function TaskRow({ task, onUpdate }: TaskRowProps) {
           className="text-xs"
           style={{ color: isOverdue ? "#FF453A" : "var(--text-muted)" }}
         >
-          {new Date(task.dueDate).toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-          })}
+          {formatDueDate(task.dueDate)}
         </span>
       </div>
 
