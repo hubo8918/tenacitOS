@@ -36,6 +36,7 @@ interface AgentCardProps {
 }
 
 type PresenceState = "active" | "idle" | "never";
+type TeamTier = "leadership" | "operations" | "io" | "meta";
 
 function formatLastActive(lastActiveAt?: string | null): string {
   if (!lastActiveAt) return "never";
@@ -121,6 +122,7 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
   const [emoji, setEmoji] = useState(agent.emoji);
   const [role, setRole] = useState(agent.role);
   const [description, setDescription] = useState(agent.description);
+  const [tier, setTier] = useState<TeamTier>(agent.tier as TeamTier);
   const [saving, setSaving] = useState(false);
   const [actionRunning, setActionRunning] = useState<"wake" | "check-in" | null>(null);
   const [actionResult, setActionResult] = useState<AgentActionResult | null>(null);
@@ -133,7 +135,7 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
       const response = await fetch("/api/team", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: agent.id, name, emoji, role, description }),
+        body: JSON.stringify({ id: agent.id, name, emoji, role, description, tier }),
       });
 
       if (!response.ok) {
@@ -156,6 +158,7 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
     setEmoji(agent.emoji);
     setRole(agent.role);
     setDescription(agent.description);
+    setTier(agent.tier as TeamTier);
     setEditing(false);
   };
 
@@ -274,6 +277,17 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
               style={inputStyle}
               aria-label="Agent role"
             />
+            <select
+              value={tier}
+              onChange={(e) => setTier(e.target.value as TeamTier)}
+              style={inputStyle}
+              aria-label="Agent tier"
+            >
+              <option value="leadership">Leadership</option>
+              <option value="operations">Operations</option>
+              <option value="io">Input / Output</option>
+              <option value="meta">Meta</option>
+            </select>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
