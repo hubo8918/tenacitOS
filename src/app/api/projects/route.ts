@@ -26,8 +26,17 @@ async function loadProjects(): Promise<Project[]> {
   try {
     const data = await fs.readFile(DATA_PATH, 'utf-8');
     return JSON.parse(data);
-  } catch {
-    return [];
+  } catch (error) {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === 'ENOENT'
+    ) {
+      return [];
+    }
+
+    throw error;
   }
 }
 
