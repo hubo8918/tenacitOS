@@ -38,6 +38,31 @@ interface AgentCardProps {
 type PresenceState = "active" | "idle" | "never";
 type TeamTier = "leadership" | "operations" | "io" | "meta";
 
+function defaultTagColor(label: string): string {
+  const normalized = label.trim().toLowerCase();
+
+  if (normalized.includes("lead") || normalized.includes("manager")) return "#A855F7";
+  if (normalized.includes("ops") || normalized.includes("infra")) return "#0A84FF";
+  if (normalized.includes("design") || normalized.includes("ux")) return "#EC4899";
+  if (normalized.includes("data") || normalized.includes("analytics")) return "#14B8A6";
+  if (normalized.includes("product") || normalized.includes("project")) return "#F59E0B";
+  return "#8B5CF6";
+}
+
+function parseTagsInput(raw: string, existingTags: TeamAgent["tags"]): TeamAgent["tags"] {
+  return raw
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map((label) => {
+      const existing = existingTags.find((tag) => tag.label.toLowerCase() === label.toLowerCase());
+      return {
+        label,
+        color: existing?.color || defaultTagColor(label),
+      };
+    });
+}
+
 function formatLastActive(lastActiveAt?: string | null): string {
   if (!lastActiveAt) return "never";
 
@@ -123,6 +148,8 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
   const [role, setRole] = useState(agent.role);
   const [description, setDescription] = useState(agent.description);
   const [tier, setTier] = useState<TeamTier>(agent.tier as TeamTier);
+  const [specialBadge, setSpecialBadge] = useState(agent.specialBadge || "");
+  const [tagsInput, setTagsInput] = useState(agent.tags.map((tag) => tag.label).join(", "));
   const [saving, setSaving] = useState(false);
   const [actionRunning, setActionRunning] = useState<"wake" | "check-in" | null>(null);
   const [actionResult, setActionResult] = useState<AgentActionResult | null>(null);
@@ -135,7 +162,16 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
       const response = await fetch("/api/team", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: agent.id, name, emoji, role, description, tier }),
+        body: JSON.stringify({
+          id: agent.id,
+          name,
+          emoji,
+          role,
+          description,
+          tier,
+          specialBadge: specialBadge.trim() || null,
+          tags: parseTagsInput(tagsInput, agent.tags),
+        }),
       });
 
       if (!response.ok) {
@@ -159,6 +195,8 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
     setRole(agent.role);
     setDescription(agent.description);
     setTier(agent.tier as TeamTier);
+    setSpecialBadge(agent.specialBadge || "");
+    setTagsInput(agent.tags.map((tag) => tag.label).join(", "));
     setEditing(false);
   };
 
@@ -296,6 +334,25 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
               style={{ ...inputStyle, resize: "none" }}
               aria-label="Agent description"
             />
+            <input
+              type="text"
+              value={specialBadge}
+              onChange={(e) => setSpecialBadge(e.target.value)}
+              placeholder="Badge (optional)"
+              style={inputStyle}
+              aria-label="Agent badge"
+            />
+            <textarea
+              value={tagsInput}
+              onChange={(e) => setTagsInput(e.target.value)}
+              placeholder="Tags, comma separated"
+              rows={2}
+              style={{ ...inputStyle, resize: "none" }}
+              aria-label="Agent tags"
+            />
+            <p className="text-[11px] -mt-1" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
+              Use tags for specialties, domain ownership, or collaboration context — for example: backend, product, infra.
+            </p>
 
             <div className="flex justify-end gap-2 mt-auto">
               <button
