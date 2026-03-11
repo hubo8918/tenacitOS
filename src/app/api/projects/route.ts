@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Project } from "@/data/mockProjectsData";
-import { getProjects, saveProjects } from "@/lib/projects-data";
+import { getProjects, normalizeProject, saveProjects } from "@/lib/projects-data";
 
 function generateId(title: string): string {
   return title
@@ -29,28 +29,28 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body = (await request.json()) as Record<string, unknown>;
 
     if (!body.title || !body.description) {
-      return NextResponse.json(
-        { error: "Missing required fields: title, description" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Missing required fields: title, description" }, { status: 400 });
     }
 
     const projects = await getProjects();
 
-    const newProject: Project = {
-      id: generateId(body.title),
+    const newProject = normalizeProject({
+      id: generateId(String(body.title)),
       title: body.title,
       description: body.description,
       status: body.status || "planning",
       progress: body.progress || 0,
       priority: body.priority || "medium",
       agent: body.agent || { emoji: "👤", name: "Unassigned", color: "#8E8E93" },
-      updatedAgo: "just now",
+      updatedAgo: body.updatedAgo || "just now",
       updatedBy: body.updatedBy || "",
-    };
+      ownerAgentId: body.ownerAgentId,
+      participatingAgentIds: body.participatingAgentIds,
+      phases: body.phases,
+    });
 
     projects.unshift(newProject);
     await saveProjects(projects);
@@ -64,34 +64,32 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body = (await request.json()) as Record<string, unknown>;
 
     if (!body.id) {
-      return NextResponse.json(
-        { error: "Missing required field: id" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Missing required field: id" }, { status: 400 });
     }
 
     const projects = await getProjects();
-    const project = projects.find((p) => p.id === body.id);
+    const index = projects.findIndex((p) => p.id === body.id);
 
-    if (!project) {
+    if (index === -1) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
-    if (body.title !== undefined) project.title = body.title;
-    if (body.description !== undefined) project.description = body.description;
-    if (body.status !== undefined) project.status = body.status;
-    if (body.progress !== undefined) project.progress = body.progress;
-    if (body.priority !== undefined) project.priority = body.priority;
-    if (body.agent !== undefined) project.agent = body.agent;
-    if (body.updatedAgo !== undefined) project.updatedAgo = body.updatedAgo;
-    if (body.updatedBy !== undefined) project.updatedBy = body.updatedBy;
+    const updatedProject: Project = normalizeProject({
+      ...projects[index],
+      ...body,
+      agent: body.agent !== undefined ? body.agent : projects[index].agent,
+      participatingAgentIds:
+        body.participatingAgentIds !== undefined ? body.participatingAgentIds : projects[index].participatingAgentIds,
+      phases: body.phases !== undefined ? body.phases : projects[index].phases,
+    });
 
+    projects[index] = updatedProject;
     await saveProjects(projects);
 
-    return NextResponse.json(project);
+    return NextResponse.json(updatedProject);
   } catch (error) {
     console.error("Failed to update project:", error);
     return NextResponse.json({ error: "Failed to update project" }, { status: 500 });

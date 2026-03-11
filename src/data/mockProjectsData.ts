@@ -1,3 +1,11 @@
+export interface ProjectPhase {
+  id: string;
+  title: string;
+  status: "pending" | "in_progress" | "blocked" | "completed";
+  ownerAgentId?: string;
+  dependsOnPhaseIds: string[];
+}
+
 export interface Project {
   id: string;
   title: string;
@@ -8,6 +16,9 @@ export interface Project {
   agent: { emoji: string; name: string; color: string };
   updatedAgo: string;
   updatedBy: string;
+  ownerAgentId?: string;
+  participatingAgentIds: string[];
+  phases: ProjectPhase[];
 }
 
 export const statusConfig: Record<string, { label: string; color: string }> = {
@@ -27,13 +38,17 @@ export const projects: Project[] = [
   {
     id: "agent-org-infra",
     title: "Agent Org Infrastructure",
-    description: "Core infrastructure for the autonomous agent organization. Health monitoring, message bus, shared memory, and inter-agent communication protocols.",
+    description:
+      "Core infrastructure for the autonomous agent organization. Health monitoring, message bus, shared memory, and inter-agent communication protocols.",
     status: "active",
     progress: 62,
     priority: "high",
     agent: { emoji: "🔧", name: "Charlie", color: "#30D158" },
     updatedAgo: "4 days ago",
     updatedBy: "Henry",
+    ownerAgentId: "charlie",
+    participatingAgentIds: ["charlie", "henry", "scout"],
+    phases: [],
   },
   {
     id: "mission-control",
@@ -45,17 +60,23 @@ export const projects: Project[] = [
     agent: { emoji: "👔", name: "Henry", color: "#FFD700" },
     updatedAgo: "8 days ago",
     updatedBy: "Henry",
+    ownerAgentId: "henry",
+    participatingAgentIds: ["henry", "codex", "pixel", "ralph"],
+    phases: [],
   },
   {
     id: "skool-ai-extension",
     title: "Skool AI Extension",
-    description: "\"Ask Alex\" Chrome extension for Vibely Academy. RAG pipeline over course content with personalized responses.",
+    description: '"Ask Alex" Chrome extension for Vibely Academy. RAG pipeline over course content with personalized responses.',
     status: "active",
     progress: 25,
     priority: "high",
     agent: { emoji: "👔", name: "Henry", color: "#FFD700" },
     updatedAgo: "4 days ago",
     updatedBy: "Henry",
+    ownerAgentId: "henry",
+    participatingAgentIds: ["henry", "codex", "echo"],
+    phases: [],
   },
   {
     id: "micro-saas-factory",
@@ -67,6 +88,9 @@ export const projects: Project[] = [
     agent: { emoji: "🔮", name: "Violet", color: "#BF5AF2" },
     updatedAgo: "8 days ago",
     updatedBy: "Violet",
+    ownerAgentId: "violet",
+    participatingAgentIds: ["violet", "scout"],
+    phases: [],
   },
   {
     id: "even-g2-integration",
@@ -78,5 +102,8 @@ export const projects: Project[] = [
     agent: { emoji: "👤", name: "Unassigned", color: "#8E8E93" },
     updatedAgo: "4 days ago",
     updatedBy: "",
+    ownerAgentId: undefined,
+    participatingAgentIds: [],
+    phases: [],
   },
 ];
