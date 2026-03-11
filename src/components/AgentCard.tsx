@@ -15,6 +15,7 @@ interface TeamAgent {
   tier: string;
   specialBadge?: string;
   reportsTo?: string;
+  canReviewFor?: string[];
   activeSessions?: number;
   lastActiveAt?: string | null;
   model?: string;
@@ -152,14 +153,28 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
   const [tier, setTier] = useState<TeamTier>(agent.tier as TeamTier);
   const [specialBadge, setSpecialBadge] = useState(agent.specialBadge || "");
   const [reportsTo, setReportsTo] = useState(agent.reportsTo || "");
+  const [canReviewFor, setCanReviewFor] = useState<string[]>(agent.canReviewFor || []);
   const [tagsInput, setTagsInput] = useState(agent.tags.map((tag) => tag.label).join(", "));
   const [saving, setSaving] = useState(false);
   const [actionRunning, setActionRunning] = useState<"wake" | "check-in" | null>(null);
   const [actionResult, setActionResult] = useState<AgentActionResult | null>(null);
 
   const presence = getPresenceMeta(getPresenceState(agent));
-  const reportOptions = allAgents.filter((candidate) => candidate.id !== agent.id);
+  const relationshipOptions = allAgents.filter((candidate) => candidate.id !== agent.id);
+  const reportOptions = relationshipOptions;
+  const reviewOptions = relationshipOptions;
   const reportsToName = allAgents.find((candidate) => candidate.id === agent.reportsTo)?.name || agent.reportsTo;
+  const reviewForNames = (agent.canReviewFor || [])
+    .map((candidateId) => allAgents.find((candidate) => candidate.id === candidateId)?.name || candidateId)
+    .filter(Boolean);
+
+  const toggleReviewTarget = (agentId: string) => {
+    setCanReviewFor((current) =>
+      current.includes(agentId)
+        ? current.filter((value) => value !== agentId)
+        : [...current, agentId]
+    );
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -176,6 +191,7 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
           tier,
           specialBadge: specialBadge.trim() || null,
           reportsTo: reportsTo || null,
+          canReviewFor,
           tags: parseTagsInput(tagsInput, agent.tags),
         }),
       });
@@ -203,6 +219,7 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
     setTier(agent.tier as TeamTier);
     setSpecialBadge(agent.specialBadge || "");
     setReportsTo(agent.reportsTo || "");
+    setCanReviewFor(agent.canReviewFor || []);
     setTagsInput(agent.tags.map((tag) => tag.label).join(", "));
     setEditing(false);
   };
@@ -280,7 +297,7 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
         {/* Edit overlay */}
         {editing && (
           <div
-            className="absolute inset-0 z-10 rounded-xl p-4 md:p-5 flex flex-col gap-3"
+            className="absolute inset-0 z-10 rounded-xl p-4 md:p-5 flex flex-col gap-3 overflow-y-auto"
             style={{ backgroundColor: "var(--card)" }}
           >
             <div className="flex items-center justify-between mb-1">
@@ -362,6 +379,39 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
                 </option>
               ))}
             </select>
+            <div>
+              <div className="text-[11px] mb-1" style={{ color: "var(--text-muted)" }}>
+                Can review for
+              </div>
+              <div
+                className="rounded-lg p-2 space-y-1.5"
+                style={{
+                  backgroundColor: "var(--surface-elevated)",
+                  border: "1px solid var(--border)",
+                }}
+              >
+                {reviewOptions.length > 0 ? (
+                  reviewOptions.map((candidate) => (
+                    <label
+                      key={candidate.id}
+                      className="flex items-center gap-2 text-xs"
+                      style={{ color: "var(--text-primary)" }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={canReviewFor.includes(candidate.id)}
+                        onChange={() => toggleReviewTarget(candidate.id)}
+                      />
+                      <span>{candidate.name}</span>
+                    </label>
+                  ))
+                ) : (
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    No other agents available.
+                  </p>
+                )}
+              </div>
+            </div>
             <textarea
               value={tagsInput}
               onChange={(e) => setTagsInput(e.target.value)}
@@ -375,6 +425,9 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
             </p>
             <p className="text-[11px] -mt-1" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
               Reporting line is organizational metadata for Mission Control, not an execution permission rule.
+            </p>
+            <p className="text-[11px] -mt-1" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
+              Review coverage is also planning metadata: who this agent is a good reviewer for, not a runtime ACL.
             </p>
 
             <div className="flex justify-end gap-2 mt-auto">
@@ -488,18 +541,32 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
           ))}
         </div>
 
-        {reportsToName && (
-          <div className="mb-3">
-            <span
-              className="text-[10px] font-semibold px-2 py-0.5 rounded"
-              style={{
-                backgroundColor: `${agent.color}12`,
-                color: "var(--text-secondary)",
-                border: "1px solid var(--border)",
-              }}
-            >
-              reports to {reportsToName}
-            </span>
+        {(reportsToName || reviewForNames.length > 0) && (
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            {reportsToName && (
+              <span
+                className="text-[10px] font-semibold px-2 py-0.5 rounded"
+                style={{
+                  backgroundColor: `${agent.color}12`,
+                  color: "var(--text-secondary)",
+                  border: "1px solid var(--border)",
+                }}
+              >
+                reports to {reportsToName}
+              </span>
+            )}
+            {reviewForNames.length > 0 && (
+              <span
+                className="text-[10px] font-semibold px-2 py-0.5 rounded"
+                style={{
+                  backgroundColor: `${agent.color}12`,
+                  color: "var(--text-secondary)",
+                  border: "1px solid var(--border)",
+                }}
+              >
+                reviews for {reviewForNames.join(", ")}
+              </span>
+            )}
           </div>
         )}
 

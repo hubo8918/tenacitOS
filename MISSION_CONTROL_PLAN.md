@@ -200,12 +200,13 @@ Make Agents the runtime/capability surface:
 - **Partially started**
 - Team identity/tier/badge/tags are editable
 - Team page now also supports the first reporting-line relationship field through editable `reportsTo` metadata
+- Team page now also supports review-coverage metadata through editable `canReviewFor`
 - Agents page now has its first true editable capability/config flow for Mission Control planning metadata (`canLead`, `canReview`, `canExecute`, `workTypes`)
 - Runtime fields on Agents remain read-only and explicitly labeled as such
 
 ### Exit criteria
 - ✅ At least one true editable/savable config flow on Agents page
-- 🟡 Team page can represent agent relationships, not just identity (started with `reportsTo`; broader delegation/review relationships still pending)
+- 🟡 Team page can represent agent relationships, not just identity (started with `reportsTo` and `canReviewFor`; delegation metadata still pending)
 
 ---
 
@@ -434,6 +435,24 @@ Connect to real OpenClaw execution:
 - Next:
   - add one more narrow relationship field (`canDelegateTo` or `canReviewFor`) without turning Team into a giant matrix editor.
 
+### 2026-03-10 23:35
+- Step: Team review-coverage editor
+- Files:
+  - `src/components/AgentCard.tsx`
+  - `src/app/(dashboard)/agents/team/TeamPageClient.tsx`
+  - `src/app/api/team/route.ts`
+  - `src/data/mockTeamData.ts`
+- Validation:
+  - `npx eslint src/components/AgentCard.tsx src/app/(dashboard)/agents/team/TeamPageClient.tsx src/app/api/team/route.ts src/data/mockTeamData.ts`
+  - `npm run build`
+- Commit: current checkpoint commit (`feat(team): add review coverage editor`)
+- Result:
+  - Team now supports `canReviewFor` as the second narrow relationship field.
+  - Each team card can save review coverage through a checkbox list and shows the saved review relationships inline.
+  - The editor explicitly labels review coverage as planning metadata, not a runtime ACL or hidden execution rule.
+- Next:
+  - add `canDelegateTo` as the next narrow Team relationship field.
+
 ---
 
 ## How to Update This File
@@ -465,6 +484,6 @@ Suggested template:
 **Current focus:** Phase 2 — turn Agents and Team into honest configuration surfaces
 
 **Do next:**
-1. keep the new Agents capability profile and Team reporting-line flows stable and honest
-2. add exactly one more narrow relationship field on Team (`canDelegateTo` or `canReviewFor`)
+1. keep the new Agents capability profile, Team reporting-line, and review-coverage flows stable and honest
+2. add exactly one more narrow relationship field on Team: `canDelegateTo`
 3. avoid widening into execution automation until more coordination metadata is truly editable

@@ -10,6 +10,7 @@ export interface TeamAgent {
   tier: "leadership" | "operations" | "io" | "meta";
   specialBadge?: string; // e.g. "The Engineer" for Codex
   reportsTo?: string;
+  canReviewFor?: string[];
   activeSessions?: number;
   lastActiveAt?: string | null;
   model?: string;

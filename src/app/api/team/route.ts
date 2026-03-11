@@ -28,6 +28,7 @@ interface TeamOverlay {
   tier?: TeamTier;
   specialBadge?: string;
   reportsTo?: string;
+  canReviewFor?: string[];
 }
 
 interface TeamAgent {
@@ -42,6 +43,7 @@ interface TeamAgent {
   tier: TeamTier;
   specialBadge?: string;
   reportsTo?: string;
+  canReviewFor?: string[];
   activeSessions: number;
   lastActiveAt: string | null;
   model: string;
@@ -237,6 +239,24 @@ function normalizeTags(value: unknown): TeamTag[] {
   return tags;
 }
 
+function normalizeAgentIdList(value: unknown, currentId?: string): string[] {
+  if (!Array.isArray(value)) return [];
+
+  const seen = new Set<string>();
+  const ids: string[] = [];
+
+  for (const entry of value) {
+    if (typeof entry !== "string") continue;
+    if (!AGENT_ID_RE.test(entry)) continue;
+    if (currentId && entry === currentId) continue;
+    if (seen.has(entry)) continue;
+    seen.add(entry);
+    ids.push(entry);
+  }
+
+  return ids;
+}
+
 function parseOverlayEntry(value: unknown): TeamOverlay | null {
   if (!value || typeof value !== "object") return null;
   const record = value as Record<string, unknown>;
@@ -267,6 +287,11 @@ function parseOverlayEntry(value: unknown): TeamOverlay | null {
 
   if (typeof record.reportsTo === "string" && AGENT_ID_RE.test(record.reportsTo)) {
     entry.reportsTo = record.reportsTo;
+  }
+
+  const canReviewFor = normalizeAgentIdList(record.canReviewFor, record.id as string | undefined);
+  if (canReviewFor.length > 0) {
+    entry.canReviewFor = canReviewFor;
   }
 
   return entry;
@@ -423,6 +448,7 @@ function mergeTeamAgent(
     tier: normalizeTier(overlay?.tier),
     specialBadge: overlay?.specialBadge,
     reportsTo: overlay?.reportsTo,
+    canReviewFor: overlay?.canReviewFor,
     activeSessions: sessionStats.activeSessions,
     lastActiveAt: sessionStats.lastActiveAt,
     model: realAgent.model || "unknown",
@@ -447,6 +473,7 @@ function fallbackFromOverlay(overlay: TeamOverlay): TeamAgent {
     tier: normalizeTier(overlay.tier),
     specialBadge: overlay.specialBadge,
     reportsTo: overlay.reportsTo,
+    canReviewFor: overlay.canReviewFor,
     activeSessions: 0,
     lastActiveAt: null,
     model: "unknown",
@@ -475,6 +502,7 @@ function mergeTeamAgentFromSummary(
     tier: normalizeTier(overlay?.tier),
     specialBadge: overlay?.specialBadge,
     reportsTo: overlay?.reportsTo,
+    canReviewFor: overlay?.canReviewFor,
     activeSessions: realAgent.activeSessions,
     lastActiveAt: realAgent.lastActivity || null,
     model: realAgent.model || "unknown",
@@ -746,6 +774,20 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const requestedCanReviewFor = normalizeAgentIdList(body.canReviewFor, id);
+    if (body.canReviewFor !== undefined) {
+      if (!Array.isArray(body.canReviewFor)) {
+        return NextResponse.json({ error: "canReviewFor must be an array of agent ids" }, { status: 400 });
+      }
+      if (
+        requestedCanReviewFor.some(
+          (agentId) => !realAgents.some((agent) => agent.id === agentId)
+        )
+      ) {
+        return NextResponse.json({ error: "canReviewFor contains unknown agent id" }, { status: 400 });
+      }
+    }
+
     const newOverlay: TeamOverlay = {
       id,
       name,
@@ -758,6 +800,7 @@ export async function POST(request: NextRequest) {
       tier: normalizeTier(body.tier),
       specialBadge: coerceString(body.specialBadge),
       reportsTo: requestedReportsTo || undefined,
+      canReviewFor: requestedCanReviewFor,
     };
 
     overlays.push(newOverlay);
@@ -805,6 +848,8 @@ export async function PUT(request: NextRequest) {
     const requestedEmoji = coerceString(body.emoji);
     const hasReportsTo = Object.prototype.hasOwnProperty.call(body, "reportsTo");
     const requestedReportsTo = sanitizeAgentId(body.reportsTo);
+    const hasCanReviewFor = Object.prototype.hasOwnProperty.call(body, "canReviewFor");
+    const requestedCanReviewFor = normalizeAgentIdList(body.canReviewFor, id);
 
     if (hasReportsTo) {
       if (body.reportsTo !== null && body.reportsTo !== "" && !requestedReportsTo) {
@@ -821,6 +866,19 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    if (hasCanReviewFor) {
+      if (body.canReviewFor !== null && !Array.isArray(body.canReviewFor)) {
+        return NextResponse.json({ error: "canReviewFor must be an array of agent ids" }, { status: 400 });
+      }
+      if (
+        requestedCanReviewFor.some(
+          (agentId) => !realAgents.some((agent) => agent.id === agentId)
+        )
+      ) {
+        return NextResponse.json({ error: "canReviewFor contains unknown agent id" }, { status: 400 });
+      }
+    }
+
     const nextOverlay: TeamOverlay = {
       ...existingOverlay,
       name: requestedName ?? existingOverlay.name,
@@ -832,6 +890,7 @@ export async function PUT(request: NextRequest) {
       tier: body.tier ? normalizeTier(body.tier) : existingOverlay.tier,
       tags: body.tags ? normalizeTags(body.tags) : existingOverlay.tags,
       reportsTo: hasReportsTo ? requestedReportsTo || undefined : existingOverlay.reportsTo,
+      canReviewFor: hasCanReviewFor ? requestedCanReviewFor : existingOverlay.canReviewFor,
     };
 
     const shouldSyncIdentity = requestedName !== undefined || requestedEmoji !== undefined;
