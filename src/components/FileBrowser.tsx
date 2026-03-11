@@ -389,36 +389,45 @@ export function FileBrowser({ workspace, path, onNavigate, viewMode = "list" }: 
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return;
     try {
-      await fetch("/api/files/mkdir", {
+      const res = await fetch("/api/files/mkdir", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ workspace, path, name: newFolderName.trim() }),
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to create folder");
+      }
       setNewFolderName("");
       setShowNewFolder(false);
       loadItems();
-    } catch {
-      alert("Failed to create folder");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to create folder");
     }
   };
 
   // Create file
   const handleCreateFile = async () => {
     if (!newFileName.trim()) return;
-    const filePath = path ? `${path}/${newFileName.trim()}` : newFileName.trim();
+    const trimmedName = newFileName.trim();
+    const filePath = path ? `${path}/${trimmedName}` : trimmedName;
     try {
-      await fetch("/api/files/write", {
+      const res = await fetch("/api/files/write", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ workspace, path: filePath, content: "" }),
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to create file");
+      }
       setNewFileName("");
       setShowNewFile(false);
       loadItems();
       // Open editor immediately
-      setEditorFile({ workspace, path: filePath, name: newFileName.trim() });
-    } catch {
-      alert("Failed to create file");
+      setEditorFile({ workspace, path: filePath, name: trimmedName });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to create file");
     }
   };
 

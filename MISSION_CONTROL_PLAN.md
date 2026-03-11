@@ -1,6 +1,6 @@
 # Mission Control Plan
 
-_Last updated: 2026-03-10_
+_Last updated: 2026-03-11_
 
 This file is the working plan for turning Mission Control from a mostly read-only dashboard into a real multi-agent operations tool.
 
@@ -476,6 +476,21 @@ Connect to real OpenClaw execution:
   - Mission Control file browse/write/download routes now share a real workspace map, support absolute and `~` paths that resolve inside known workspaces, and return clearer save/load errors in the editor.
 - Next:
   - keep these new Team relationship flows and the hardened file-edit path stable before widening into broader relationship matrices or automation.
+
+### 2026-03-11 00:18
+- Step: File browser create-flow trust fix
+- Files:
+  - `src/components/FileBrowser.tsx`
+- Validation:
+  - `npx eslint src/components/FileBrowser.tsx`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(files): respect create errors in file browser`)
+- Result:
+  - New file and new folder actions now respect backend error responses instead of treating any completed fetch like success.
+  - If the API rejects a bad path, the create UI stays open, the editor does not launch against a non-existent file, and the returned server error is surfaced to the operator.
+  - This keeps the newly hardened write-path trust boundary honest during real use instead of failing one step later in a confusing way.
+- Next:
+  - if Files gets one more trust pass, give directory-load/upload failures the same explicit error treatment before widening back into broader product work.
 
 ---
 
