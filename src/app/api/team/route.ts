@@ -27,6 +27,7 @@ interface TeamOverlay {
   status?: TeamStatus;
   tier?: TeamTier;
   specialBadge?: string;
+  reportsTo?: string;
 }
 
 interface TeamAgent {
@@ -40,6 +41,7 @@ interface TeamAgent {
   status: TeamStatus;
   tier: TeamTier;
   specialBadge?: string;
+  reportsTo?: string;
   activeSessions: number;
   lastActiveAt: string | null;
   model: string;
@@ -263,6 +265,10 @@ function parseOverlayEntry(value: unknown): TeamOverlay | null {
     entry.specialBadge = record.specialBadge;
   }
 
+  if (typeof record.reportsTo === "string" && AGENT_ID_RE.test(record.reportsTo)) {
+    entry.reportsTo = record.reportsTo;
+  }
+
   return entry;
 }
 
@@ -416,6 +422,7 @@ function mergeTeamAgent(
     status: sessionStats.activeSessions > 0 ? "online" : "offline",
     tier: normalizeTier(overlay?.tier),
     specialBadge: overlay?.specialBadge,
+    reportsTo: overlay?.reportsTo,
     activeSessions: sessionStats.activeSessions,
     lastActiveAt: sessionStats.lastActiveAt,
     model: realAgent.model || "unknown",
@@ -439,6 +446,7 @@ function fallbackFromOverlay(overlay: TeamOverlay): TeamAgent {
     status: normalizeStatus(overlay.status) || "offline",
     tier: normalizeTier(overlay.tier),
     specialBadge: overlay.specialBadge,
+    reportsTo: overlay.reportsTo,
     activeSessions: 0,
     lastActiveAt: null,
     model: "unknown",
@@ -466,6 +474,7 @@ function mergeTeamAgentFromSummary(
     status: realAgent.status,
     tier: normalizeTier(overlay?.tier),
     specialBadge: overlay?.specialBadge,
+    reportsTo: overlay?.reportsTo,
     activeSessions: realAgent.activeSessions,
     lastActiveAt: realAgent.lastActivity || null,
     model: realAgent.model || "unknown",
@@ -721,6 +730,22 @@ export async function POST(request: NextRequest) {
       real = { id, identityName: name, identityEmoji: emoji, workspace };
     }
 
+    const requestedReportsTo = sanitizeAgentId(body.reportsTo);
+    if (body.reportsTo !== undefined) {
+      if (body.reportsTo !== null && !requestedReportsTo) {
+        return NextResponse.json({ error: "Invalid reportsTo agent id" }, { status: 400 });
+      }
+      if (requestedReportsTo === id) {
+        return NextResponse.json({ error: "Agent cannot report to itself" }, { status: 400 });
+      }
+      if (
+        requestedReportsTo &&
+        !realAgents.some((agent) => agent.id === requestedReportsTo)
+      ) {
+        return NextResponse.json({ error: "reportsTo agent not found" }, { status: 400 });
+      }
+    }
+
     const newOverlay: TeamOverlay = {
       id,
       name,
@@ -732,6 +757,7 @@ export async function POST(request: NextRequest) {
       status: normalizeStatus(body.status) || "offline",
       tier: normalizeTier(body.tier),
       specialBadge: coerceString(body.specialBadge),
+      reportsTo: requestedReportsTo || undefined,
     };
 
     overlays.push(newOverlay);
@@ -777,6 +803,23 @@ export async function PUT(request: NextRequest) {
     const existingOverlay: TeamOverlay = index === -1 ? { id } : overlays[index];
     const requestedName = coerceString(body.name);
     const requestedEmoji = coerceString(body.emoji);
+    const hasReportsTo = Object.prototype.hasOwnProperty.call(body, "reportsTo");
+    const requestedReportsTo = sanitizeAgentId(body.reportsTo);
+
+    if (hasReportsTo) {
+      if (body.reportsTo !== null && body.reportsTo !== "" && !requestedReportsTo) {
+        return NextResponse.json({ error: "Invalid reportsTo agent id" }, { status: 400 });
+      }
+      if (requestedReportsTo === id) {
+        return NextResponse.json({ error: "Agent cannot report to itself" }, { status: 400 });
+      }
+      if (
+        requestedReportsTo &&
+        !realAgents.some((agent) => agent.id === requestedReportsTo)
+      ) {
+        return NextResponse.json({ error: "reportsTo agent not found" }, { status: 400 });
+      }
+    }
 
     const nextOverlay: TeamOverlay = {
       ...existingOverlay,
@@ -788,6 +831,7 @@ export async function PUT(request: NextRequest) {
       specialBadge: coerceString(body.specialBadge) ?? existingOverlay.specialBadge,
       tier: body.tier ? normalizeTier(body.tier) : existingOverlay.tier,
       tags: body.tags ? normalizeTags(body.tags) : existingOverlay.tags,
+      reportsTo: hasReportsTo ? requestedReportsTo || undefined : existingOverlay.reportsTo,
     };
 
     const shouldSyncIdentity = requestedName !== undefined || requestedEmoji !== undefined;

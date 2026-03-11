@@ -94,6 +94,7 @@ export default function TeamPageClient({ initialTeam }: TeamPageClientProps) {
         agent.model || "",
         agent.workspace || "",
         agent.tags.map((tag) => tag.label).join(" "),
+        agent.reportsTo || "",
       ]
         .join(" ")
         .toLowerCase();
@@ -218,7 +219,7 @@ export default function TeamPageClient({ initialTeam }: TeamPageClientProps) {
           }}
         >
           This page is for understanding who each agent is, what they are responsible for, and how the team is
-          organized. Presence labels here mean <strong>active now</strong>, <strong>recently seen</strong>, or
+          organized, including reporting lines. Presence labels here mean <strong>active now</strong>, <strong>recently seen</strong>, or
           <strong> no activity yet</strong> — not the same thing as runtime online/offline.{" "}
           <Link href="/agents" style={{ color: "var(--accent)", fontWeight: 600 }}>
             Need models, workspaces, permissions, or runtime status? Open Agents →
@@ -351,7 +352,7 @@ export default function TeamPageClient({ initialTeam }: TeamPageClientProps) {
 
             <div className={`grid ${tier.gridCols} gap-4 md:gap-6 mx-auto ${tier.maxWidth || ""}`}>
               {agents.map((agent) => (
-                <AgentCard key={agent.id} agent={agent} onUpdate={refetch} />
+                <AgentCard key={agent.id} agent={agent} allAgents={teamAgents} onUpdate={refetch} />
               ))}
             </div>
           </div>

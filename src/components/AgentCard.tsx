@@ -14,6 +14,7 @@ interface TeamAgent {
   status: "online" | "offline";
   tier: string;
   specialBadge?: string;
+  reportsTo?: string;
   activeSessions?: number;
   lastActiveAt?: string | null;
   model?: string;
@@ -32,6 +33,7 @@ interface AgentActionResult {
 
 interface AgentCardProps {
   agent: TeamAgent;
+  allAgents: Pick<TeamAgent, "id" | "name">[];
   onUpdate?: () => void;
 }
 
@@ -141,7 +143,7 @@ function getPresenceMeta(state: PresenceState): {
   };
 }
 
-export function AgentCard({ agent, onUpdate }: AgentCardProps) {
+export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(agent.name);
   const [emoji, setEmoji] = useState(agent.emoji);
@@ -149,12 +151,15 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
   const [description, setDescription] = useState(agent.description);
   const [tier, setTier] = useState<TeamTier>(agent.tier as TeamTier);
   const [specialBadge, setSpecialBadge] = useState(agent.specialBadge || "");
+  const [reportsTo, setReportsTo] = useState(agent.reportsTo || "");
   const [tagsInput, setTagsInput] = useState(agent.tags.map((tag) => tag.label).join(", "));
   const [saving, setSaving] = useState(false);
   const [actionRunning, setActionRunning] = useState<"wake" | "check-in" | null>(null);
   const [actionResult, setActionResult] = useState<AgentActionResult | null>(null);
 
   const presence = getPresenceMeta(getPresenceState(agent));
+  const reportOptions = allAgents.filter((candidate) => candidate.id !== agent.id);
+  const reportsToName = allAgents.find((candidate) => candidate.id === agent.reportsTo)?.name || agent.reportsTo;
 
   const handleSave = async () => {
     setSaving(true);
@@ -170,6 +175,7 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
           description,
           tier,
           specialBadge: specialBadge.trim() || null,
+          reportsTo: reportsTo || null,
           tags: parseTagsInput(tagsInput, agent.tags),
         }),
       });
@@ -196,6 +202,7 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
     setDescription(agent.description);
     setTier(agent.tier as TeamTier);
     setSpecialBadge(agent.specialBadge || "");
+    setReportsTo(agent.reportsTo || "");
     setTagsInput(agent.tags.map((tag) => tag.label).join(", "));
     setEditing(false);
   };
@@ -342,6 +349,19 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
               style={inputStyle}
               aria-label="Agent badge"
             />
+            <select
+              value={reportsTo}
+              onChange={(e) => setReportsTo(e.target.value)}
+              style={inputStyle}
+              aria-label="Agent manager"
+            >
+              <option value="">Top-level / no manager</option>
+              {reportOptions.map((candidate) => (
+                <option key={candidate.id} value={candidate.id}>
+                  {candidate.name}
+                </option>
+              ))}
+            </select>
             <textarea
               value={tagsInput}
               onChange={(e) => setTagsInput(e.target.value)}
@@ -352,6 +372,9 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
             />
             <p className="text-[11px] -mt-1" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
               Use tags for specialties, domain ownership, or collaboration context — for example: backend, product, infra.
+            </p>
+            <p className="text-[11px] -mt-1" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
+              Reporting line is organizational metadata for Mission Control, not an execution permission rule.
             </p>
 
             <div className="flex justify-end gap-2 mt-auto">
@@ -464,6 +487,21 @@ export function AgentCard({ agent, onUpdate }: AgentCardProps) {
             </span>
           ))}
         </div>
+
+        {reportsToName && (
+          <div className="mb-3">
+            <span
+              className="text-[10px] font-semibold px-2 py-0.5 rounded"
+              style={{
+                backgroundColor: `${agent.color}12`,
+                color: "var(--text-secondary)",
+                border: "1px solid var(--border)",
+              }}
+            >
+              reports to {reportsToName}
+            </span>
+          </div>
+        )}
 
         <div className="flex items-start justify-between gap-3">
           <div className="text-[11px] leading-tight" style={{ color: "var(--text-muted)" }}>

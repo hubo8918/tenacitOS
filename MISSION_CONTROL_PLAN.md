@@ -199,12 +199,13 @@ Make Agents the runtime/capability surface:
 ### Status
 - **Partially started**
 - Team identity/tier/badge/tags are editable
+- Team page now also supports the first reporting-line relationship field through editable `reportsTo` metadata
 - Agents page now has its first true editable capability/config flow for Mission Control planning metadata (`canLead`, `canReview`, `canExecute`, `workTypes`)
 - Runtime fields on Agents remain read-only and explicitly labeled as such
 
 ### Exit criteria
 - ✅ At least one true editable/savable config flow on Agents page
-- Team page can represent agent relationships, not just identity
+- 🟡 Team page can represent agent relationships, not just identity (started with `reportsTo`; broader delegation/review relationships still pending)
 
 ---
 
@@ -415,6 +416,24 @@ Connect to real OpenClaw execution:
 - Next:
   - either add relationship/delegation metadata on Agents, or move to Team relationship editing now that the first Agents config foothold exists.
 
+### 2026-03-10 23:19
+- Step: Team reporting-line editor
+- Files:
+  - `src/components/AgentCard.tsx`
+  - `src/app/(dashboard)/agents/team/TeamPageClient.tsx`
+  - `src/app/api/team/route.ts`
+  - `src/data/mockTeamData.ts`
+- Validation:
+  - `npx eslint src/components/AgentCard.tsx src/app/(dashboard)/agents/team/TeamPageClient.tsx src/app/api/team/route.ts src/data/mockTeamData.ts`
+  - `npm run build`
+- Commit: current checkpoint commit (`feat(team): add reporting line editor`)
+- Result:
+  - Team now supports the first true relationship-editing flow via `reportsTo`.
+  - Each team card can save an organizational reporting line, and the card now surfaces that relationship inline instead of leaving org structure hidden in future plans.
+  - The editor explicitly labels this as Mission Control organizational metadata, not an execution-permission rule.
+- Next:
+  - add one more narrow relationship field (`canDelegateTo` or `canReviewFor`) without turning Team into a giant matrix editor.
+
 ---
 
 ## How to Update This File
@@ -446,6 +465,6 @@ Suggested template:
 **Current focus:** Phase 2 — turn Agents and Team into honest configuration surfaces
 
 **Do next:**
-1. keep the new Agents capability profile flow stable and honest
-2. choose the next relationship surface: Agents delegation metadata or Team relationship editing
+1. keep the new Agents capability profile and Team reporting-line flows stable and honest
+2. add exactly one more narrow relationship field on Team (`canDelegateTo` or `canReviewFor`)
 3. avoid widening into execution automation until more coordination metadata is truly editable
