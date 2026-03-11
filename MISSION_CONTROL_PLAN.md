@@ -170,7 +170,7 @@ Add/normalize fields for:
 - Tasks page now exposes the first safe routing edit flow for assignee/reviewer/handoff metadata
 
 ### Next micro-step
-- Shift back to Phase 2 and expose a true editable capability/config flow on the Agents page instead of widening Tasks into broader execution automation.
+- Build on the new Agents capability profile by surfacing relationship/delegation metadata next, or shift to the Team relationship editor now that Agents has its first real editable config flow.
 
 ---
 
@@ -199,10 +199,11 @@ Make Agents the runtime/capability surface:
 ### Status
 - **Partially started**
 - Team identity/tier/badge/tags are editable
-- Agents page is still mostly read-only
+- Agents page now has its first true editable capability/config flow for Mission Control planning metadata (`canLead`, `canReview`, `canExecute`, `workTypes`)
+- Runtime fields on Agents remain read-only and explicitly labeled as such
 
 ### Exit criteria
-- At least one true editable/savable config flow on Agents page
+- ✅ At least one true editable/savable config flow on Agents page
 - Team page can represent agent relationships, not just identity
 
 ---
@@ -396,6 +397,24 @@ Connect to real OpenClaw execution:
 - Next:
   - move back to Phase 2 and add the next true config/edit surface on Agents instead of widening Tasks into execution automation.
 
+### 2026-03-10 23:08
+- Step: Agents capability profile editor
+- Files:
+  - `src/app/(dashboard)/agents/AgentsPageClient.tsx`
+  - `src/app/api/agents/route.ts`
+  - `src/lib/agents-data.ts`
+  - `src/lib/agent-capabilities-data.ts`
+- Validation:
+  - `npx eslint src/app/(dashboard)/agents/AgentsPageClient.tsx src/app/api/agents/route.ts src/lib/agents-data.ts src/lib/agent-capabilities-data.ts`
+  - `npm run build`
+- Commit: current checkpoint commit (`feat(agents): add capability profile editor`)
+- Result:
+  - Agents now exposes the first true editable/savable config flow on the page through a Mission Control capability profile editor.
+  - The saved planning metadata is intentionally scoped to `canLead`, `canReview`, `canExecute`, and `workTypes`.
+  - Runtime fields like model, workspace, DM policy, and active-session status remain read-only and are explicitly described as separate from planning metadata.
+- Next:
+  - either add relationship/delegation metadata on Agents, or move to Team relationship editing now that the first Agents config foothold exists.
+
 ---
 
 ## How to Update This File
@@ -424,9 +443,9 @@ Suggested template:
 
 ## Current Focus
 
-**Current focus:** Phase 1 orchestration data model + first safe UI foothold
+**Current focus:** Phase 2 — turn Agents and Team into honest configuration surfaces
 
 **Do next:**
-1. keep the new ownership/reviewer/handoff flow stable and honest
-2. shift back to an Agents-page capability/config editor instead of continuing to widen Tasks
+1. keep the new Agents capability profile flow stable and honest
+2. choose the next relationship surface: Agents delegation metadata or Team relationship editing
 3. avoid widening into execution automation until more coordination metadata is truly editable

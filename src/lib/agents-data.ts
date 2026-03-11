@@ -2,6 +2,10 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { spawnSync } from "child_process";
 import { OPENCLAW_DIR, OPENCLAW_CONFIG } from "@/lib/paths";
+import {
+  buildAgentCapabilityProfile,
+  loadAgentCapabilityOverlay,
+} from "@/lib/agent-capabilities-data";
 
 export interface AgentSummary {
   id: string;
@@ -22,6 +26,11 @@ export interface AgentSummary {
   status: "online" | "offline";
   lastActivity?: string;
   activeSessions: number;
+  canLead: boolean;
+  canReview: boolean;
+  canExecute: boolean;
+  workTypes: string[];
+  capabilityProfileConfigured: boolean;
 }
 
 interface OpenClawAgentConfig {
@@ -130,6 +139,7 @@ function cloneAgents(agents: AgentSummary[]): AgentSummary[] {
     allowAgentsDetails: agent.allowAgentsDetails
       ? agent.allowAgentsDetails.map((entry) => ({ ...entry }))
       : [],
+    workTypes: agent.workTypes ? [...agent.workTypes] : [],
   }));
 }
 
@@ -248,6 +258,7 @@ function loadAgentsFromConfig(): AgentSummary[] {
   const configuredAgents = Array.isArray(config?.agents?.list) ? config.agents.list : [];
   const defaultWorkspace = config?.agents?.defaults?.workspace || join(OPENCLAW_DIR, "workspace");
   const sessionStatsMap = buildSessionStatsMap(getSessionsPayload());
+  const capabilityMap = new Map(loadAgentCapabilityOverlay().map((entry) => [entry.id, entry]));
 
   const normalizedAgents: OpenClawAgentConfig[] =
     configuredAgents.length > 0
@@ -284,6 +295,7 @@ function loadAgentsFromConfig(): AgentSummary[] {
     const allowAgents = Array.isArray(agent.subagents?.allowAgents)
       ? agent.subagents.allowAgents
       : [];
+    const capabilityProfile = buildAgentCapabilityProfile(capabilityMap.get(agent.id));
 
     const allowAgentsDetails = allowAgents.map((subagentId) => {
       const subagentConfig = normalizedAgents.find((entry) => entry.id === subagentId);
@@ -320,8 +332,18 @@ function loadAgentsFromConfig(): AgentSummary[] {
       status: sessionStats.activeSessions > 0 ? "online" : "offline",
       lastActivity: sessionStats.lastActiveAt,
       activeSessions: sessionStats.activeSessions,
+      canLead: capabilityProfile.canLead,
+      canReview: capabilityProfile.canReview,
+      canExecute: capabilityProfile.canExecute,
+      workTypes: capabilityProfile.workTypes,
+      capabilityProfileConfigured: capabilityProfile.configured,
     } satisfies AgentSummary;
   });
+}
+
+export function invalidateAgentsCache(): void {
+  agentsCache = null;
+  sessionsCache = null;
 }
 
 export async function getAgentsSummary(): Promise<AgentSummary[]> {
