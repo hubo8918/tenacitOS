@@ -3,9 +3,11 @@ export interface Task {
   title: string;
   status: "in_progress" | "completed" | "pending" | "blocked";
   priority: "high" | "medium" | "low";
-  agent: { emoji: string; name: string; color: string };
+  agent: { id?: string; emoji: string; name: string; color: string };
   project: string;
   dueDate: string;
+  assigneeAgentId?: string;
+  reviewerAgentId?: string;
 }
 
 export const taskStatusConfig: Record<string, { label: string; color: string }> = {

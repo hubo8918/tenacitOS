@@ -81,6 +81,9 @@ To avoid fake progress or silent drift:
 - due-date timezone fix
 - blocked/overdue summary
 - improved empty/no-match states
+- first safe ownership editor now landed for:
+  - assignee / owner
+  - reviewer
 - **Still missing full create/edit/delete/assign UI.**
 
 #### Projects
@@ -163,9 +166,10 @@ Add/normalize fields for:
 - **Current phase**
 - **Started**
 - Task/project data and API contracts now preserve first-pass orchestration fields
+- Tasks page now exposes the first safe ownership edit flow for assignee/reviewer metadata
 
 ### Next micro-step
-- Expose the first minimal UI entry point for these new task/project orchestration fields, starting with task assignment/ownership metadata.
+- Expose one more narrowly-scoped task orchestration field once this ownership flow is stable, with handoff target as the most natural next candidate.
 
 ---
 
@@ -348,13 +352,31 @@ Connect to real OpenClaw execution:
 - Validation:
   - `npx eslint src/lib/agent-tasks-data.ts src/app/api/agent-tasks/route.ts src/data/mockProjectsData.ts src/lib/projects-data.ts src/app/api/projects/route.ts`
   - `npm run build`
-- Commit: pending
+- Commit: `8bcc9fc`
 - Result:
   - tasks now preserve orchestration fields such as assignee/reviewer/blockers/handoff/execution status/deliverable
   - projects now preserve owner/participants/phases metadata
   - existing stored JSON remains backward-compatible via normalization
 - Next:
   - expose the first safe UI editing surface for task ownership/orchestration metadata
+
+### 2026-03-10 19:14
+- Step: Tasks ownership editor
+- Files:
+  - `src/app/(dashboard)/agents/tasks/page.tsx`
+  - `src/app/(dashboard)/agents/tasks/TasksPageClient.tsx`
+  - `src/components/TaskRow.tsx`
+  - `src/data/mockTasksData.ts`
+- Validation:
+  - `npx eslint src/data/mockTasksData.ts src/app/(dashboard)/agents/tasks/page.tsx src/app/(dashboard)/agents/tasks/TasksPageClient.tsx src/components/TaskRow.tsx`
+  - `npm run build`
+- Commit: current checkpoint commit (`feat(tasks): add first ownership editor`)
+- Result:
+  - Tasks now loads real agent options server-side and exposes a per-task ownership editor from the existing row action menu.
+  - The first safe UI editing surface is intentionally narrow: owner/assignee plus optional reviewer only.
+  - Saves still go through the existing `/api/agent-tasks` path, and the row now surfaces reviewer metadata without pretending the broader orchestration model is finished.
+- Next:
+  - add one more narrowly-scoped task orchestration field only if needed, with handoff target as the cleanest next step.
 
 ---
 
@@ -384,9 +406,9 @@ Suggested template:
 
 ## Current Focus
 
-**Current focus:** Phase 1 orchestration data model
+**Current focus:** Phase 1 orchestration data model + first safe UI foothold
 
 **Do next:**
-1. extend task/project data shape with orchestration fields
-2. update APIs to preserve those fields
-3. then expose the first minimal UI that edits them safely
+1. keep the new ownership/reviewer flow stable and honest
+2. expose one additional task orchestration field only if it can stay equally narrow
+3. avoid widening into execution automation until more coordination metadata is truly editable

@@ -27,11 +27,19 @@ function isTaskOverdue(task: Task) {
   return dueDate < startOfToday;
 }
 
-interface TasksPageClientProps {
-  initialTasks: Task[];
+interface TaskAgentOption {
+  id: string;
+  name: string;
+  emoji: string;
+  color: string;
 }
 
-export default function TasksPageClient({ initialTasks }: TasksPageClientProps) {
+interface TasksPageClientProps {
+  initialTasks: Task[];
+  initialTaskAgents: TaskAgentOption[];
+}
+
+export default function TasksPageClient({ initialTasks, initialTaskAgents }: TasksPageClientProps) {
   const hasInitialTasks = initialTasks.length > 0;
   const { data, loading, error, refetch } = useFetch<{ tasks: Task[] }>("/api/agent-tasks", {
     initialData: hasInitialTasks ? { tasks: initialTasks } : null,
@@ -104,7 +112,7 @@ export default function TasksPageClient({ initialTasks }: TasksPageClientProps) 
     { key: "title", label: "Task", flex: "flex-[3]" },
     { key: "status", label: "Status", flex: "flex-[1.2]" },
     { key: "priority", label: "Priority", flex: "flex-[1]" },
-    { key: null, label: "Agent", flex: "flex-[1.2]" },
+    { key: null, label: "Owner", flex: "flex-[1.2]" },
     { key: null, label: "Project", flex: "flex-[1.5]" },
     { key: "dueDate", label: "Due", flex: "flex-[1]" },
     { key: null, label: "", flex: "w-8" },
@@ -269,7 +277,9 @@ export default function TasksPageClient({ initialTasks }: TasksPageClientProps) 
             </div>
 
             {filteredTasks.length > 0 ? (
-              filteredTasks.map((task) => <TaskRow key={task.id} task={task} onUpdate={refetch} />)
+              filteredTasks.map((task) => (
+                <TaskRow key={task.id} task={task} agentOptions={initialTaskAgents} onUpdate={refetch} />
+              ))
             ) : (
               <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
                 <div className="space-y-1">
