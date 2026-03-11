@@ -81,9 +81,10 @@ To avoid fake progress or silent drift:
 - due-date timezone fix
 - blocked/overdue summary
 - improved empty/no-match states
-- first safe ownership editor now landed for:
+- first safe routing editor now landed for:
   - assignee / owner
   - reviewer
+  - handoff target
 - **Still missing full create/edit/delete/assign UI.**
 
 #### Projects
@@ -166,10 +167,10 @@ Add/normalize fields for:
 - **Current phase**
 - **Started**
 - Task/project data and API contracts now preserve first-pass orchestration fields
-- Tasks page now exposes the first safe ownership edit flow for assignee/reviewer metadata
+- Tasks page now exposes the first safe routing edit flow for assignee/reviewer/handoff metadata
 
 ### Next micro-step
-- Expose one more narrowly-scoped task orchestration field once this ownership flow is stable, with handoff target as the most natural next candidate.
+- Shift back to Phase 2 and expose a true editable capability/config flow on the Agents page instead of widening Tasks into broader execution automation.
 
 ---
 
@@ -378,6 +379,23 @@ Connect to real OpenClaw execution:
 - Next:
   - add one more narrowly-scoped task orchestration field only if needed, with handoff target as the cleanest next step.
 
+### 2026-03-10 19:38
+- Step: Tasks handoff target editor
+- Files:
+  - `src/components/TaskRow.tsx`
+  - `src/data/mockTasksData.ts`
+  - `src/app/api/agent-tasks/route.ts`
+- Validation:
+  - `npx eslint src/components/TaskRow.tsx src/data/mockTasksData.ts src/app/api/agent-tasks/route.ts`
+  - `npm run build`
+- Commit: current checkpoint commit (`feat(tasks): add handoff target editor`)
+- Result:
+  - Tasks now exposes a minimal handoff target selector alongside owner and reviewer in the existing row-level routing editor.
+  - The row surfaces handoff metadata inline so the next responsible agent is visible without opening the editor.
+  - Saves stay on `PUT /api/agent-tasks`, and both the UI and API now reject reviewer/owner or owner/handoff collisions.
+- Next:
+  - move back to Phase 2 and add the next true config/edit surface on Agents instead of widening Tasks into execution automation.
+
 ---
 
 ## How to Update This File
@@ -409,6 +427,6 @@ Suggested template:
 **Current focus:** Phase 1 orchestration data model + first safe UI foothold
 
 **Do next:**
-1. keep the new ownership/reviewer flow stable and honest
-2. expose one additional task orchestration field only if it can stay equally narrow
+1. keep the new ownership/reviewer/handoff flow stable and honest
+2. shift back to an Agents-page capability/config editor instead of continuing to widen Tasks
 3. avoid widening into execution automation until more coordination metadata is truly editable

@@ -8,6 +8,7 @@ export interface Task {
   dueDate: string;
   assigneeAgentId?: string;
   reviewerAgentId?: string;
+  handoffToAgentId?: string;
 }
 
 export const taskStatusConfig: Record<string, { label: string; color: string }> = {

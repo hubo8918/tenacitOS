@@ -21,6 +21,26 @@ function generateId(tasks: AgentTask[]): string {
   return `task-${String(next).padStart(3, "0")}`;
 }
 
+function asOptionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function getTaskRoutingValidationError(body: Record<string, unknown>): string | null {
+  const assigneeAgentId = asOptionalString(body.assigneeAgentId);
+  const reviewerAgentId = asOptionalString(body.reviewerAgentId);
+  const handoffToAgentId = asOptionalString(body.handoffToAgentId);
+
+  if (assigneeAgentId && reviewerAgentId && assigneeAgentId === reviewerAgentId) {
+    return "Reviewer must be different from the owner.";
+  }
+
+  if (assigneeAgentId && handoffToAgentId && assigneeAgentId === handoffToAgentId) {
+    return "Handoff target must be different from the owner.";
+  }
+
+  return null;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -53,6 +73,11 @@ export async function POST(request: NextRequest) {
 
     if (!body.title) {
       return NextResponse.json({ error: "Missing required field: title" }, { status: 400 });
+    }
+
+    const routingValidationError = getTaskRoutingValidationError(body);
+    if (routingValidationError) {
+      return NextResponse.json({ error: routingValidationError }, { status: 400 });
     }
 
     const tasks = await getAgentTasks();
@@ -90,6 +115,11 @@ export async function PUT(request: NextRequest) {
 
     if (!body.id) {
       return NextResponse.json({ error: "Missing required field: id" }, { status: 400 });
+    }
+
+    const routingValidationError = getTaskRoutingValidationError(body);
+    if (routingValidationError) {
+      return NextResponse.json({ error: routingValidationError }, { status: 400 });
     }
 
     const tasks = await getAgentTasks();

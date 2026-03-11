@@ -64,6 +64,7 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
   const [ownershipError, setOwnershipError] = useState<string | null>(null);
   const [assigneeAgentId, setAssigneeAgentId] = useState("");
   const [reviewerAgentId, setReviewerAgentId] = useState("");
+  const [handoffToAgentId, setHandoffToAgentId] = useState("");
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -84,6 +85,10 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
   const reviewerOption = useMemo(
     () => agentOptions.find((option) => option.id === task.reviewerAgentId),
     [agentOptions, task.reviewerAgentId]
+  );
+  const handoffOption = useMemo(
+    () => agentOptions.find((option) => option.id === task.handoffToAgentId),
+    [agentOptions, task.handoffToAgentId]
   );
 
   const displayOwner = assigneeOption || (task.agent.name === "Unassigned" ? unassignedAgent : {
@@ -112,8 +117,9 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
   useEffect(() => {
     setAssigneeAgentId(inferredAssigneeAgentId);
     setReviewerAgentId(task.reviewerAgentId || "");
+    setHandoffToAgentId(task.handoffToAgentId || "");
     setOwnershipError(null);
-  }, [inferredAssigneeAgentId, task.reviewerAgentId]);
+  }, [inferredAssigneeAgentId, task.reviewerAgentId, task.handoffToAgentId]);
 
   const handleStatusChange = async (newStatus: string) => {
     setShowMenu(false);
@@ -143,6 +149,7 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
     setShowMenu(false);
     setAssigneeAgentId(inferredAssigneeAgentId);
     setReviewerAgentId(task.reviewerAgentId || "");
+    setHandoffToAgentId(task.handoffToAgentId || "");
     setOwnershipError(null);
     setEditingOwnership(true);
   };
@@ -150,6 +157,11 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
   const handleSaveOwnership = async () => {
     if (assigneeAgentId && reviewerAgentId && assigneeAgentId === reviewerAgentId) {
       setOwnershipError("Reviewer must be different from the owner.");
+      return;
+    }
+
+    if (assigneeAgentId && handoffToAgentId && assigneeAgentId === handoffToAgentId) {
+      setOwnershipError("Handoff target must be different from the owner.");
       return;
     }
 
@@ -165,6 +177,7 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
           id: task.id,
           assigneeAgentId: assigneeAgentId || undefined,
           reviewerAgentId: reviewerAgentId || undefined,
+          handoffToAgentId: handoffToAgentId || undefined,
           agent: nextOwner
             ? {
                 id: nextOwner.id,
@@ -182,14 +195,14 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
 
       const payload = (await response.json().catch(() => null)) as { error?: string } | null;
       if (!response.ok) {
-        throw new Error(payload?.error || "Failed to save task ownership");
+        throw new Error(payload?.error || "Failed to save task routing");
       }
 
       setEditingOwnership(false);
       onUpdate?.();
     } catch (err) {
-      console.error("Failed to update task ownership:", err);
-      setOwnershipError(err instanceof Error ? err.message : "Failed to save task ownership");
+      console.error("Failed to update task routing:", err);
+      setOwnershipError(err instanceof Error ? err.message : "Failed to save task routing");
     } finally {
       setSavingOwnership(false);
     }
@@ -241,6 +254,12 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
               Review:{" "}
               <span style={{ color: reviewerOption?.color || "var(--text-secondary)", fontWeight: 600 }}>
                 {reviewerOption ? `${reviewerOption.emoji} ${reviewerOption.name}` : "Not set"}
+              </span>
+            </span>
+            <span>
+              Handoff:{" "}
+              <span style={{ color: handoffOption?.color || "var(--text-secondary)", fontWeight: 600 }}>
+                {handoffOption ? `${handoffOption.emoji} ${handoffOption.name}` : "Not set"}
               </span>
             </span>
           </div>
@@ -334,7 +353,7 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
                   e.currentTarget.style.backgroundColor = "transparent";
                 }}
               >
-                Edit ownership
+                Edit ownership & handoff
               </button>
               <div
                 style={{
@@ -420,15 +439,15 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                    Task ownership
+                    Task ownership & handoff
                   </p>
                   <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-                    Assign an owner and optional reviewer. Reviewer must be different from the owner.
+                    Assign an owner, optional reviewer, and optional handoff target. Reviewer and handoff target should stay distinct from the current owner.
                   </p>
                 </div>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid gap-3 md:grid-cols-3">
                 <label className="flex flex-col gap-1.5 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
                   Owner
                   <select
@@ -462,6 +481,23 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
                     ))}
                   </select>
                 </label>
+
+                <label className="flex flex-col gap-1.5 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                  Handoff target
+                  <select
+                    value={handoffToAgentId}
+                    onChange={(e) => setHandoffToAgentId(e.target.value)}
+                    style={inputStyle}
+                    aria-label={`Handoff target for ${task.title}`}
+                  >
+                    <option value="">No handoff planned</option>
+                    {agentOptions.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
 
               {ownershipError && (
@@ -477,6 +513,7 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
                     setOwnershipError(null);
                     setAssigneeAgentId(inferredAssigneeAgentId);
                     setReviewerAgentId(task.reviewerAgentId || "");
+                    setHandoffToAgentId(task.handoffToAgentId || "");
                   }}
                   className="text-xs px-3 py-1.5 rounded-lg transition-colors"
                   style={{
@@ -496,7 +533,7 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
                     opacity: savingOwnership ? 0.6 : 1,
                   }}
                 >
-                  {savingOwnership ? "Saving..." : "Save ownership"}
+                  {savingOwnership ? "Saving..." : "Save routing"}
                 </button>
               </div>
             </div>
