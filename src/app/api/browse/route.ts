@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
 
-import { OPENCLAW_DIR } from "@/lib/paths";
+import { getWorkspaceBase, resolveWorkspaceFilePath } from "@/lib/workspace-files";
 
 interface FileEntry {
   name: string;
@@ -15,40 +15,41 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const workspace = searchParams.get("workspace") || "workspace";
-    const relativePath = searchParams.get("path") || "";
+    const requestedPath = searchParams.get("path") || "";
     const fileContent = searchParams.get("content") === "true";
     const rawMode = searchParams.get("raw") === "true";
-    
-    // Determine BASE_PATH based on workspace
-    const BASE_PATH = path.join(OPENCLAW_DIR, workspace);
-    
-    // Validate workspace exists
+
+    const workspaceEntry = getWorkspaceBase(workspace);
+    if (!workspaceEntry) {
+      return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
+    }
+
     try {
-      await fs.access(BASE_PATH);
+      await fs.access(workspaceEntry.base);
     } catch {
-      return NextResponse.json(
-        { error: "Workspace not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
     }
-    
-    // Normalize and validate path to prevent directory traversal
-    const normalizedPath = path.normalize(relativePath).replace(/^(\.\.[\/\\])+/, "");
-    const fullPath = path.join(BASE_PATH, normalizedPath);
-    
-    // Ensure the path is within BASE_PATH
-    if (!fullPath.startsWith(BASE_PATH)) {
+
+    const resolved = requestedPath
+      ? resolveWorkspaceFilePath({ workspace, filePath: requestedPath })
+      : {
+          workspace,
+          base: workspaceEntry.base,
+          fullPath: workspaceEntry.base,
+          relativePath: "",
+        };
+
+    if (!resolved) {
       return NextResponse.json(
-        { error: "Access denied: Path outside workspace" },
-        { status: 403 }
+        { error: "Invalid path. Path must stay inside a known workspace." },
+        { status: 400 }
       );
     }
 
-    const stats = await fs.stat(fullPath);
+    const stats = await fs.stat(resolved.fullPath);
 
-    // Serve raw file (for images etc.)
     if (rawMode && stats.isFile()) {
-      const ext = path.extname(fullPath).toLowerCase().slice(1);
+      const ext = path.extname(resolved.fullPath).toLowerCase().slice(1);
       const mimeTypes: Record<string, string> = {
         png: "image/png",
         jpg: "image/jpeg",
@@ -65,7 +66,7 @@ export async function GET(request: NextRequest) {
           { status: 400 }
         );
       }
-      const buffer = await fs.readFile(fullPath);
+      const buffer = await fs.readFile(resolved.fullPath);
       return new NextResponse(buffer, {
         headers: {
           "Content-Type": contentType,
@@ -75,29 +76,28 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // If requesting file content
     if (fileContent && stats.isFile()) {
-      const content = await fs.readFile(fullPath, "utf-8");
+      const content = await fs.readFile(resolved.fullPath, "utf-8");
       return NextResponse.json({
-        name: path.basename(fullPath),
-        path: normalizedPath,
+        name: path.basename(resolved.fullPath),
+        path: resolved.relativePath,
+        workspace: resolved.workspace,
         content,
         size: stats.size,
         modified: stats.mtime.toISOString(),
       });
     }
 
-    // If it's a directory, list contents
     if (stats.isDirectory()) {
-      const entries = await fs.readdir(fullPath, { withFileTypes: true });
-      
+      const entries = await fs.readdir(resolved.fullPath, { withFileTypes: true });
+
       const items: FileEntry[] = await Promise.all(
         entries
-          .filter((entry) => !entry.name.startsWith(".")) // Hide hidden files
+          .filter((entry) => !entry.name.startsWith("."))
           .map(async (entry) => {
-            const entryPath = path.join(fullPath, entry.name);
+            const entryPath = path.join(resolved.fullPath, entry.name);
             const entryStats = await fs.stat(entryPath).catch(() => null);
-            
+
             return {
               name: entry.name,
               type: entry.isDirectory() ? "folder" : "file",
@@ -107,7 +107,6 @@ export async function GET(request: NextRequest) {
           })
       );
 
-      // Sort: folders first, then by name
       items.sort((a, b) => {
         if (a.type !== b.type) {
           return a.type === "folder" ? -1 : 1;
@@ -116,30 +115,25 @@ export async function GET(request: NextRequest) {
       });
 
       return NextResponse.json({
-        path: normalizedPath,
+        path: resolved.relativePath,
+        workspace: resolved.workspace,
         items,
       });
     }
 
-    // Single file info
     return NextResponse.json({
-      name: path.basename(fullPath),
-      path: normalizedPath,
+      name: path.basename(resolved.fullPath),
+      path: resolved.relativePath,
+      workspace: resolved.workspace,
       type: "file",
       size: stats.size,
       modified: stats.mtime.toISOString(),
     });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return NextResponse.json(
-        { error: "Path not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Path not found" }, { status: 404 });
     }
     console.error("Browse API error:", error);
-    return NextResponse.json(
-      { error: "Failed to browse path" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to browse path" }, { status: 500 });
   }
 }

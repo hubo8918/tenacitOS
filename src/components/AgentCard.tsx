@@ -16,6 +16,7 @@ interface TeamAgent {
   specialBadge?: string;
   reportsTo?: string;
   canReviewFor?: string[];
+  canDelegateTo?: string[];
   activeSessions?: number;
   lastActiveAt?: string | null;
   model?: string;
@@ -154,6 +155,7 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
   const [specialBadge, setSpecialBadge] = useState(agent.specialBadge || "");
   const [reportsTo, setReportsTo] = useState(agent.reportsTo || "");
   const [canReviewFor, setCanReviewFor] = useState<string[]>(agent.canReviewFor || []);
+  const [canDelegateTo, setCanDelegateTo] = useState<string[]>(agent.canDelegateTo || []);
   const [tagsInput, setTagsInput] = useState(agent.tags.map((tag) => tag.label).join(", "));
   const [saving, setSaving] = useState(false);
   const [actionRunning, setActionRunning] = useState<"wake" | "check-in" | null>(null);
@@ -163,13 +165,25 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
   const relationshipOptions = allAgents.filter((candidate) => candidate.id !== agent.id);
   const reportOptions = relationshipOptions;
   const reviewOptions = relationshipOptions;
+  const delegateOptions = relationshipOptions;
   const reportsToName = allAgents.find((candidate) => candidate.id === agent.reportsTo)?.name || agent.reportsTo;
   const reviewForNames = (agent.canReviewFor || [])
+    .map((candidateId) => allAgents.find((candidate) => candidate.id === candidateId)?.name || candidateId)
+    .filter(Boolean);
+  const delegateToNames = (agent.canDelegateTo || [])
     .map((candidateId) => allAgents.find((candidate) => candidate.id === candidateId)?.name || candidateId)
     .filter(Boolean);
 
   const toggleReviewTarget = (agentId: string) => {
     setCanReviewFor((current) =>
+      current.includes(agentId)
+        ? current.filter((value) => value !== agentId)
+        : [...current, agentId]
+    );
+  };
+
+  const toggleDelegateTarget = (agentId: string) => {
+    setCanDelegateTo((current) =>
       current.includes(agentId)
         ? current.filter((value) => value !== agentId)
         : [...current, agentId]
@@ -192,6 +206,7 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
           specialBadge: specialBadge.trim() || null,
           reportsTo: reportsTo || null,
           canReviewFor,
+          canDelegateTo,
           tags: parseTagsInput(tagsInput, agent.tags),
         }),
       });
@@ -220,6 +235,7 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
     setSpecialBadge(agent.specialBadge || "");
     setReportsTo(agent.reportsTo || "");
     setCanReviewFor(agent.canReviewFor || []);
+    setCanDelegateTo(agent.canDelegateTo || []);
     setTagsInput(agent.tags.map((tag) => tag.label).join(", "));
     setEditing(false);
   };
@@ -412,6 +428,39 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
                 )}
               </div>
             </div>
+            <div>
+              <div className="text-[11px] mb-1" style={{ color: "var(--text-muted)" }}>
+                Can delegate to
+              </div>
+              <div
+                className="rounded-lg p-2 space-y-1.5"
+                style={{
+                  backgroundColor: "var(--surface-elevated)",
+                  border: "1px solid var(--border)",
+                }}
+              >
+                {delegateOptions.length > 0 ? (
+                  delegateOptions.map((candidate) => (
+                    <label
+                      key={candidate.id}
+                      className="flex items-center gap-2 text-xs"
+                      style={{ color: "var(--text-primary)" }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={canDelegateTo.includes(candidate.id)}
+                        onChange={() => toggleDelegateTarget(candidate.id)}
+                      />
+                      <span>{candidate.name}</span>
+                    </label>
+                  ))
+                ) : (
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    No other agents available.
+                  </p>
+                )}
+              </div>
+            </div>
             <textarea
               value={tagsInput}
               onChange={(e) => setTagsInput(e.target.value)}
@@ -428,6 +477,9 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
             </p>
             <p className="text-[11px] -mt-1" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
               Review coverage is also planning metadata: who this agent is a good reviewer for, not a runtime ACL.
+            </p>
+            <p className="text-[11px] -mt-1" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
+              Delegation targets describe likely handoff paths in Mission Control, not an enforced spawn/permission rule.
             </p>
 
             <div className="flex justify-end gap-2 mt-auto">
@@ -541,7 +593,7 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
           ))}
         </div>
 
-        {(reportsToName || reviewForNames.length > 0) && (
+        {(reportsToName || reviewForNames.length > 0 || delegateToNames.length > 0) && (
           <div className="mb-3 flex flex-wrap gap-1.5">
             {reportsToName && (
               <span
@@ -565,6 +617,18 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
                 }}
               >
                 reviews for {reviewForNames.join(", ")}
+              </span>
+            )}
+            {delegateToNames.length > 0 && (
+              <span
+                className="text-[10px] font-semibold px-2 py-0.5 rounded"
+                style={{
+                  backgroundColor: `${agent.color}12`,
+                  color: "var(--text-secondary)",
+                  border: "1px solid var(--border)",
+                }}
+              >
+                delegates to {delegateToNames.join(", ")}
               </span>
             )}
           </div>

@@ -3,12 +3,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { logActivity } from '@/lib/activities-db';
 
-import { OPENCLAW_DIR } from '@/lib/paths';
-
-const WORKSPACE_MAP: Record<string, string> = {
-  workspace: path.join(OPENCLAW_DIR, 'workspace'),
-  'mission-control': path.join(OPENCLAW_DIR, 'workspace', 'mission-control'),
-};
+import { getWorkspaceBase, resolveWorkspaceFilePath } from '@/lib/workspace-files';
 
 function getMimeType(filename: string): string {
   const ext = path.extname(filename).toLowerCase();
@@ -50,27 +45,37 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Missing path parameter' }, { status: 400 });
     }
 
-    const base = WORKSPACE_MAP[workspace];
-    if (!base) {
+    if (!getWorkspaceBase(workspace)) {
       return NextResponse.json({ error: 'Unknown workspace' }, { status: 400 });
     }
 
-    const fullPath = path.resolve(base, filePath);
-    if (!fullPath.startsWith(base)) {
-      return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+    const resolved = resolveWorkspaceFilePath({ workspace, filePath });
+    if (!resolved) {
+      return NextResponse.json(
+        {
+          error:
+            'Invalid path. Use a path inside the selected workspace, or an absolute/~/ path that resolves inside a known workspace.',
+        },
+        { status: 400 }
+      );
     }
 
-    const stat = await fs.stat(fullPath);
+    const stat = await fs.stat(resolved.fullPath);
     if (!stat.isFile()) {
       return NextResponse.json({ error: 'Not a file' }, { status: 400 });
     }
 
-    const content = await fs.readFile(fullPath);
-    const filename = path.basename(fullPath);
+    const content = await fs.readFile(resolved.fullPath);
+    const filename = path.basename(resolved.fullPath);
     const mimeType = getMimeType(filename);
 
-    logActivity('file_read', `Downloaded file: ${filePath}`, 'success', {
-      metadata: { workspace, filePath, size: stat.size },
+    logActivity('file_read', `Downloaded file: ${resolved.relativePath || filePath}`, 'success', {
+      metadata: {
+        workspace: resolved.workspace,
+        requestedWorkspace: workspace,
+        filePath: resolved.relativePath || filePath,
+        size: stat.size,
+      },
     });
 
     return new NextResponse(content, {

@@ -96,6 +96,7 @@ export default function TeamPageClient({ initialTeam }: TeamPageClientProps) {
         agent.tags.map((tag) => tag.label).join(" "),
         agent.reportsTo || "",
         (agent.canReviewFor || []).join(" "),
+        (agent.canDelegateTo || []).join(" "),
       ]
         .join(" ")
         .toLowerCase();
@@ -220,7 +221,7 @@ export default function TeamPageClient({ initialTeam }: TeamPageClientProps) {
           }}
         >
           This page is for understanding who each agent is, what they are responsible for, and how the team is
-          organized, including reporting lines and review coverage. Presence labels here mean <strong>active now</strong>, <strong>recently seen</strong>, or
+          organized, including reporting lines, review coverage, and delegation paths. Presence labels here mean <strong>active now</strong>, <strong>recently seen</strong>, or
           <strong> no activity yet</strong> — not the same thing as runtime online/offline.{" "}
           <Link href="/agents" style={{ color: "var(--accent)", fontWeight: 600 }}>
             Need models, workspaces, permissions, or runtime status? Open Agents →

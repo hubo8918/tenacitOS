@@ -201,12 +201,13 @@ Make Agents the runtime/capability surface:
 - Team identity/tier/badge/tags are editable
 - Team page now also supports the first reporting-line relationship field through editable `reportsTo` metadata
 - Team page now also supports review-coverage metadata through editable `canReviewFor`
+- Team page now also supports delegation-path metadata through editable `canDelegateTo`
 - Agents page now has its first true editable capability/config flow for Mission Control planning metadata (`canLead`, `canReview`, `canExecute`, `workTypes`)
 - Runtime fields on Agents remain read-only and explicitly labeled as such
 
 ### Exit criteria
 - ✅ At least one true editable/savable config flow on Agents page
-- 🟡 Team page can represent agent relationships, not just identity (started with `reportsTo` and `canReviewFor`; delegation metadata still pending)
+- ✅ Team page can represent agent relationships, not just identity (`reportsTo`, `canReviewFor`, and `canDelegateTo` now exist as narrow editable fields)
 
 ---
 
@@ -453,6 +454,29 @@ Connect to real OpenClaw execution:
 - Next:
   - add `canDelegateTo` as the next narrow Team relationship field.
 
+### 2026-03-11 00:00
+- Step: Team delegation-path editor + file path hardening
+- Files:
+  - `src/components/AgentCard.tsx`
+  - `src/app/(dashboard)/agents/team/TeamPageClient.tsx`
+  - `src/app/api/team/route.ts`
+  - `src/data/mockTeamData.ts`
+  - `src/components/FileBrowser.tsx`
+  - `src/app/api/browse/route.ts`
+  - `src/app/api/files/write/route.ts`
+  - `src/app/api/files/download/route.ts`
+  - `src/lib/workspace-files.ts`
+- Validation:
+  - `npx eslint src/lib/workspace-files.ts src/app/api/browse/route.ts src/app/api/files/write/route.ts src/app/api/files/download/route.ts src/components/FileBrowser.tsx src/app/api/team/route.ts src/components/AgentCard.tsx src/app/(dashboard)/agents/team/TeamPageClient.tsx src/data/mockTeamData.ts`
+  - `npm run build`
+- Commit: current checkpoint commit (`feat(team): add delegation paths and harden file path handling`)
+- Result:
+  - Team now supports `canDelegateTo` as a third narrow relationship field, using the same honest checkbox-list pattern as review coverage.
+  - Team cards now surface delegation paths inline instead of keeping handoff structure implicit.
+  - Mission Control file browse/write/download routes now share a real workspace map, support absolute and `~` paths that resolve inside known workspaces, and return clearer save/load errors in the editor.
+- Next:
+  - keep these new Team relationship flows and the hardened file-edit path stable before widening into broader relationship matrices or automation.
+
 ---
 
 ## How to Update This File
@@ -484,6 +508,6 @@ Suggested template:
 **Current focus:** Phase 2 — turn Agents and Team into honest configuration surfaces
 
 **Do next:**
-1. keep the new Agents capability profile, Team reporting-line, and review-coverage flows stable and honest
-2. add exactly one more narrow relationship field on Team: `canDelegateTo`
+1. keep the new Agents capability profile plus Team reporting-line / review-coverage / delegation flows stable and honest
+2. harden the newly unified file-edit path with a small smoke test and any UX polish that falls out of real use
 3. avoid widening into execution automation until more coordination metadata is truly editable

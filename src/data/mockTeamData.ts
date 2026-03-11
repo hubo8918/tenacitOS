@@ -11,6 +11,7 @@ export interface TeamAgent {
   specialBadge?: string; // e.g. "The Engineer" for Codex
   reportsTo?: string;
   canReviewFor?: string[];
+  canDelegateTo?: string[];
   activeSessions?: number;
   lastActiveAt?: string | null;
   model?: string;

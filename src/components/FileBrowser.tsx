@@ -109,13 +109,19 @@ function EditorModal({ workspace, filePath, fileName, onClose }: EditorModalProp
   useEffect(() => {
     setLoading(true);
     fetch(`/api/browse?workspace=${encodeURIComponent(workspace)}&path=${encodeURIComponent(filePath)}&content=true`)
-      .then((r) => r.json())
+      .then(async (r) => {
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          throw new Error(data?.error || "Failed to load file");
+        }
+        return data;
+      })
       .then((data) => {
         setContent(data.content || "");
         setLoading(false);
       })
-      .catch(() => {
-        setError("Failed to load file");
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "Failed to load file");
         setLoading(false);
       });
   }, [workspace, filePath]);
@@ -129,11 +135,14 @@ function EditorModal({ workspace, filePath, fileName, onClose }: EditorModalProp
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ workspace, path: filePath, content }),
       });
-      if (!res.ok) throw new Error("Save failed");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || "Save failed");
+      }
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch {
-      setError("Failed to save file");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save file");
     } finally {
       setSaving(false);
     }

@@ -29,6 +29,7 @@ interface TeamOverlay {
   specialBadge?: string;
   reportsTo?: string;
   canReviewFor?: string[];
+  canDelegateTo?: string[];
 }
 
 interface TeamAgent {
@@ -44,6 +45,7 @@ interface TeamAgent {
   specialBadge?: string;
   reportsTo?: string;
   canReviewFor?: string[];
+  canDelegateTo?: string[];
   activeSessions: number;
   lastActiveAt: string | null;
   model: string;
@@ -294,6 +296,11 @@ function parseOverlayEntry(value: unknown): TeamOverlay | null {
     entry.canReviewFor = canReviewFor;
   }
 
+  const canDelegateTo = normalizeAgentIdList(record.canDelegateTo, record.id as string | undefined);
+  if (canDelegateTo.length > 0) {
+    entry.canDelegateTo = canDelegateTo;
+  }
+
   return entry;
 }
 
@@ -449,6 +456,7 @@ function mergeTeamAgent(
     specialBadge: overlay?.specialBadge,
     reportsTo: overlay?.reportsTo,
     canReviewFor: overlay?.canReviewFor,
+    canDelegateTo: overlay?.canDelegateTo,
     activeSessions: sessionStats.activeSessions,
     lastActiveAt: sessionStats.lastActiveAt,
     model: realAgent.model || "unknown",
@@ -474,6 +482,7 @@ function fallbackFromOverlay(overlay: TeamOverlay): TeamAgent {
     specialBadge: overlay.specialBadge,
     reportsTo: overlay.reportsTo,
     canReviewFor: overlay.canReviewFor,
+    canDelegateTo: overlay.canDelegateTo,
     activeSessions: 0,
     lastActiveAt: null,
     model: "unknown",
@@ -503,6 +512,7 @@ function mergeTeamAgentFromSummary(
     specialBadge: overlay?.specialBadge,
     reportsTo: overlay?.reportsTo,
     canReviewFor: overlay?.canReviewFor,
+    canDelegateTo: overlay?.canDelegateTo,
     activeSessions: realAgent.activeSessions,
     lastActiveAt: realAgent.lastActivity || null,
     model: realAgent.model || "unknown",
@@ -788,6 +798,20 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const requestedCanDelegateTo = normalizeAgentIdList(body.canDelegateTo, id);
+    if (body.canDelegateTo !== undefined) {
+      if (!Array.isArray(body.canDelegateTo)) {
+        return NextResponse.json({ error: "canDelegateTo must be an array of agent ids" }, { status: 400 });
+      }
+      if (
+        requestedCanDelegateTo.some(
+          (agentId) => !realAgents.some((agent) => agent.id === agentId)
+        )
+      ) {
+        return NextResponse.json({ error: "canDelegateTo contains unknown agent id" }, { status: 400 });
+      }
+    }
+
     const newOverlay: TeamOverlay = {
       id,
       name,
@@ -801,6 +825,7 @@ export async function POST(request: NextRequest) {
       specialBadge: coerceString(body.specialBadge),
       reportsTo: requestedReportsTo || undefined,
       canReviewFor: requestedCanReviewFor,
+      canDelegateTo: requestedCanDelegateTo,
     };
 
     overlays.push(newOverlay);
@@ -850,6 +875,8 @@ export async function PUT(request: NextRequest) {
     const requestedReportsTo = sanitizeAgentId(body.reportsTo);
     const hasCanReviewFor = Object.prototype.hasOwnProperty.call(body, "canReviewFor");
     const requestedCanReviewFor = normalizeAgentIdList(body.canReviewFor, id);
+    const hasCanDelegateTo = Object.prototype.hasOwnProperty.call(body, "canDelegateTo");
+    const requestedCanDelegateTo = normalizeAgentIdList(body.canDelegateTo, id);
 
     if (hasReportsTo) {
       if (body.reportsTo !== null && body.reportsTo !== "" && !requestedReportsTo) {
@@ -879,6 +906,19 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    if (hasCanDelegateTo) {
+      if (body.canDelegateTo !== null && !Array.isArray(body.canDelegateTo)) {
+        return NextResponse.json({ error: "canDelegateTo must be an array of agent ids" }, { status: 400 });
+      }
+      if (
+        requestedCanDelegateTo.some(
+          (agentId) => !realAgents.some((agent) => agent.id === agentId)
+        )
+      ) {
+        return NextResponse.json({ error: "canDelegateTo contains unknown agent id" }, { status: 400 });
+      }
+    }
+
     const nextOverlay: TeamOverlay = {
       ...existingOverlay,
       name: requestedName ?? existingOverlay.name,
@@ -891,6 +931,7 @@ export async function PUT(request: NextRequest) {
       tags: body.tags ? normalizeTags(body.tags) : existingOverlay.tags,
       reportsTo: hasReportsTo ? requestedReportsTo || undefined : existingOverlay.reportsTo,
       canReviewFor: hasCanReviewFor ? requestedCanReviewFor : existingOverlay.canReviewFor,
+      canDelegateTo: hasCanDelegateTo ? requestedCanDelegateTo : existingOverlay.canDelegateTo,
     };
 
     const shouldSyncIdentity = requestedName !== undefined || requestedEmoji !== undefined;
