@@ -112,7 +112,7 @@ To avoid fake progress or silent drift:
   - explicit backend error handling
   - no silent false-success path for status/delete actions
 - visible project linkage now exists from each task row, and task-origin project jumps now open a focused Projects view for the matching title when one exists
-- board-level attention summary now also surfaces project-label / project-title mismatches before operators have to open individual task rows
+- board-level attention summary now also surfaces project-label / project-title mismatches before operators have to open individual task rows, and mismatched rows now expose a direct cleanup CTA into the existing details editor
 - dependency editing now exists with:
   - blocker selection
   - cycle guards
@@ -987,6 +987,21 @@ Connect to real OpenClaw execution:
   - This keeps Project ↔ Task linkage read-only while making label-drift cleanup more direct instead of pretending Projects can repair linkage inline.
 - Next:
   - keep Project ↔ Task linkage read-only, then reassess the next tight Tasks/Projects trust issue instead of widening into fake cross-page editing.
+
+### 2026-03-12 09:50
+- Step: Tasks mismatched-row cleanup CTA
+- Files:
+  - `src/components/TaskRow.tsx`
+- Validation:
+  - `npx eslint src/components/TaskRow.tsx`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(tasks): add direct mismatch cleanup CTA`)
+- Result:
+  - Task rows with a project-label / project-title mismatch now expose a direct "Fix label" action right beside the mismatch badge instead of hiding cleanup behind the overflow menu.
+  - The CTA opens the existing task-details editor, so Mission Control still uses the real saved project field instead of pretending Projects can repair linkage inline.
+  - This keeps Project ↔ Task linkage read-only while making mismatch cleanup faster after the new Projects → Tasks handoff lands on an affected row.
+- Next:
+  - keep Project ↔ Task linkage read-only, and if the next trust step stays narrow, make the mismatch-only Tasks view explain when the handoff landed on a specific row that already has a direct fix path.
 
 ---
 

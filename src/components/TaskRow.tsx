@@ -696,17 +696,35 @@ export function TaskRow({
               <ExternalLink className="w-3 h-3 opacity-60 flex-shrink-0" />
             </button>
             {projectLabelMismatch && (
-              <span
-                className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                style={{
-                  color: "#FF9F0A",
-                  backgroundColor: "color-mix(in srgb, #FF9F0A 14%, transparent)",
-                  border: "1px solid color-mix(in srgb, #FF9F0A 28%, transparent)",
-                }}
-                title="This task's saved project label does not exactly match any current project title on the Projects board."
-              >
-                No exact match
-              </span>
+              <>
+                <span
+                  className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                  style={{
+                    color: "#FF9F0A",
+                    backgroundColor: "color-mix(in srgb, #FF9F0A 14%, transparent)",
+                    border: "1px solid color-mix(in srgb, #FF9F0A 28%, transparent)",
+                  }}
+                  title="This task's saved project label does not exactly match any current project title on the Projects board."
+                >
+                  No exact match
+                </span>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleOpenDetailsEditor();
+                  }}
+                  className="rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors"
+                  style={{
+                    color: "#FF9F0A",
+                    backgroundColor: "transparent",
+                    border: "1px solid color-mix(in srgb, #FF9F0A 30%, transparent)",
+                  }}
+                  title={`Edit this task's saved project label for ${task.title}`}
+                >
+                  Fix label
+                </button>
+              </>
             )}
           </div>
         </div>
