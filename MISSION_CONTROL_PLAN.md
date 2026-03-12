@@ -126,6 +126,7 @@ To avoid fake progress or silent drift:
 - current-phase dependency visibility now reads directly on each project card
 - project ↔ task linkage now reads directly on each project card as a read-only Tasks summary
 - linked task summaries now call out blocked/overdue attention without pretending Projects owns task editing
+- zero-linked projects now include a focused Tasks-board handoff instead of reading like a dead-end empty state
 - **Still missing full operational CRUD, dependency editing, and linked-task editing.**
 
 #### Calendar
@@ -815,6 +816,21 @@ Connect to real OpenClaw execution:
 - Next:
   - keep Project ↔ Task linkage read-only, and if the next step stays narrow, either add a clearer zero-linked-task affordance from Projects or return to the next tight Tasks/Projects trust issue.
 
+### 2026-03-12 04:xx
+- Step: Projects zero-linked-task handoff affordance
+- Files:
+  - `src/components/ProjectCard.tsx`
+- Validation:
+  - `npx eslint src/components/ProjectCard.tsx`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(projects): add zero-linked task handoff`)
+- Result:
+  - Project cards with no linked tasks now offer a direct focused jump into the Tasks board instead of stopping at a dead-end empty state.
+  - The empty state explicitly says linkage editing still lives on Tasks, so Projects remains honest about its read-only trust boundary.
+  - This keeps Project ↔ Task linkage read-only while making the zero-linked case actionable.
+- Next:
+  - keep Project ↔ Task linkage read-only, then return to the next tight Tasks/Projects trust issue instead of widening into fake cross-page editing.
+
 ---
 
 ## How to Update This File
@@ -843,7 +859,7 @@ Suggested template:
 
 ## Current Focus
 
-**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, a first Projects owner/phase editor, participating-agent visibility, current-phase dependency visibility, read-only Project ↔ Task linkage visibility, and a linked-task attention summary shipped
+**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, a first Projects owner/phase editor, participating-agent visibility, current-phase dependency visibility, read-only Project ↔ Task linkage visibility, a linked-task attention summary, and a zero-linked Tasks handoff shipped
 
 **Do next:**
 1. keep the new Agents capability profile plus Team reporting-line / review-coverage / delegation flows stable and honest

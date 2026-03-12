@@ -635,9 +635,25 @@ export function ProjectCard({
               </div>
             </div>
           ) : (
-            <p className="text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
-              No tasks currently link back to this project from the Tasks board labels saved on each task.
-            </p>
+            <div className="space-y-2">
+              <p className="text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
+                No tasks currently link back to this project from the Tasks board labels saved on each task.
+              </p>
+              <div className="flex items-center justify-between gap-2 pt-1">
+                <p className="text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
+                  Projects stays read-only for linkage here; add or relabel work from the Tasks board.
+                </p>
+                <a
+                  href={projectTasksHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[10px] font-medium whitespace-nowrap"
+                  style={{ color: "#0A84FF" }}
+                >
+                  Open focused Tasks ↗
+                </a>
+              </div>
+            </div>
           )}
         </div>
 
