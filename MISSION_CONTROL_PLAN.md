@@ -109,7 +109,9 @@ To avoid fake progress or silent drift:
 - browse / write / download now share a unified workspace path resolver
 - file editing now supports workspace-relative, absolute, and `~` paths that still resolve inside known workspaces
 - create-file/create-folder no longer fake success when the backend rejects the request
-- still needs one more trust/stability pass around directory-load and upload failure UX
+- directory-load failures now preserve backend error detail and give the operator retry / go-up recovery
+- upload failures now surface explicit backend error messages, and invalid upload paths no longer fake success
+- Files Phase 2.5 trust/stability pass is now at a clean stopping point
 
 #### Platform stability
 - OpenClaw upgraded to `2026.3.8`
@@ -254,7 +256,8 @@ Tasks should clearly show:
 - which project/phase it belongs to
 
 ### Status
-- **In progress at the trust/perf layer**
+- **Phase 3 kickoff is now active**
+- Files trust/stability pass is complete enough to widen back into Tasks
 - **Not done at the CRUD/orchestration layer**
 
 ### Exit criteria
@@ -325,8 +328,8 @@ Connect to real OpenClaw execution:
 ## Immediate Priority Queue
 
 ### P0
-1. Finish the current Files trust/stability pass (directory-load + upload failure handling, plus any tiny UX fallout)
-2. Start the first true Tasks create/edit/delete flow without breaking the existing routing editor
+1. Start the first true Tasks create/edit/delete flow without breaking the existing routing editor
+2. Deepen Tasks CRUD one honest step at a time (next best candidate: real edit fields beyond routing, or delete confirmation / trust polish if needed)
 3. Start the first real Projects owner/phase editing flow
 
 ### P1
@@ -516,6 +519,22 @@ Connect to real OpenClaw execution:
 - Next:
   - complete the remaining Files trust/stability pass, then return to the first real Tasks/Projects CRUD flows.
 
+### 2026-03-11 18:3x
+- Step: Files directory-load + upload failure trust pass
+- Files:
+  - `src/components/FileBrowser.tsx`
+  - `src/app/api/files/upload/route.ts`
+- Validation:
+  - `npx eslint src/components/FileBrowser.tsx src/app/api/files/upload/route.ts`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(files): harden load and upload failure UX`)
+- Result:
+  - Directory-load failures now keep the backend error message visible and give the operator retry / go-up recovery instead of a vague dead-end state.
+  - Upload failures now surface explicit backend errors in the Files UI instead of only logging to the console.
+  - Invalid upload paths no longer fake success; the upload route now uses the shared workspace resolver and rejects unsafe paths honestly.
+- Next:
+  - begin Phase 3 with the first true Tasks CRUD milestone, preferably a real create flow that complements the existing routing editor.
+
 ---
 
 ## How to Update This File
@@ -544,9 +563,9 @@ Suggested template:
 
 ## Current Focus
 
-**Current focus:** Phase 2 surfaces are now established; immediate attention shifts to Files trust/stability before widening back into Tasks/Projects
+**Current focus:** Files trust/stability has reached a clean stopping point; immediate attention shifts into Phase 3 starting with the first true Tasks CRUD milestone
 
 **Do next:**
 1. keep the new Agents capability profile plus Team reporting-line / review-coverage / delegation flows stable and honest
-2. finish the Files trust/stability pass, especially directory-load and upload failure UX
-3. then return to the first true Tasks/Projects CRUD flows instead of widening into execution automation
+2. add the first honest Tasks CRUD milestone, preferably create before widening into broader edit surfaces
+3. then move to the first real Projects owner/phase editing flow instead of widening into execution automation

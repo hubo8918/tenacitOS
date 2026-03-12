@@ -90,6 +90,17 @@ function isEditable(name: string): boolean {
   return editableExts.includes(ext) || !name.includes(".");
 }
 
+async function getResponseError(response: Response, fallback: string): Promise<string> {
+  const data = await response.json().catch(() => null) as { error?: string } | null;
+  return data?.error || fallback;
+}
+
+function getParentPath(currentPath: string): string {
+  const segments = currentPath.split("/").filter(Boolean);
+  segments.pop();
+  return segments.join("/");
+}
+
 // ─── Monaco Editor Modal ───────────────────────────────────────────────────────
 interface EditorModalProps {
   workspace: string;
@@ -289,6 +300,7 @@ export function FileBrowser({ workspace, path, onNavigate, viewMode = "list" }: 
   const [editorFile, setEditorFile] = useState<{ workspace: string; path: string; name: string } | null>(null);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<FileEntry | null>(null);
   const [newFolderName, setNewFolderName] = useState("");
   const [showNewFolder, setShowNewFolder] = useState(false);
@@ -296,22 +308,22 @@ export function FileBrowser({ workspace, path, onNavigate, viewMode = "list" }: 
   const [showNewFile, setShowNewFile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const loadItems = useCallback(() => {
+  const loadItems = useCallback(async () => {
     setLoading(true);
     setError(null);
-    fetch(`/api/browse?workspace=${encodeURIComponent(workspace)}&path=${encodeURIComponent(path)}`)
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to load directory");
-        return res.json();
-      })
-      .then((data) => {
-        setItems(data.items || []);
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError(err.message);
-        setLoading(false);
-      });
+    try {
+      const res = await fetch(`/api/browse?workspace=${encodeURIComponent(workspace)}&path=${encodeURIComponent(path)}`);
+      const data = await res.json().catch(() => null) as { items?: FileEntry[]; error?: string } | null;
+      if (!res.ok) {
+        throw new Error(data?.error || "Failed to load directory");
+      }
+      setItems(data?.items || []);
+    } catch (err) {
+      setItems([]);
+      setError(err instanceof Error ? err.message : "Failed to load directory");
+    } finally {
+      setLoading(false);
+    }
   }, [workspace, path]);
 
   useEffect(() => {
@@ -336,6 +348,7 @@ export function FileBrowser({ workspace, path, onNavigate, viewMode = "list" }: 
   const handleUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     setUploading(true);
+    setUploadError(null);
     try {
       const formData = new FormData();
       formData.append("workspace", workspace);
@@ -344,11 +357,19 @@ export function FileBrowser({ workspace, path, onNavigate, viewMode = "list" }: 
         formData.append("files", file);
       }
       const res = await fetch("/api/files/upload", { method: "POST", body: formData });
-      if (!res.ok) throw new Error("Upload failed");
-      loadItems();
-    } catch (e) {
-      console.error("Upload error:", e);
+      if (!res.ok) {
+        throw new Error(await getResponseError(res, "Upload failed"));
+      }
+      await loadItems();
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed");
     } finally {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
       setUploading(false);
     }
   };
@@ -449,10 +470,43 @@ export function FileBrowser({ workspace, path, onNavigate, viewMode = "list" }: 
   }
 
   if (error) {
+    const locationLabel = path ? `/${path}` : "/";
+
     return (
-      <div className="flex flex-col items-center justify-center py-12" style={{ color: "var(--accent)" }}>
-        <AlertCircle className="w-12 h-12 mb-4" />
-        <p>{error}</p>
+      <div className="flex flex-col items-center justify-center py-12 px-6 text-center" style={{ color: "var(--text-secondary)" }}>
+        <AlertCircle className="w-12 h-12 mb-4" style={{ color: "var(--status-blocked)" }} />
+        <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+          Could not load {locationLabel}
+        </p>
+        <p className="mt-2 text-sm" style={{ color: "var(--text-muted)", maxWidth: "32rem", lineHeight: 1.6 }}>
+          {error}
+        </p>
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+          <button
+            onClick={() => void loadItems()}
+            className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
+            style={{
+              backgroundColor: "var(--surface-elevated)",
+              color: "var(--text-primary)",
+              border: "1px solid var(--border)",
+            }}
+          >
+            Retry
+          </button>
+          {path && (
+            <button
+              onClick={() => onNavigate(getParentPath(path))}
+              className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
+              style={{
+                backgroundColor: "transparent",
+                color: "var(--text-secondary)",
+                border: "1px solid var(--border)",
+              }}
+            >
+              Go up one level
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -530,6 +584,38 @@ export function FileBrowser({ workspace, path, onNavigate, viewMode = "list" }: 
           <RefreshCw className="w-3.5 h-3.5" />
         </button>
       </div>
+
+      {uploadError && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "0.75rem",
+            padding: "0.75rem 1rem",
+            borderBottom: "1px solid var(--border)",
+            backgroundColor: "color-mix(in srgb, var(--status-blocked) 10%, transparent)",
+            color: "var(--status-blocked)",
+            fontSize: "0.85rem",
+          }}
+        >
+          <span>{uploadError}</span>
+          <button
+            onClick={() => setUploadError(null)}
+            style={{
+              padding: "0.25rem",
+              borderRadius: "0.375rem",
+              background: "none",
+              color: "inherit",
+              border: "none",
+              cursor: "pointer",
+            }}
+            aria-label="Dismiss upload error"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* New Folder input */}
       {showNewFolder && (
