@@ -213,6 +213,16 @@ export default function TasksPageClient({
     setPendingMismatchTaskId(projectLabelMismatchTasks[0]?.id || null);
   };
 
+  const handleJumpToRequestedMismatch = () => {
+    if (!requestedMismatchTask) {
+      return;
+    }
+
+    setStatusFilter("all");
+    setShowMismatchOnly(true);
+    setPendingMismatchTaskId(requestedMismatchTask.id);
+  };
+
   useEffect(() => {
     setShowMismatchOnly(mismatchOnlyRequested);
     setPendingMismatchTaskId(mismatchTaskIdRequested || null);
@@ -486,6 +496,18 @@ export default function TasksPageClient({
               This mismatch-only view opened on a specific task from Projects. Look for the <span style={{ color: "#FF9F0A" }}>No exact match</span> badge and the row&apos;s <span style={{ color: "#FF9F0A" }}>Fix label</span> action to correct the saved project label through the existing task-details editor.
             </p>
           </div>
+          <button
+            type="button"
+            onClick={handleJumpToRequestedMismatch}
+            className="rounded-full px-3 py-1 font-semibold transition-colors"
+            style={{
+              color: "#FFD60A",
+              backgroundColor: "transparent",
+              border: "1px solid color-mix(in srgb, #FFD60A 36%, transparent)",
+            }}
+          >
+            Jump back to requested row
+          </button>
         </div>
       )}
 

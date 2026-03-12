@@ -1018,6 +1018,21 @@ Connect to real OpenClaw execution:
 - Next:
   - keep Project ↔ Task linkage read-only, and if the next trust step stays narrow, make the targeted mismatch handoff easier to re-find after scrolling away from the requested row.
 
+### 2026-03-12 10:53
+- Step: Tasks targeted mismatch re-focus CTA
+- Files:
+  - `src/app/(dashboard)/agents/tasks/TasksPageClient.tsx`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/agents/tasks/TasksPageClient.tsx"`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(tasks): add mismatch re-focus CTA`)
+- Result:
+  - The targeted mismatch handoff notice now includes a direct jump-back control, so operators can re-center the requested mismatched row after scrolling elsewhere on the board.
+  - The re-focus action re-applies the mismatch-only scope and scroll target instead of pretending the requested row should stay mentally tracked after the initial handoff.
+  - This keeps Project ↔ Task linkage read-only while making the existing Tasks-side cleanup path easier to recover without widening into inline Project repairs.
+- Next:
+  - keep Project ↔ Task linkage read-only, and if the next trust step stays narrow, briefly highlight the requested mismatched row after a targeted handoff or re-focus jump so the cleanup CTA is easier to spot.
+
 ---
 
 ## How to Update This File
