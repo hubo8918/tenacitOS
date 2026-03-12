@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ListTodo, ArrowUpDown } from "lucide-react";
+import { ListTodo, ArrowUpDown, Plus } from "lucide-react";
 import { TaskRow } from "@/components/TaskRow";
-import { taskStatusConfig } from "@/data/mockTasksData";
+import { taskPriorityConfig, taskStatusConfig } from "@/data/mockTasksData";
 import type { Task } from "@/data/mockTasksData";
 import { useFetch } from "@/lib/useFetch";
 
@@ -13,6 +13,12 @@ type SortDir = "asc" | "desc";
 
 const priorityOrder = { high: 0, medium: 1, low: 2 };
 const statusOrder = { blocked: 0, in_progress: 1, pending: 2, completed: 3 };
+const unassignedAgent = {
+  id: "",
+  name: "Unassigned",
+  emoji: "👤",
+  color: "#8E8E93",
+};
 
 function parseLocalDate(dateString: string) {
   const [year, month, day] = dateString.split("-").map(Number);
@@ -25,6 +31,15 @@ function isTaskOverdue(task: Task) {
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   return dueDate < startOfToday;
+}
+
+function getLocalDateInputValue(offsetDays = 0) {
+  const date = new Date();
+  date.setDate(date.getDate() + offsetDays);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 interface TaskAgentOption {
@@ -50,15 +65,22 @@ export default function TasksPageClient({ initialTasks, initialTaskAgents }: Tas
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sortField, setSortField] = useState<SortField>("status");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [creatingTask, setCreatingTask] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [newTitle, setNewTitle] = useState("");
+  const [newProject, setNewProject] = useState("");
+  const [newDueDate, setNewDueDate] = useState(() => getLocalDateInputValue(7));
+  const [newStatus, setNewStatus] = useState<Task["status"]>("pending");
+  const [newPriority, setNewPriority] = useState<Task["priority"]>("medium");
+  const [newAssigneeAgentId, setNewAssigneeAgentId] = useState("");
 
   const filteredTasks = useMemo(() => {
-    let result = [...tasks];
+    const result = [...tasks];
 
-    if (statusFilter !== "all") {
-      result = result.filter((t) => t.status === statusFilter);
-    }
+    const filtered = statusFilter === "all" ? result : result.filter((task) => task.status === statusFilter);
 
-    result.sort((a, b) => {
+    filtered.sort((a, b) => {
       let cmp = 0;
       switch (sortField) {
         case "title":
@@ -81,21 +103,101 @@ export default function TasksPageClient({ initialTasks, initialTaskAgents }: Tas
       return sortDir === "asc" ? cmp : -cmp;
     });
 
-    return result;
+    return filtered;
   }, [tasks, statusFilter, sortField, sortDir]);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      setSortDir((direction) => (direction === "asc" ? "desc" : "asc"));
     } else {
       setSortField(field);
       setSortDir("asc");
     }
   };
 
-  const inProgressCount = tasks.filter((t) => t.status === "in_progress").length;
-  const completedCount = tasks.filter((t) => t.status === "completed").length;
-  const blockedCount = tasks.filter((t) => t.status === "blocked").length;
+  const resetCreateForm = () => {
+    setNewTitle("");
+    setNewProject("");
+    setNewDueDate(getLocalDateInputValue(7));
+    setNewStatus("pending");
+    setNewPriority("medium");
+    setNewAssigneeAgentId("");
+    setCreateError(null);
+  };
+
+  const handleToggleCreateForm = () => {
+    if (showCreateForm) {
+      resetCreateForm();
+      setShowCreateForm(false);
+      return;
+    }
+
+    setCreateError(null);
+    setShowCreateForm(true);
+  };
+
+  const handleCreateTask = async () => {
+    const trimmedTitle = newTitle.trim();
+    const trimmedProject = newProject.trim();
+
+    if (!trimmedTitle) {
+      setCreateError("Title is required.");
+      return;
+    }
+
+    if (!newDueDate) {
+      setCreateError("Due date is required.");
+      return;
+    }
+
+    setCreatingTask(true);
+    setCreateError(null);
+
+    try {
+      const owner = initialTaskAgents.find((agent) => agent.id === newAssigneeAgentId);
+      const response = await fetch("/api/agent-tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: trimmedTitle,
+          project: trimmedProject,
+          dueDate: newDueDate,
+          status: newStatus,
+          priority: newPriority,
+          assigneeAgentId: owner?.id || undefined,
+          agent: owner
+            ? {
+                id: owner.id,
+                emoji: owner.emoji,
+                name: owner.name,
+                color: owner.color,
+              }
+            : {
+                emoji: unassignedAgent.emoji,
+                name: unassignedAgent.name,
+                color: unassignedAgent.color,
+              },
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to create task");
+      }
+
+      resetCreateForm();
+      setShowCreateForm(false);
+      refetch();
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : "Failed to create task");
+    } finally {
+      setCreatingTask(false);
+    }
+  };
+
+  const inProgressCount = tasks.filter((task) => task.status === "in_progress").length;
+  const completedCount = tasks.filter((task) => task.status === "completed").length;
+  const blockedCount = tasks.filter((task) => task.status === "blocked").length;
   const overdueCount = tasks.filter(isTaskOverdue).length;
 
   const filterButtons: { key: StatusFilter; label: string }[] = [
@@ -105,7 +207,7 @@ export default function TasksPageClient({ initialTasks, initialTaskAgents }: Tas
     { key: "pending", label: "Pending" },
     { key: "blocked", label: "Blocked" },
   ];
-  const activeFilterLabel = filterButtons.find((btn) => btn.key === statusFilter)?.label ?? "Current";
+  const activeFilterLabel = filterButtons.find((button) => button.key === statusFilter)?.label ?? "Current";
   const hasAnyTasks = tasks.length > 0;
 
   const columns: { key: SortField | null; label: string; flex: string }[] = [
@@ -117,6 +219,17 @@ export default function TasksPageClient({ initialTasks, initialTaskAgents }: Tas
     { key: "dueDate", label: "Due", flex: "flex-[1]" },
     { key: null, label: "", flex: "w-8" },
   ];
+
+  const formInputStyle = {
+    width: "100%",
+    padding: "0.7rem 0.8rem",
+    borderRadius: "0.75rem",
+    border: "1px solid var(--border)",
+    backgroundColor: "var(--card)",
+    color: "var(--text-primary)",
+    fontSize: "0.9rem",
+    outline: "none",
+  };
 
   if (loading && !data) {
     return (
@@ -151,74 +264,213 @@ export default function TasksPageClient({ initialTasks, initialTaskAgents }: Tas
 
   return (
     <div className="p-4 md:p-8">
-      <div className="mb-6">
-        <h1
-          className="text-3xl font-bold mb-2"
-          style={{
-            fontFamily: "var(--font-heading)",
-            color: "var(--text-primary)",
-            letterSpacing: "-1.5px",
-          }}
-        >
-          <ListTodo className="inline-block w-8 h-8 mr-2 mb-1" />
-          Tasks
-        </h1>
-        <p style={{ color: "var(--text-secondary)", fontSize: "14px" }}>
-          Coordination board &bull; {tasks.length} tracked &bull; {inProgressCount} in progress &bull; {completedCount} completed
-        </p>
-        <p className="mt-2 text-sm" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
-          Use this page to track shared work across agents and projects. Task status here reflects backlog progress,
-          not live runtime online/offline state.
-        </p>
-        {(blockedCount > 0 || overdueCount > 0) && (
-          <div
-            className="mt-4 flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
+      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h1
+            className="text-3xl font-bold mb-2"
             style={{
-              backgroundColor: "var(--surface-elevated)",
-              border: "1px solid var(--border)",
+              fontFamily: "var(--font-heading)",
+              color: "var(--text-primary)",
+              letterSpacing: "-1.5px",
             }}
           >
-            <span className="font-semibold" style={{ color: "var(--text-secondary)" }}>
-              Needs attention
-            </span>
-            {blockedCount > 0 && (
-              <span
-                className="rounded-full px-2 py-1 font-semibold"
-                style={{
-                  color: "var(--status-blocked)",
-                  backgroundColor: "color-mix(in srgb, var(--status-blocked) 14%, transparent)",
-                  border: "1px solid color-mix(in srgb, var(--status-blocked) 28%, transparent)",
-                }}
-              >
-                {blockedCount} blocked
-              </span>
-            )}
-            {overdueCount > 0 && (
-              <span
-                className="rounded-full px-2 py-1 font-semibold"
-                style={{
-                  color: "#FF9F0A",
-                  backgroundColor: "color-mix(in srgb, #FF9F0A 16%, transparent)",
-                  border: "1px solid color-mix(in srgb, #FF9F0A 30%, transparent)",
-                }}
-              >
-                {overdueCount} overdue
-              </span>
-            )}
-          </div>
-        )}
+            <ListTodo className="inline-block w-8 h-8 mr-2 mb-1" />
+            Tasks
+          </h1>
+          <p style={{ color: "var(--text-secondary)", fontSize: "14px" }}>
+            Coordination board &bull; {tasks.length} tracked &bull; {inProgressCount} in progress &bull; {completedCount} completed
+          </p>
+          <p className="mt-2 text-sm" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+            Use this page to track shared work across agents and projects. Task status here reflects backlog progress,
+            not live runtime online/offline state.
+          </p>
+        </div>
+
+        <button
+          onClick={handleToggleCreateForm}
+          className="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors"
+          style={{
+            backgroundColor: showCreateForm ? "var(--surface-elevated)" : "var(--accent)",
+            color: showCreateForm ? "var(--text-primary)" : "#000",
+            border: showCreateForm ? "1px solid var(--border)" : "none",
+          }}
+        >
+          <Plus className="w-4 h-4" />
+          {showCreateForm ? "Close task intake" : "New task"}
+        </button>
       </div>
+
+      {showCreateForm && (
+        <div
+          className="mb-6 rounded-2xl p-4 md:p-5"
+          style={{
+            backgroundColor: "var(--card)",
+            border: "1px solid var(--border)",
+          }}
+        >
+          <div className="flex flex-col gap-4">
+            <div>
+              <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                Create a tracked task
+              </p>
+              <p className="mt-1 text-sm" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+                This first CRUD milestone keeps creation honest: title, board status, priority, due date, project,
+                and initial owner all save here. Reviewer and handoff can still be added from the row-level routing editor after creation.
+              </p>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <label className="flex flex-col gap-1.5 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                Title
+                <input
+                  value={newTitle}
+                  onChange={(event) => setNewTitle(event.target.value)}
+                  placeholder="Add a new task"
+                  style={formInputStyle}
+                />
+              </label>
+
+              <label className="flex flex-col gap-1.5 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                Project
+                <input
+                  value={newProject}
+                  onChange={(event) => setNewProject(event.target.value)}
+                  placeholder="Mission Control"
+                  style={formInputStyle}
+                />
+              </label>
+
+              <label className="flex flex-col gap-1.5 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                Due date
+                <input
+                  type="date"
+                  value={newDueDate}
+                  onChange={(event) => setNewDueDate(event.target.value)}
+                  style={formInputStyle}
+                />
+              </label>
+
+              <label className="flex flex-col gap-1.5 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                Initial status
+                <select value={newStatus} onChange={(event) => setNewStatus(event.target.value as Task["status"])} style={formInputStyle}>
+                  {Object.entries(taskStatusConfig).map(([value, config]) => (
+                    <option key={value} value={value}>
+                      {config.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-1.5 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                Priority
+                <select value={newPriority} onChange={(event) => setNewPriority(event.target.value as Task["priority"])} style={formInputStyle}>
+                  {Object.entries(taskPriorityConfig).map(([value, config]) => (
+                    <option key={value} value={value}>
+                      {config.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-1.5 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                Owner
+                <select value={newAssigneeAgentId} onChange={(event) => setNewAssigneeAgentId(event.target.value)} style={formInputStyle}>
+                  <option value="">Unassigned</option>
+                  {initialTaskAgents.map((agent) => (
+                    <option key={agent.id} value={agent.id}>
+                      {agent.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            {createError && (
+              <p className="text-sm font-medium" style={{ color: "var(--status-blocked)" }}>
+                {createError}
+              </p>
+            )}
+
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                onClick={() => {
+                  resetCreateForm();
+                  setShowCreateForm(false);
+                }}
+                className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
+                style={{
+                  backgroundColor: "transparent",
+                  color: "var(--text-secondary)",
+                  border: "1px solid var(--border)",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateTask}
+                disabled={creatingTask}
+                className="px-4 py-2 text-sm font-semibold rounded-lg transition-colors"
+                style={{
+                  backgroundColor: "var(--accent)",
+                  color: "#000",
+                  opacity: creatingTask ? 0.7 : 1,
+                }}
+              >
+                {creatingTask ? "Creating..." : "Create task"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(blockedCount > 0 || overdueCount > 0) && (
+        <div
+          className="mb-6 flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
+          style={{
+            backgroundColor: "var(--surface-elevated)",
+            border: "1px solid var(--border)",
+          }}
+        >
+          <span className="font-semibold" style={{ color: "var(--text-secondary)" }}>
+            Needs attention
+          </span>
+          {blockedCount > 0 && (
+            <span
+              className="rounded-full px-2 py-1 font-semibold"
+              style={{
+                color: "var(--status-blocked)",
+                backgroundColor: "color-mix(in srgb, var(--status-blocked) 14%, transparent)",
+                border: "1px solid color-mix(in srgb, var(--status-blocked) 28%, transparent)",
+              }}
+            >
+              {blockedCount} blocked
+            </span>
+          )}
+          {overdueCount > 0 && (
+            <span
+              className="rounded-full px-2 py-1 font-semibold"
+              style={{
+                color: "#FF9F0A",
+                backgroundColor: "color-mix(in srgb, #FF9F0A 16%, transparent)",
+                border: "1px solid color-mix(in srgb, #FF9F0A 30%, transparent)",
+              }}
+            >
+              {overdueCount} overdue
+            </span>
+          )}
+        </div>
+      )}
 
       {hasAnyTasks ? (
         <>
           <div className="flex flex-wrap gap-2 mb-6">
-            {filterButtons.map((btn) => {
-              const isActive = statusFilter === btn.key;
-              const statusColor = btn.key !== "all" ? taskStatusConfig[btn.key]?.color : undefined;
+            {filterButtons.map((button) => {
+              const isActive = statusFilter === button.key;
+              const statusColor = button.key !== "all" ? taskStatusConfig[button.key]?.color : undefined;
               return (
                 <button
-                  key={btn.key}
-                  onClick={() => setStatusFilter(btn.key)}
+                  key={button.key}
+                  onClick={() => setStatusFilter(button.key)}
                   className="text-xs font-semibold px-3 py-1.5 rounded-full transition-all duration-150"
                   style={{
                     backgroundColor: isActive
@@ -232,9 +484,9 @@ export default function TasksPageClient({ initialTasks, initialTaskAgents }: Tas
                       : "1px solid var(--border)",
                   }}
                 >
-                  {btn.label}
-                  {btn.key === "all" && ` (${tasks.length})`}
-                  {btn.key !== "all" && ` (${tasks.filter((t) => t.status === btn.key).length})`}
+                  {button.label}
+                  {button.key === "all" && ` (${tasks.length})`}
+                  {button.key !== "all" && ` (${tasks.filter((task) => task.status === button.key).length})`}
                 </button>
               );
             })}
@@ -254,16 +506,16 @@ export default function TasksPageClient({ initialTasks, initialTaskAgents }: Tas
                 backgroundColor: "var(--surface-elevated)",
               }}
             >
-              {columns.map((col, i) => (
+              {columns.map((column, index) => (
                 <div
-                  key={i}
-                  className={`${col.flex} flex items-center gap-1 ${col.key ? "cursor-pointer select-none" : ""}`}
-                  onClick={() => col.key && toggleSort(col.key)}
+                  key={index}
+                  className={`${column.flex} flex items-center gap-1 ${column.key ? "cursor-pointer select-none" : ""}`}
+                  onClick={() => column.key && toggleSort(column.key)}
                 >
                   <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
-                    {col.label}
+                    {column.label}
                   </span>
-                  {col.key && sortField === col.key && (
+                  {column.key && sortField === column.key && (
                     <ArrowUpDown
                       className="w-3 h-3"
                       style={{
@@ -318,20 +570,32 @@ export default function TasksPageClient({ initialTasks, initialTaskAgents }: Tas
               No tracked tasks yet
             </p>
             <p className="text-sm" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
-              This coordination board is ready, but nothing has been added yet. Once agents or projects start tracking work,
-              task status, priority, owner, and due dates will show up here.
+              This coordination board is ready for real intake now. Create the first task to start tracking owner,
+              board status, priority, project, and due date from Mission Control instead of editing JSON by hand.
             </p>
-            <button
-              onClick={refetch}
-              className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
-              style={{
-                backgroundColor: "var(--surface-elevated)",
-                color: "var(--text-primary)",
-                border: "1px solid var(--border)",
-              }}
-            >
-              Refresh board
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+              <button
+                onClick={() => setShowCreateForm(true)}
+                className="px-4 py-2 text-sm font-semibold rounded-lg transition-colors"
+                style={{
+                  backgroundColor: "var(--accent)",
+                  color: "#000",
+                }}
+              >
+                Create first task
+              </button>
+              <button
+                onClick={refetch}
+                className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
+                style={{
+                  backgroundColor: "var(--surface-elevated)",
+                  color: "var(--text-primary)",
+                  border: "1px solid var(--border)",
+                }}
+              >
+                Refresh board
+              </button>
+            </div>
           </div>
         </div>
       )}

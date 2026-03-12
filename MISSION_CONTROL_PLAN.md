@@ -93,7 +93,15 @@ To avoid fake progress or silent drift:
   - assignee / owner
   - reviewer
   - handoff target
-- **Still missing full create/edit/delete/assign UI.**
+- first true task-intake flow now landed for:
+  - title
+  - status
+  - priority
+  - project
+  - due date
+  - initial owner
+- row actions already support status updates and delete
+- **Still missing broader edit coverage, delete trust polish, dependency tracking, and project linkage.**
 
 #### Projects
 - SSR initial data
@@ -258,6 +266,7 @@ Tasks should clearly show:
 ### Status
 - **Phase 3 kickoff is now active**
 - Files trust/stability pass is complete enough to widen back into Tasks
+- first true Tasks CRUD milestone is now in place through real task creation
 - **Not done at the CRUD/orchestration layer**
 
 ### Exit criteria
@@ -328,9 +337,9 @@ Connect to real OpenClaw execution:
 ## Immediate Priority Queue
 
 ### P0
-1. Start the first true Tasks create/edit/delete flow without breaking the existing routing editor
-2. Deepen Tasks CRUD one honest step at a time (next best candidate: real edit fields beyond routing, or delete confirmation / trust polish if needed)
-3. Start the first real Projects owner/phase editing flow
+1. Deepen Tasks CRUD one honest step at a time (next best candidate: real edit fields beyond routing, or delete confirmation / trust polish if needed)
+2. Start the first real Projects owner/phase editing flow
+3. Make Project ↔ Task linkage visible and editable once Tasks/Projects both have a stable CRUD foothold
 
 ### P1
 4. Strengthen Agents runtime/delegate-matrix clarity without pretending runtime config is more editable than it is
@@ -535,6 +544,21 @@ Connect to real OpenClaw execution:
 - Next:
   - begin Phase 3 with the first true Tasks CRUD milestone, preferably a real create flow that complements the existing routing editor.
 
+### 2026-03-11 18:4x
+- Step: Tasks create-flow kickoff
+- Files:
+  - `src/app/(dashboard)/agents/tasks/TasksPageClient.tsx`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/agents/tasks/TasksPageClient.tsx"`
+  - `npm run build`
+- Commit: current checkpoint commit (`feat(tasks): add first real create flow`)
+- Result:
+  - Tasks now has its first true create flow from the board itself instead of relying on JSON edits.
+  - New tasks can save title, status, priority, project, due date, and initial owner through the existing `/api/agent-tasks` path.
+  - Reviewer and handoff stay in the existing row-level routing editor, which keeps the create scope honest instead of pretending the whole board is fully editable.
+- Next:
+  - either deepen Tasks with the first broader edit/delete trust pass, or move to the first real Projects owner/phase editing milestone if that stays cleaner.
+
 ---
 
 ## How to Update This File
@@ -563,9 +587,9 @@ Suggested template:
 
 ## Current Focus
 
-**Current focus:** Files trust/stability has reached a clean stopping point; immediate attention shifts into Phase 3 starting with the first true Tasks CRUD milestone
+**Current focus:** Files trust/stability is in a good stop state, and Phase 3 is now underway with the first true Tasks CRUD milestone shipped
 
 **Do next:**
 1. keep the new Agents capability profile plus Team reporting-line / review-coverage / delegation flows stable and honest
-2. add the first honest Tasks CRUD milestone, preferably create before widening into broader edit surfaces
+2. deepen Tasks with the next honest CRUD step (broader edit fields and/or delete trust polish) without turning the board into fake full editability
 3. then move to the first real Projects owner/phase editing flow instead of widening into execution automation
