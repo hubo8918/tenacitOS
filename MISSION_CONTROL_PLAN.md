@@ -600,6 +600,21 @@ Connect to real OpenClaw execution:
 - Next:
   - either expose visible project linkage on Tasks, or move to the first real Projects owner/phase editing flow if that lands cleaner.
 
+### 2026-03-11 21:3x
+- Step: Tasks visible project linkage
+- Files:
+  - `src/components/TaskRow.tsx`
+- Validation:
+  - `npx eslint src/components/TaskRow.tsx`
+  - `npm run build`
+- Commit: current checkpoint commit (`feat(tasks): add visible project linkage`)
+- Result:
+  - The Tasks board now treats the project field as a real navigation surface instead of dead text.
+  - Each task row links the visible project name to the Projects page in a new tab and adds a small external-link affordance so the jump reads like navigation, not editing.
+  - This keeps the trust boundary honest: Tasks now exposes project linkage more clearly without pretending Projects already has full CRUD or inline cross-page synchronization.
+- Next:
+  - move to the first real Projects owner/phase editing flow, or add dependency tracking if keeping momentum on Tasks stays cleaner.
+
 ---
 
 ## How to Update This File
@@ -628,9 +643,9 @@ Suggested template:
 
 ## Current Focus
 
-**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation shipped
+**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage shipped
 
 **Do next:**
 1. keep the new Agents capability profile plus Team reporting-line / review-coverage / delegation flows stable and honest
-2. deepen Tasks with the next honest coordination step (visible project linkage or dependency tracking) without turning the board into fake full editability
-3. then move to the first real Projects owner/phase editing flow instead of widening into execution automation
+2. either add Tasks dependency tracking, or move straight to the first real Projects owner/phase editing flow
+3. keep pushing coordination surfaces forward without pretending execution automation already exists

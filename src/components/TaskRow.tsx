@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import type { CSSProperties } from "react";
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal, ExternalLink } from "lucide-react";
 import { taskPriorityConfig, taskStatusConfig, type Task } from "@/data/mockTasksData";
 
 function parseLocalDate(dateString: string) {
@@ -434,9 +434,18 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
         </div>
 
         <div className="flex-[1.5] min-w-0">
-          <span className="text-xs truncate block" style={{ color: "var(--text-muted)" }}>
+          <button
+            type="button"
+            onClick={() => {
+              window.open("/agents/projects", "_blank");
+            }}
+            className="text-xs truncate block text-left hover:underline hover:text-[var(--text-secondary)] transition-colors flex items-center gap-1.5"
+            style={{ color: "var(--text-muted)" }}
+            title={`View all tasks in project: ${task.project}`}
+          >
             {task.project}
-          </span>
+            <ExternalLink className="w-3 h-3 opacity-60 flex-shrink-0" />
+          </button>
         </div>
 
         <div className="flex-[1]">
