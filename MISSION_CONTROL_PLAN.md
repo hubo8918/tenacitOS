@@ -111,7 +111,12 @@ To avoid fake progress or silent drift:
   - delete confirmation
   - explicit backend error handling
   - no silent false-success path for status/delete actions
-- **Still missing dependency tracking and project linkage.**
+- visible project linkage now exists from each task row
+- dependency editing now exists with:
+  - blocker selection
+  - cycle guards
+  - stale/completed blocker cleanup filtering
+- **Still missing richer linked-task/project editing and broader dependency-management UX.**
 
 #### Projects
 - SSR initial data
@@ -698,6 +703,22 @@ Connect to real OpenClaw execution:
 - Next:
   - either add project dependency visibility on Projects, or improve task dependency filtering for stale/completed blockers.
 
+### 2026-03-12 00:5x
+- Step: Tasks stale/completed blocker cleanup filter
+- Files:
+  - `src/components/TaskRow.tsx`
+  - `src/app/api/agent-tasks/route.ts`
+- Validation:
+  - `npx eslint src/components/TaskRow.tsx src/app/api/agent-tasks/route.ts`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(tasks): filter stale blockers from dependency saves`)
+- Result:
+  - The dependency picker now offers unfinished blockers for new selection and keeps completed or missing blockers visible only long enough to clean them up.
+  - Existing stale/completed blockers now trigger explicit cleanup messaging in the Tasks routing editor instead of quietly reading like active blockers.
+  - `/api/agent-tasks` now rejects stale or completed blocker saves, so the backend trust boundary matches the UI.
+- Next:
+  - either add project dependency visibility on Projects, or improve how Tasks surfaces stale blocker cleanup from the main board state.
+
 ---
 
 ## How to Update This File
@@ -730,5 +751,5 @@ Suggested template:
 
 **Do next:**
 1. keep the new Agents capability profile plus Team reporting-line / review-coverage / delegation flows stable and honest
-2. either deepen Projects with dependency visibility, or return to Tasks dependency filtering for stale/completed blockers
+2. either deepen Projects with dependency visibility, or improve how Tasks surfaces stale blocker cleanup from the main board state
 3. keep pushing coordination surfaces forward without pretending execution automation already exists

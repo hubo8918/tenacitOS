@@ -47,6 +47,17 @@ const unassignedAgent: TaskAgentOption = {
   color: "#8E8E93",
 };
 
+interface DependencyOption {
+  id: string;
+  title: string;
+  project: string;
+  statusLabel: string;
+  isSelected: boolean;
+  isCycleCandidate: boolean;
+  isCompleted: boolean;
+  isMissing: boolean;
+}
+
 interface TaskRowProps {
   task: Task;
   agentOptions: TaskAgentOption[];
@@ -101,16 +112,63 @@ export function TaskRow({ task, agentOptions, allTasks, onUpdate }: TaskRowProps
     return nextCycleCandidates;
   }, [allTasks, dependencyMap, task.id]);
 
-  const dependencyCandidates = useMemo(
-    () =>
-      allTasks
-        .filter((candidate) => candidate.id !== task.id)
-        .sort((a, b) => {
-          if (a.project === task.project && b.project !== task.project) return -1;
-          if (a.project !== task.project && b.project === task.project) return 1;
-          return a.title.localeCompare(b.title);
-        }),
-    [allTasks, task.id, task.project]
+  const dependencyOptions = useMemo<DependencyOption[]>(() => {
+    const activeOptions = allTasks
+      .filter((candidate) => candidate.id !== task.id && candidate.status !== "completed")
+      .sort((a, b) => {
+        if (a.project === task.project && b.project !== task.project) return -1;
+        if (a.project !== task.project && b.project === task.project) return 1;
+        return a.title.localeCompare(b.title);
+      })
+      .map((candidate) => ({
+        id: candidate.id,
+        title: candidate.title,
+        project: candidate.project,
+        statusLabel: taskStatusConfig[candidate.status].label,
+        isSelected: blockedByDraft.includes(candidate.id),
+        isCycleCandidate: cycleCandidateIds.has(candidate.id),
+        isCompleted: false,
+        isMissing: false,
+      }));
+
+    const staleSelectedOptions = blockedByDraft.flatMap<DependencyOption>((taskId) => {
+      const candidate = allTasks.find((item) => item.id === taskId);
+
+      if (!candidate) {
+        return [{
+          id: taskId,
+          title: taskId,
+          project: "Unavailable task",
+          statusLabel: "Missing",
+          isSelected: true,
+          isCycleCandidate: false,
+          isCompleted: false,
+          isMissing: true,
+        }];
+      }
+
+      if (candidate.status !== "completed") {
+        return [];
+      }
+
+      return [{
+        id: candidate.id,
+        title: candidate.title,
+        project: candidate.project,
+        statusLabel: taskStatusConfig[candidate.status].label,
+        isSelected: true,
+        isCycleCandidate: false,
+        isCompleted: true,
+        isMissing: false,
+      }];
+    });
+
+    return [...activeOptions, ...staleSelectedOptions];
+  }, [allTasks, blockedByDraft, cycleCandidateIds, task.id, task.project]);
+
+  const staleDependencyOptions = useMemo(
+    () => dependencyOptions.filter((candidate) => candidate.isCompleted || candidate.isMissing),
+    [dependencyOptions]
   );
 
   const blockedByLabels = useMemo(
@@ -354,6 +412,18 @@ export function TaskRow({ task, agentOptions, allTasks, onUpdate }: TaskRowProps
 
     if (blockedByDraft.includes(task.id)) {
       setOwnershipError("A task cannot depend on itself.");
+      return;
+    }
+
+    const missingBlocker = staleDependencyOptions.find((candidate) => candidate.isMissing);
+    if (missingBlocker) {
+      setOwnershipError(`Remove stale blocker \"${missingBlocker.title}\" before saving. It is no longer available on the Tasks board.`);
+      return;
+    }
+
+    const completedBlocker = staleDependencyOptions.find((candidate) => candidate.isCompleted);
+    if (completedBlocker) {
+      setOwnershipError(`Remove completed blocker \"${completedBlocker.title}\" before saving. Finished work should not stay listed as an active blocker.`);
       return;
     }
 
@@ -1016,7 +1086,7 @@ export function TaskRow({ task, agentOptions, allTasks, onUpdate }: TaskRowProps
                       Blocking tasks
                     </p>
                     <p className="mt-1 text-[11px]" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
-                      Pick the tasks that must land before this one can move. Same-project tasks are listed first, and tasks that would create a dependency cycle stay disabled.
+                      Pick the unfinished tasks that still need to land before this one can move. Same-project tasks are listed first, cycle-causing tasks stay disabled, and completed or missing blockers stay visible only when you need to clean them up.
                     </p>
                   </div>
                   <span className="text-[11px] font-medium" style={{ color: "var(--text-muted)" }}>
@@ -1024,27 +1094,54 @@ export function TaskRow({ task, agentOptions, allTasks, onUpdate }: TaskRowProps
                   </span>
                 </div>
 
+                {staleDependencyOptions.length > 0 && (
+                  <div
+                    className="mt-3 rounded-lg px-3 py-2"
+                    style={{
+                      border: "1px solid color-mix(in srgb, #FF9F0A 35%, transparent)",
+                      backgroundColor: "color-mix(in srgb, #FF9F0A 10%, transparent)",
+                    }}
+                  >
+                    <p className="text-[11px] font-semibold" style={{ color: "#FF9F0A" }}>
+                      Cleanup needed before save
+                    </p>
+                    <p className="mt-1 text-[11px]" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+                      Completed or missing blockers are shown below only so you can remove them honestly. Mission Control will not save them as active blockers.
+                    </p>
+                  </div>
+                )}
+
                 <div className="mt-3 grid gap-2 md:grid-cols-2">
-                  {dependencyCandidates.length > 0 ? (
-                    dependencyCandidates.map((candidate) => {
-                      const isChecked = blockedByDraft.includes(candidate.id);
-                      const isCycleCandidate = cycleCandidateIds.has(candidate.id);
-                      const disableSelection = isCycleCandidate && !isChecked;
+                  {dependencyOptions.length > 0 ? (
+                    dependencyOptions.map((candidate) => {
+                      const disableSelection = candidate.isCycleCandidate && !candidate.isSelected;
+                      const borderColor = candidate.isMissing
+                        ? "color-mix(in srgb, var(--status-blocked) 35%, transparent)"
+                        : candidate.isCompleted
+                          ? "color-mix(in srgb, #FF9F0A 35%, transparent)"
+                          : "var(--border)";
+                      const backgroundColor = candidate.isSelected
+                        ? "var(--surface-hover)"
+                        : candidate.isMissing
+                          ? "color-mix(in srgb, var(--status-blocked) 8%, transparent)"
+                          : candidate.isCompleted
+                            ? "color-mix(in srgb, #FF9F0A 8%, transparent)"
+                            : "transparent";
 
                       return (
                         <label
                           key={candidate.id}
                           className="flex items-start gap-2 rounded-lg px-3 py-2"
                           style={{
-                            border: "1px solid var(--border)",
-                            backgroundColor: isChecked ? "var(--surface-hover)" : "transparent",
+                            border: `1px solid ${borderColor}`,
+                            backgroundColor,
                             cursor: disableSelection ? "not-allowed" : "pointer",
                             opacity: disableSelection ? 0.65 : 1,
                           }}
                         >
                           <input
                             type="checkbox"
-                            checked={isChecked}
+                            checked={candidate.isSelected}
                             disabled={disableSelection}
                             onChange={(event) => {
                               setBlockedByDraft((current) =>
@@ -1059,9 +1156,19 @@ export function TaskRow({ task, agentOptions, allTasks, onUpdate }: TaskRowProps
                               {candidate.title}
                             </span>
                             <span className="block text-[11px] truncate" style={{ color: "var(--text-muted)" }}>
-                              {candidate.project} • {taskStatusConfig[candidate.status].label}
+                              {candidate.project} • {candidate.statusLabel}
                             </span>
-                            {isCycleCandidate && (
+                            {candidate.isMissing && (
+                              <span className="block text-[11px] mt-1" style={{ color: "var(--status-blocked)" }}>
+                                This blocker no longer exists in the current task list. Remove it before saving.
+                              </span>
+                            )}
+                            {candidate.isCompleted && (
+                              <span className="block text-[11px] mt-1" style={{ color: "#FF9F0A" }}>
+                                This blocker is already completed. Remove it if this task is no longer actively blocked.
+                              </span>
+                            )}
+                            {candidate.isCycleCandidate && (
                               <span className="block text-[11px] mt-1" style={{ color: "var(--status-blocked)" }}>
                                 Would create a dependency cycle with this task
                               </span>

@@ -64,10 +64,6 @@ function getTaskRoutingValidationError(body: Record<string, unknown>): string | 
 }
 
 function getTaskDependencyValidationError(body: Record<string, unknown>, tasks: AgentTask[]): string | null {
-  if (typeof body.id !== "string") {
-    return null;
-  }
-
   const blockedByTaskIds = getBlockedByTaskIds(body.blockedByTaskIds);
   if (blockedByTaskIds.length === 0) {
     return null;
@@ -76,11 +72,17 @@ function getTaskDependencyValidationError(body: Record<string, unknown>, tasks: 
   const tasksById = new Map(tasks.map((task) => [task.id, task]));
 
   for (const blockedTaskId of blockedByTaskIds) {
-    if (!tasksById.has(blockedTaskId)) {
-      return `Blocking task \"${blockedTaskId}\" was not found.`;
+    const blockedTask = tasksById.get(blockedTaskId);
+
+    if (!blockedTask) {
+      return `Blocking task \"${blockedTaskId}\" was not found. Remove stale blockers before saving.`;
     }
 
-    if (taskDependsOn(blockedTaskId, body.id, tasksById)) {
+    if (blockedTask.status === "completed") {
+      return `Completed task \"${blockedTask.title}\" cannot stay listed as an active blocker.`;
+    }
+
+    if (typeof body.id === "string" && taskDependsOn(blockedTaskId, body.id, tasksById)) {
       return "A task cannot depend on a task that already depends on it.";
     }
   }
@@ -128,6 +130,10 @@ export async function POST(request: NextRequest) {
     }
 
     const tasks = await getAgentTasks();
+    const dependencyValidationError = getTaskDependencyValidationError(body, tasks);
+    if (dependencyValidationError) {
+      return NextResponse.json({ error: dependencyValidationError }, { status: 400 });
+    }
 
     const newTask = normalizeAgentTask({
       id: generateId(tasks),
