@@ -29,6 +29,9 @@ function getTaskRoutingValidationError(body: Record<string, unknown>): string | 
   const assigneeAgentId = asOptionalString(body.assigneeAgentId);
   const reviewerAgentId = asOptionalString(body.reviewerAgentId);
   const handoffToAgentId = asOptionalString(body.handoffToAgentId);
+  const blockedByTaskIds = Array.isArray(body.blockedByTaskIds)
+    ? body.blockedByTaskIds.filter((value): value is string => typeof value === "string" && value.length > 0)
+    : [];
 
   if (assigneeAgentId && reviewerAgentId && assigneeAgentId === reviewerAgentId) {
     return "Reviewer must be different from the owner.";
@@ -36,6 +39,10 @@ function getTaskRoutingValidationError(body: Record<string, unknown>): string | 
 
   if (assigneeAgentId && handoffToAgentId && assigneeAgentId === handoffToAgentId) {
     return "Handoff target must be different from the owner.";
+  }
+
+  if (typeof body.id === "string" && blockedByTaskIds.includes(body.id)) {
+    return "A task cannot depend on itself.";
   }
 
   return null;

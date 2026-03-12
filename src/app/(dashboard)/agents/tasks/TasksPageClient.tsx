@@ -530,7 +530,7 @@ export default function TasksPageClient({ initialTasks, initialTaskAgents }: Tas
 
             {filteredTasks.length > 0 ? (
               filteredTasks.map((task) => (
-                <TaskRow key={task.id} task={task} agentOptions={initialTaskAgents} onUpdate={refetch} />
+                <TaskRow key={task.id} task={task} agentOptions={initialTaskAgents} allTasks={tasks} onUpdate={refetch} />
               ))
             ) : (
               <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">

@@ -41,10 +41,11 @@ const unassignedAgent: TaskAgentOption = {
 interface TaskRowProps {
   task: Task;
   agentOptions: TaskAgentOption[];
+  allTasks: Task[];
   onUpdate?: () => void;
 }
 
-export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
+export function TaskRow({ task, agentOptions, allTasks, onUpdate }: TaskRowProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [editingDetails, setEditingDetails] = useState(false);
   const [savingDetails, setSavingDetails] = useState(false);
@@ -65,14 +66,37 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
   const [assigneeAgentId, setAssigneeAgentId] = useState("");
   const [reviewerAgentId, setReviewerAgentId] = useState("");
   const [handoffToAgentId, setHandoffToAgentId] = useState("");
+  const [blockedByDraft, setBlockedByDraft] = useState<string[]>(task.blockedByTaskIds || []);
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   const status = taskStatusConfig[task.status];
   const priority = taskPriorityConfig[task.priority];
   const isOverdue = isTaskOverdue(task.dueDate) && task.status !== "completed";
-  const blockedByTaskIds = task.blockedByTaskIds || [];
-  const dependencyPreview = blockedByTaskIds.slice(0, 2).join(", ");
+  const blockedByTaskIds = useMemo(() => task.blockedByTaskIds || [], [task.blockedByTaskIds]);
+
+  const dependencyCandidates = useMemo(
+    () =>
+      allTasks
+        .filter((candidate) => candidate.id !== task.id)
+        .sort((a, b) => {
+          if (a.project === task.project && b.project !== task.project) return -1;
+          if (a.project !== task.project && b.project === task.project) return 1;
+          return a.title.localeCompare(b.title);
+        }),
+    [allTasks, task.id, task.project]
+  );
+
+  const blockedByLabels = useMemo(
+    () =>
+      blockedByTaskIds.map((taskId) => {
+        const dependency = allTasks.find((candidate) => candidate.id === taskId);
+        return dependency ? dependency.title : taskId;
+      }),
+    [allTasks, blockedByTaskIds]
+  );
+
+  const dependencyPreview = blockedByLabels.slice(0, 2).join(", ");
 
   const inferredAssigneeAgentId = useMemo(() => {
     if (task.assigneeAgentId) return task.assigneeAgentId;
@@ -129,8 +153,9 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
     setAssigneeAgentId(inferredAssigneeAgentId);
     setReviewerAgentId(task.reviewerAgentId || "");
     setHandoffToAgentId(task.handoffToAgentId || "");
+    setBlockedByDraft(task.blockedByTaskIds || []);
     setOwnershipError(null);
-  }, [inferredAssigneeAgentId, task.reviewerAgentId, task.handoffToAgentId]);
+  }, [inferredAssigneeAgentId, task.blockedByTaskIds, task.reviewerAgentId, task.handoffToAgentId]);
 
   useEffect(() => {
     setActionError(null);
@@ -285,6 +310,7 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
     setAssigneeAgentId(inferredAssigneeAgentId);
     setReviewerAgentId(task.reviewerAgentId || "");
     setHandoffToAgentId(task.handoffToAgentId || "");
+    setBlockedByDraft(task.blockedByTaskIds || []);
     setOwnershipError(null);
     setEditingOwnership(true);
   };
@@ -297,6 +323,11 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
 
     if (assigneeAgentId && handoffToAgentId && assigneeAgentId === handoffToAgentId) {
       setOwnershipError("Handoff target must be different from the owner.");
+      return;
+    }
+
+    if (blockedByDraft.includes(task.id)) {
+      setOwnershipError("A task cannot depend on itself.");
       return;
     }
 
@@ -313,6 +344,7 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
           assigneeAgentId: assigneeAgentId || undefined,
           reviewerAgentId: reviewerAgentId || undefined,
           handoffToAgentId: handoffToAgentId || undefined,
+          blockedByTaskIds: blockedByDraft,
           agent: nextOwner
             ? {
                 id: nextOwner.id,
@@ -330,14 +362,14 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
 
       const payload = (await response.json().catch(() => null)) as { error?: string } | null;
       if (!response.ok) {
-        throw new Error(payload?.error || "Failed to save task routing");
+        throw new Error(payload?.error || "Failed to save task routing and blockers");
       }
 
       setEditingOwnership(false);
       onUpdate?.();
     } catch (err) {
-      console.error("Failed to update task routing:", err);
-      setOwnershipError(err instanceof Error ? err.message : "Failed to save task routing");
+      console.error("Failed to update task routing and blockers:", err);
+      setOwnershipError(err instanceof Error ? err.message : "Failed to save task routing and blockers");
     } finally {
       setSavingOwnership(false);
     }
@@ -406,7 +438,7 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
                 }}
                 className="inline-flex items-center gap-1 hover:underline transition-colors"
                 style={{ color: "var(--text-muted)" }}
-                title={`Blocked by ${blockedByTaskIds.join(", ")}`}
+                title={`Blocked by ${blockedByLabels.join(", ")}`}
               >
                 <span>
                   Blocked by:{" "}
@@ -530,7 +562,7 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
                   e.currentTarget.style.backgroundColor = "transparent";
                 }}
               >
-                Edit ownership & handoff
+                Edit routing & dependencies
               </button>
               <div
                 style={{
@@ -675,7 +707,7 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
                         Dependencies
                       </p>
                       <p className="text-[11px] mb-2" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
-                        This task is currently blocked by {blockedByTaskIds.length} task{blockedByTaskIds.length > 1 ? "s" : ""}: {blockedByTaskIds.join(", ")}.
+                        This task is currently blocked by {blockedByTaskIds.length} task{blockedByTaskIds.length > 1 ? "s" : ""}: {blockedByLabels.join(", ")}.
                       </p>
                       <button
                         type="button"
@@ -883,10 +915,10 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                    Task ownership & handoff
+                    Task routing & dependencies
                   </p>
-                  <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-                    Assign an owner, optional reviewer, and optional handoff target. Reviewer and handoff target should stay distinct from the current owner.
+                  <p className="text-xs mt-1" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+                    Assign an owner, optional reviewer, optional handoff target, and any blocking tasks. Reviewer and handoff target should stay distinct from the current owner.
                   </p>
                 </div>
               </div>
@@ -944,6 +976,64 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
                 </label>
               </div>
 
+              <div className="rounded-xl p-3" style={{ border: "1px solid var(--border)", backgroundColor: "var(--card)" }}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
+                      Blocking tasks
+                    </p>
+                    <p className="mt-1 text-[11px]" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+                      Pick the tasks that must land before this one can move. Same-project tasks are listed first.
+                    </p>
+                  </div>
+                  <span className="text-[11px] font-medium" style={{ color: "var(--text-muted)" }}>
+                    {blockedByDraft.length} selected
+                  </span>
+                </div>
+
+                <div className="mt-3 grid gap-2 md:grid-cols-2">
+                  {dependencyCandidates.length > 0 ? (
+                    dependencyCandidates.map((candidate) => {
+                      const isChecked = blockedByDraft.includes(candidate.id);
+                      return (
+                        <label
+                          key={candidate.id}
+                          className="flex items-start gap-2 rounded-lg px-3 py-2 cursor-pointer"
+                          style={{
+                            border: "1px solid var(--border)",
+                            backgroundColor: isChecked ? "var(--surface-hover)" : "transparent",
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(event) => {
+                              setBlockedByDraft((current) =>
+                                event.target.checked
+                                  ? [...current, candidate.id]
+                                  : current.filter((taskId) => taskId !== candidate.id)
+                              );
+                            }}
+                          />
+                          <span className="min-w-0">
+                            <span className="block text-xs font-semibold truncate" style={{ color: "var(--text-primary)" }}>
+                              {candidate.title}
+                            </span>
+                            <span className="block text-[11px] truncate" style={{ color: "var(--text-muted)" }}>
+                              {candidate.project} • {taskStatusConfig[candidate.status].label}
+                            </span>
+                          </span>
+                        </label>
+                      );
+                    })
+                  ) : (
+                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      No other tasks are available to use as blockers yet.
+                    </p>
+                  )}
+                </div>
+              </div>
+
               {ownershipError && (
                 <p className="text-xs font-medium" style={{ color: "var(--status-blocked)" }}>
                   {ownershipError}
@@ -958,6 +1048,7 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
                     setAssigneeAgentId(inferredAssigneeAgentId);
                     setReviewerAgentId(task.reviewerAgentId || "");
                     setHandoffToAgentId(task.handoffToAgentId || "");
+                    setBlockedByDraft(task.blockedByTaskIds || []);
                   }}
                   className="text-xs px-3 py-1.5 rounded-lg transition-colors"
                   style={{
@@ -977,7 +1068,7 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
                     opacity: savingOwnership ? 0.6 : 1,
                   }}
                 >
-                  {savingOwnership ? "Saving..." : "Save routing"}
+                  {savingOwnership ? "Saving..." : "Save routing & blockers"}
                 </button>
               </div>
             </div>
