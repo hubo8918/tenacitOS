@@ -1111,6 +1111,21 @@ Connect to real OpenClaw execution:
 - Next:
   - keep Project ↔ Task linkage read-only, then reassess the next tight Tasks/Projects trust issue instead of widening into fake cross-page editing.
 
+### 2026-03-12 14:23
+- Step: Projects linked-task preview prioritizes urgent work
+- Files:
+  - `src/components/ProjectCard.tsx`
+- Validation:
+  - `npx eslint src/components/ProjectCard.tsx`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(projects): prioritize urgent linked-task previews`)
+- Result:
+  - Project cards still keep Project ↔ Task linkage read-only, but the visible three-task preview no longer depends on raw task array order.
+  - Blocked and overdue linked tasks now rise to the top of the card preview before less urgent or completed work, so the preview better matches the card's existing blocked/overdue attention summary.
+  - This keeps the Projects linkage summary honest and more actionable without widening into inline task editing.
+- Next:
+  - keep Project ↔ Task linkage read-only, and if the next trust step stays narrow, surface when additional urgent linked tasks still exist beyond the three-row preview.
+
 ---
 
 ## How to Update This File

@@ -41,6 +41,27 @@ function getLinkedTaskAttentionSummary(tasks: Task[]) {
   return { openCount, blockedCount, overdueCount };
 }
 
+function compareLinkedTaskPreviewPriority(a: Task, b: Task) {
+  const getRank = (task: Task) => {
+    if (task.status === "blocked") return 0;
+    if (isTaskOverdue(task.dueDate, task.status)) return 1;
+    if (task.status !== "completed") return 2;
+    return 3;
+  };
+
+  const rankDiff = getRank(a) - getRank(b);
+  if (rankDiff !== 0) {
+    return rankDiff;
+  }
+
+  const dueDateDiff = parseLocalDate(a.dueDate).getTime() - parseLocalDate(b.dueDate).getTime();
+  if (dueDateDiff !== 0) {
+    return dueDateDiff;
+  }
+
+  return a.title.localeCompare(b.title);
+}
+
 function getCurrentPhase(project: Project): ProjectPhase | null {
   return (
     project.phases.find((phase) => phase.status === "in_progress") ||
@@ -129,7 +150,10 @@ export function ProjectCard({
 
     return { resolved, unresolvedIds };
   }, [currentPhase, project.phases]);
-  const visibleLinkedTasks = useMemo(() => linkedTasks.slice(0, 3), [linkedTasks]);
+  const visibleLinkedTasks = useMemo(
+    () => [...linkedTasks].sort(compareLinkedTaskPreviewPriority).slice(0, 3),
+    [linkedTasks]
+  );
   const linkedTaskAttention = useMemo(() => getLinkedTaskAttentionSummary(linkedTasks), [linkedTasks]);
   const projectTasksHref = getProjectTasksHref(project.title);
 
