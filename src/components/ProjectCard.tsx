@@ -66,6 +66,26 @@ export function ProjectCard({ project, teamAgents, onUpdate }: ProjectCardProps)
     [teamAgents, project.participatingAgentIds]
   );
   const participatingCount = project.participatingAgentIds.length;
+  const currentPhaseDependencies = useMemo(() => {
+    if (!currentPhase) {
+      return { resolved: [] as ProjectPhase[], unresolvedIds: [] as string[] };
+    }
+
+    const phaseById = new Map(project.phases.map((phase) => [phase.id, phase]));
+    const resolved: ProjectPhase[] = [];
+    const unresolvedIds: string[] = [];
+
+    for (const phaseId of currentPhase.dependsOnPhaseIds) {
+      const phase = phaseById.get(phaseId);
+      if (phase) {
+        resolved.push(phase);
+      } else {
+        unresolvedIds.push(phaseId);
+      }
+    }
+
+    return { resolved, unresolvedIds };
+  }, [currentPhase, project.phases]);
 
   const resetDraft = () => {
     const nextPhase = getCurrentPhase(project);
@@ -158,7 +178,7 @@ export function ProjectCard({ project, teamAgents, onUpdate }: ProjectCardProps)
                 Project owner and current phase
               </p>
               <p className="text-[11px] mt-1" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
-                This edits planning metadata only. It does not imply Projects already has full operational CRUD or dependency management.
+                This edits planning metadata only. Current phase dependency visibility is read-only here, and Projects still does not have full operational CRUD.
               </p>
             </div>
 
@@ -427,6 +447,63 @@ export function ProjectCard({ project, teamAgents, onUpdate }: ProjectCardProps)
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {currentPhase && currentPhase.dependsOnPhaseIds.length > 0 && (
+          <div
+            className="mb-4 rounded-lg px-3 py-2"
+            style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}
+          >
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <span className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
+                Phase dependencies
+              </span>
+              <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                {currentPhase.dependsOnPhaseIds.length} tracked
+              </span>
+            </div>
+
+            <div className="flex flex-wrap gap-1.5">
+              {currentPhaseDependencies.resolved.map((phase) => {
+                const config = phaseStatusConfig[phase.status];
+                return (
+                  <span
+                    key={phase.id}
+                    className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-medium"
+                    style={{
+                      backgroundColor: `color-mix(in srgb, ${config.color} 12%, transparent)`,
+                      color: config.color,
+                      border: `1px solid color-mix(in srgb, ${config.color} 28%, transparent)`,
+                    }}
+                    title={`${phase.title} (${config.label})`}
+                  >
+                    <span>{phase.title}</span>
+                    <span style={{ color: "var(--text-muted)" }}>{config.label}</span>
+                  </span>
+                );
+              })}
+
+              {currentPhaseDependencies.unresolvedIds.length > 0 && (
+                <span
+                  className="inline-flex items-center rounded-full px-2 py-1 text-[10px] font-medium"
+                  style={{
+                    backgroundColor: "var(--surface-hover)",
+                    color: "var(--text-secondary)",
+                    border: "1px solid var(--border)",
+                  }}
+                  title={currentPhaseDependencies.unresolvedIds.join(", ")}
+                >
+                  {currentPhaseDependencies.unresolvedIds.length} unresolved
+                </span>
+              )}
+            </div>
+
+            {currentPhaseDependencies.unresolvedIds.length > 0 && (
+              <p className="mt-2 text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
+                Some dependency IDs are still stored without a matching phase on this project, so this stays read-only until Projects has a narrower dependency editor.
+              </p>
+            )}
           </div>
         )}
 

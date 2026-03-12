@@ -123,7 +123,8 @@ To avoid fake progress or silent drift:
 - unreadable stored data no longer masquerades as an empty portfolio
 - first owner/current-phase planning editor is now live
 - participating-agent visibility now reads directly on each project card
-- **Still missing full operational CRUD, dependency visibility/editing, and linked-task management.**
+- current-phase dependency visibility now reads directly on each project card
+- **Still missing full operational CRUD, dependency editing, and linked-task management.**
 
 #### Calendar
 - SSR initial task-backed calendar data
@@ -734,6 +735,21 @@ Connect to real OpenClaw execution:
 - Next:
   - either add project dependency visibility on Projects, or widen the Tasks board-level attention summary only if stale blocker cleanup still feels too easy to miss.
 
+### 2026-03-12 01:55
+- Step: Projects phase dependency visibility v1
+- Files:
+  - `src/components/ProjectCard.tsx`
+- Validation:
+  - `npx eslint src/components/ProjectCard.tsx`
+  - `npm run build`
+- Commit: current checkpoint commit (`feat(projects): surface phase dependency visibility`)
+- Result:
+  - Project cards now surface current-phase dependency metadata inline instead of leaving phase blockers hidden in stored fields.
+  - Resolved dependency phases show their current status directly on the card, and unresolved dependency IDs are called out honestly instead of disappearing.
+  - This keeps Projects clearer about sequencing without pretending dependency editing already exists.
+- Next:
+  - either add visible Project ↔ Task linkage from Projects, or add a narrower dependency editor only if the read-only summary proves useful.
+
 ---
 
 ## How to Update This File
@@ -762,9 +778,9 @@ Suggested template:
 
 ## Current Focus
 
-**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, a first Projects owner/phase editor, and participating-agent visibility shipped
+**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, a first Projects owner/phase editor, participating-agent visibility, and current-phase dependency visibility shipped
 
 **Do next:**
 1. keep the new Agents capability profile plus Team reporting-line / review-coverage / delegation flows stable and honest
-2. deepen Projects with dependency visibility, unless another tighter trust issue appears first on Tasks
+2. make Project ↔ Task linkage clearer from Projects, unless a tighter trust issue appears first on Tasks
 3. keep pushing coordination surfaces forward without pretending execution automation already exists
