@@ -273,7 +273,9 @@ export function TaskRow({
     name: task.agent.name,
     color: task.agent.color,
   });
-  const projectFocusHref = `/agents/projects?project=${encodeURIComponent(task.project.trim())}`;
+  const projectFocusHref = task.project.trim()
+    ? `/agents/projects?project=${encodeURIComponent(task.project.trim())}&task=${encodeURIComponent(task.id)}`
+    : `/agents/projects?task=${encodeURIComponent(task.id)}`;
   const projectLabelMismatch = hasProjectTitleMatch === false;
 
   useEffect(() => {

@@ -27,6 +27,7 @@ export default function ProjectsPageClient({
 }: ProjectsPageClientProps) {
   const searchParams = useSearchParams();
   const projectFocus = searchParams.get("project")?.trim() || "";
+  const requestedTaskId = searchParams.get("task")?.trim() || "";
   const normalizedProjectFocus = normalizeProjectLabel(projectFocus);
   const hasInitialProjects = initialProjects.length > 0;
   const { data, loading, error, refetch } = useFetch<{ projects: Project[] }>("/api/projects", {
@@ -45,6 +46,17 @@ export default function ProjectsPageClient({
   const tasks = tasksData?.tasks || [];
   const linkedTasksLoading = tasksLoading && !tasksData && !tasksError;
   const linkedTasksUnavailable = Boolean(tasksError) && !tasksData && !tasksLoading;
+  const requestedTask = requestedTaskId ? tasks.find((task) => task.id === requestedTaskId) || null : null;
+  const requestedTaskStillMatchesFocus = Boolean(
+    requestedTask && projectFocus && normalizeProjectLabel(requestedTask.project) === normalizedProjectFocus
+  );
+  const requestedTaskTasksHref = requestedTask
+    ? requestedTaskStillMatchesFocus
+      ? `/agents/tasks?mismatch=1&task=${encodeURIComponent(requestedTask.id)}`
+      : requestedTask.project.trim()
+        ? `/agents/tasks?project=${encodeURIComponent(requestedTask.project.trim())}&task=${encodeURIComponent(requestedTask.id)}`
+        : `/agents/tasks?task=${encodeURIComponent(requestedTask.id)}`
+    : "/agents/tasks";
   const visibleProjects = normalizedProjectFocus
     ? projects.filter((project) => normalizeProjectLabel(project.title) === normalizedProjectFocus)
     : projects;
@@ -200,7 +212,27 @@ export default function ProjectsPageClient({
             <p className="text-sm" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
               This focus came from a task&apos;s saved project label. Projects stays honest here: if no current project title matches that label exactly, it shows the mismatch instead of pretending it found the right card.
             </p>
+            {requestedTask && (
+              <p className="text-sm" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+                The requested task <span style={{ color: "var(--text-primary)" }}>{requestedTask.title}</span> still owns that saved label, so cleanup stays on Tasks through the existing row-level project-field editor instead of pretending Projects can repair linkage inline.
+              </p>
+            )}
             <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+              <a
+                href={requestedTaskTasksHref}
+                className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
+                style={{
+                  backgroundColor: requestedTask ? "transparent" : "var(--surface-elevated)",
+                  color: requestedTask ? "#FF9F0A" : "var(--text-primary)",
+                  border: requestedTask ? "1px solid color-mix(in srgb, #FF9F0A 28%, transparent)" : "1px solid var(--border)",
+                }}
+              >
+                {requestedTaskStillMatchesFocus
+                  ? "Open requested task in Tasks cleanup view"
+                  : requestedTask
+                    ? "Open requested task in Tasks"
+                    : "Open full Tasks board"}
+              </a>
               <a
                 href="/agents/projects"
                 className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"

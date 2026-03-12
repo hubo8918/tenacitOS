@@ -1095,6 +1095,22 @@ Connect to real OpenClaw execution:
 - Next:
   - keep Project ↔ Task linkage read-only, then reassess the next tight Tasks/Projects trust issue instead of widening into fake cross-page editing.
 
+### 2026-03-12 13:53
+- Step: Projects mismatch-focus recovery handoff
+- Files:
+  - `src/app/(dashboard)/agents/projects/ProjectsPageClient.tsx`
+  - `src/components/TaskRow.tsx`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/agents/projects/ProjectsPageClient.tsx" src/components/TaskRow.tsx`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(projects): preserve requested task in mismatch focus`)
+- Result:
+  - Task-row project links now carry the originating task id into Projects, so an exact-title mismatch focus can stay anchored to the requested task instead of dead-ending on a generic empty state.
+  - When that focused Projects view has no matching card, it now points operators back to the requested task's real Tasks-side cleanup flow instead of pretending Projects can repair linkage inline.
+  - This keeps Project ↔ Task linkage read-only while tightening the recovery path after a Tasks → Projects mismatch handoff.
+- Next:
+  - keep Project ↔ Task linkage read-only, then reassess the next tight Tasks/Projects trust issue instead of widening into fake cross-page editing.
+
 ---
 
 ## How to Update This File
