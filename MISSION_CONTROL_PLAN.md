@@ -632,6 +632,22 @@ Connect to real OpenClaw execution:
 - Next:
   - either deepen Projects with participating-agent or dependency visibility, or return to Tasks for dependency tracking.
 
+### 2026-03-11 22:0x
+- Step: Tasks dependency visibility v1
+- Files:
+  - `src/components/TaskRow.tsx`
+  - `src/data/mockTasksData.ts`
+- Validation:
+  - `npx eslint src/components/TaskRow.tsx src/data/mockTasksData.ts`
+  - `npm run build`
+- Commit: current checkpoint commit (`feat(tasks): expose dependency visibility`)
+- Result:
+  - Tasks now surfaces blocking-task metadata directly on the row instead of leaving dependency state hidden in stored fields.
+  - Blocked tasks show a compact dependency summary inline plus a clear navigation affordance back to the Tasks board.
+  - The status confirmation panel also reflects current dependency context, so blocked work reads more honestly without pretending there is already full dependency management UI.
+- Next:
+  - either turn dependency visibility into a true dependency editor, or deepen Projects with participating-agent / dependency visibility so cross-project coordination becomes more legible.
+
 ---
 
 ## How to Update This File
@@ -660,9 +676,9 @@ Suggested template:
 
 ## Current Focus
 
-**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage plus a first Projects owner/phase editor shipped
+**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + dependency visibility plus a first Projects owner/phase editor shipped
 
 **Do next:**
 1. keep the new Agents capability profile plus Team reporting-line / review-coverage / delegation flows stable and honest
-2. either deepen Projects with participating-agent / dependency visibility, or return to Tasks for dependency tracking
+2. either turn Tasks dependency visibility into a true dependency editor, or deepen Projects with participating-agent / dependency visibility
 3. keep pushing coordination surfaces forward without pretending execution automation already exists

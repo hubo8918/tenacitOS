@@ -9,6 +9,7 @@ export interface Task {
   assigneeAgentId?: string;
   reviewerAgentId?: string;
   handoffToAgentId?: string;
+  blockedByTaskIds?: string[];
 }
 
 export const taskStatusConfig: Record<string, { label: string; color: string }> = {
@@ -132,5 +133,15 @@ export const tasks: Task[] = [
     agent: { emoji: "👔", name: "Henry", color: "#FFD700" },
     project: "Agent Org Infrastructure",
     dueDate: "2026-03-06",
+  },
+  {
+    id: "task-013",
+    title: "Final dashboard polish and accessibility",
+    status: "pending",
+    priority: "high",
+    agent: { emoji: "✨", name: "Pixel", color: "#FF375F" },
+    project: "Mission Control",
+    dueDate: "2026-03-14",
+    blockedByTaskIds: ["task-010"],
   },
 ];

@@ -71,6 +71,8 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
   const status = taskStatusConfig[task.status];
   const priority = taskPriorityConfig[task.priority];
   const isOverdue = isTaskOverdue(task.dueDate) && task.status !== "completed";
+  const blockedByTaskIds = task.blockedByTaskIds || [];
+  const dependencyPreview = blockedByTaskIds.slice(0, 2).join(", ");
 
   const inferredAssigneeAgentId = useMemo(() => {
     if (task.assigneeAgentId) return task.assigneeAgentId;
@@ -395,6 +397,27 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
                 {handoffOption ? `${handoffOption.emoji} ${handoffOption.name}` : "Not set"}
               </span>
             </span>
+            {blockedByTaskIds.length > 0 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.open("/agents/tasks", "_blank");
+                }}
+                className="inline-flex items-center gap-1 hover:underline transition-colors"
+                style={{ color: "var(--text-muted)" }}
+                title={`Blocked by ${blockedByTaskIds.join(", ")}`}
+              >
+                <span>
+                  Blocked by:{" "}
+                  <span style={{ color: status.color, fontWeight: 600 }}>
+                    {dependencyPreview}
+                    {blockedByTaskIds.length > 2 ? ` +${blockedByTaskIds.length - 2}` : ""}
+                  </span>
+                </span>
+                <ExternalLink className="w-3 h-3 opacity-60 flex-shrink-0" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -646,6 +669,37 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
                       This marks the task as {(pendingStatusLabel || taskStatusConfig[confirmingStatus].label).toLowerCase()}. The task ownership and handoff metadata remain unchanged.
                     </p>
                   </div>
+                  {blockedByTaskIds.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold mb-2" style={{ color: "var(--text-primary)" }}>
+                        Dependencies
+                      </p>
+                      <p className="text-[11px] mb-2" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+                        This task is currently blocked by {blockedByTaskIds.length} task{blockedByTaskIds.length > 1 ? "s" : ""}: {blockedByTaskIds.join(", ")}.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowMenu(false);
+                          setConfirmingStatus(null);
+                          window.open("/agents/tasks", "_blank");
+                        }}
+                        className="text-[11px] font-medium px-3 py-1.5 rounded-lg transition-colors"
+                        style={{
+                          color: "var(--text-secondary)",
+                          border: "1px solid var(--border)",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = "var(--surface-hover)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = "transparent";
+                        }}
+                      >
+                        Open Tasks board
+                      </button>
+                    </div>
+                  )}
                   <div className="flex justify-end gap-2">
                     <button
                       onClick={() => {
