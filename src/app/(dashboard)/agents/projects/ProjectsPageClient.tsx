@@ -48,6 +48,31 @@ export default function ProjectsPageClient({
   const visibleProjects = normalizedProjectFocus
     ? projects.filter((project) => normalizeProjectLabel(project.title) === normalizedProjectFocus)
     : projects;
+  const normalizedProjectTitles = new Set(projects.map((project) => normalizeProjectLabel(project.title)));
+  const taskProjectLabelMismatchTasks = tasks.filter((task) => {
+    const trimmedProject = task.project.trim();
+    return Boolean(trimmedProject) && !normalizedProjectTitles.has(normalizeProjectLabel(trimmedProject));
+  });
+  const taskProjectLabelMismatchPreview = (() => {
+    if (taskProjectLabelMismatchTasks.length === 0) {
+      return "";
+    }
+
+    const labelCounts = new Map<string, number>();
+    taskProjectLabelMismatchTasks.forEach((task) => {
+      const trimmedProject = task.project.trim();
+      labelCounts.set(trimmedProject, (labelCounts.get(trimmedProject) || 0) + 1);
+    });
+
+    const topLabels = Array.from(labelCounts.entries())
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 2)
+      .map(([label]) => label);
+    const remainingLabelCount = labelCounts.size - topLabels.length;
+
+    return `${topLabels.join(", ")}${remainingLabelCount > 0 ? ` +${remainingLabelCount} more` : ""}`;
+  })();
+  const showTaskProjectMismatchSummary = !projectFocus && !linkedTasksLoading && !linkedTasksUnavailable && taskProjectLabelMismatchTasks.length > 0;
 
   const activeCount = visibleProjects.filter((p) => p.status === "active").length;
   const planningCount = visibleProjects.filter((p) => p.status === "planning").length;
@@ -123,6 +148,35 @@ export default function ProjectsPageClient({
             }}
           >
             Clear focus
+          </a>
+        </div>
+      )}
+
+      {showTaskProjectMismatchSummary && (
+        <div
+          className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2 text-xs"
+          style={{
+            backgroundColor: "var(--surface-elevated)",
+            border: "1px solid var(--border)",
+          }}
+        >
+          <div className="space-y-1">
+            <p className="font-semibold" style={{ color: "#FFD60A" }}>
+              Task ↔ Project label drift needs cleanup
+            </p>
+            <p style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
+              {taskProjectLabelMismatchTasks.length} task project label mismatch{taskProjectLabelMismatchTasks.length === 1 ? "" : "es"} currently do not map to an exact Projects title ({taskProjectLabelMismatchPreview}). Projects stays read-only here instead of pretending those tasks are linked.
+            </p>
+          </div>
+          <a
+            href="/agents/tasks?mismatch=1"
+            className="rounded-full px-3 py-1 font-medium"
+            style={{
+              color: "#FFD60A",
+              border: "1px solid color-mix(in srgb, #FFD60A 32%, transparent)",
+            }}
+          >
+            Open mismatch-only Tasks view
           </a>
         </div>
       )}

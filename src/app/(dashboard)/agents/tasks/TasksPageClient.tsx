@@ -68,6 +68,7 @@ export default function TasksPageClient({
 }: TasksPageClientProps) {
   const searchParams = useSearchParams();
   const projectFocus = searchParams.get("project")?.trim() || "";
+  const mismatchOnlyRequested = searchParams.get("mismatch") === "1";
   const normalizedProjectFocus = normalizeProjectLabel(projectFocus);
   const hasInitialTasks = initialTasks.length > 0;
   const { data, loading, error, refetch } = useFetch<{ tasks: Task[] }>("/api/agent-tasks", {
@@ -87,7 +88,7 @@ export default function TasksPageClient({
   const canCheckProjectMatches = Boolean(projectsData);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [showMismatchOnly, setShowMismatchOnly] = useState(false);
+  const [showMismatchOnly, setShowMismatchOnly] = useState(mismatchOnlyRequested);
   const [jumpToFirstMismatchPending, setJumpToFirstMismatchPending] = useState(false);
   const [sortField, setSortField] = useState<SortField>("status");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -207,9 +208,12 @@ export default function TasksPageClient({
   };
 
   useEffect(() => {
-    setShowMismatchOnly(false);
+    setShowMismatchOnly(mismatchOnlyRequested);
     setJumpToFirstMismatchPending(false);
-  }, [normalizedProjectFocus]);
+    if (mismatchOnlyRequested) {
+      setStatusFilter("all");
+    }
+  }, [mismatchOnlyRequested, normalizedProjectFocus]);
 
   useEffect(() => {
     if (showMismatchOnly && projectLabelMismatchCount === 0) {
