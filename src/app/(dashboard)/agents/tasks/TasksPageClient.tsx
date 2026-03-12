@@ -87,6 +87,7 @@ export default function TasksPageClient({
   const canCheckProjectMatches = Boolean(projectsData);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [showMismatchOnly, setShowMismatchOnly] = useState(false);
   const [sortField, setSortField] = useState<SortField>("status");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -117,6 +118,10 @@ export default function TasksPageClient({
     });
   }, [canCheckProjectMatches, normalizedProjectTitles, scopedTasks]);
   const projectLabelMismatchCount = projectLabelMismatchTasks.length;
+  const projectLabelMismatchTaskIds = useMemo(
+    () => new Set(projectLabelMismatchTasks.map((task) => task.id)),
+    [projectLabelMismatchTasks]
+  );
   const projectLabelMismatchPreview = useMemo(() => {
     if (projectLabelMismatchTasks.length === 0) {
       return "";
@@ -140,7 +145,9 @@ export default function TasksPageClient({
   const focusedProjectTaskCount = scopedTasks.length;
 
   const filteredTasks = useMemo(() => {
-    const filtered = statusFilter === "all" ? [...scopedTasks] : scopedTasks.filter((task) => task.status === statusFilter);
+    const filtered = (statusFilter === "all" ? [...scopedTasks] : scopedTasks.filter((task) => task.status === statusFilter)).filter(
+      (task) => !showMismatchOnly || projectLabelMismatchTaskIds.has(task.id)
+    );
 
     filtered.sort((a, b) => {
       let cmp = 0;
@@ -166,7 +173,7 @@ export default function TasksPageClient({
     });
 
     return filtered;
-  }, [scopedTasks, statusFilter, sortField, sortDir]);
+  }, [projectLabelMismatchTaskIds, scopedTasks, showMismatchOnly, sortDir, sortField, statusFilter]);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
@@ -176,6 +183,26 @@ export default function TasksPageClient({
       setSortDir("asc");
     }
   };
+
+  const handleToggleMismatchOnly = () => {
+    setShowMismatchOnly((current) => {
+      const next = !current;
+      if (next) {
+        setStatusFilter("all");
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    setShowMismatchOnly(false);
+  }, [normalizedProjectFocus]);
+
+  useEffect(() => {
+    if (showMismatchOnly && projectLabelMismatchCount === 0) {
+      setShowMismatchOnly(false);
+    }
+  }, [projectLabelMismatchCount, showMismatchOnly]);
 
   useEffect(() => {
     if (!showCreateForm) {
@@ -577,6 +604,18 @@ export default function TasksPageClient({
               <span style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
                 {projectLabelMismatchPreview} Clean them up from the affected task rows so focused Projects navigation stays honest.
               </span>
+              <button
+                type="button"
+                onClick={handleToggleMismatchOnly}
+                className="rounded-full px-3 py-1 font-semibold transition-colors"
+                style={{
+                  color: showMismatchOnly ? "#111" : "#FFD60A",
+                  backgroundColor: showMismatchOnly ? "#FFD60A" : "transparent",
+                  border: "1px solid color-mix(in srgb, #FFD60A 36%, transparent)",
+                }}
+              >
+                {showMismatchOnly ? "Show all visible tasks" : "Show mismatches only"}
+              </button>
             </>
           )}
         </div>
@@ -584,7 +623,7 @@ export default function TasksPageClient({
 
       {hasAnyTasks ? (
         <>
-          <div className="flex flex-wrap gap-2 mb-6">
+          <div className="mb-6 flex flex-wrap gap-2">
             {filterButtons.map((button) => {
               const isActive = statusFilter === button.key;
               const statusColor = button.key !== "all" ? taskStatusConfig[button.key]?.color : undefined;
@@ -611,6 +650,20 @@ export default function TasksPageClient({
                 </button>
               );
             })}
+            {showMismatchOnly && (
+              <button
+                type="button"
+                onClick={handleToggleMismatchOnly}
+                className="text-xs font-semibold px-3 py-1.5 rounded-full transition-all duration-150"
+                style={{
+                  backgroundColor: "color-mix(in srgb, #FFD60A 18%, transparent)",
+                  color: "#FFD60A",
+                  border: "1px solid color-mix(in srgb, #FFD60A 34%, transparent)",
+                }}
+              >
+                Mismatches only ({projectLabelMismatchCount})
+              </button>
+            )}
           </div>
 
           <div
@@ -664,14 +717,22 @@ export default function TasksPageClient({
               <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
                 <div className="space-y-1">
                   <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                    {projectFocus && !hasFocusedTasks ? `No tasks linked to ${projectFocus} yet` : `No ${activeFilterLabel.toLowerCase()} tasks right now`}
+                    {showMismatchOnly
+                      ? "No project label mismatches in this view"
+                      : projectFocus && !hasFocusedTasks
+                        ? `No tasks linked to ${projectFocus} yet`
+                        : `No ${activeFilterLabel.toLowerCase()} tasks right now`}
                   </p>
                   <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                    {projectFocus
-                      ? hasFocusedTasks
-                        ? `The ${projectFocus} focus is active, and the current status filter is not showing any matching tasks.`
-                        : `This project focus is active, but no task currently carries the ${projectFocus} project label from the Tasks board yet.`
-                      : `The board still has ${tasks.length} tracked task${tasks.length === 1 ? "" : "s"}; this filter just is not showing any of them.`}
+                    {showMismatchOnly
+                      ? projectFocus
+                        ? `Every visible task in the ${projectFocus} focus currently matches an exact Projects title, so there is no label drift to clean up here.`
+                        : "Every visible task currently matches an exact Projects title, so the mismatch-only filter has nothing left to show."
+                      : projectFocus
+                        ? hasFocusedTasks
+                          ? `The ${projectFocus} focus is active, and the current status filter is not showing any matching tasks.`
+                          : `This project focus is active, but no task currently carries the ${projectFocus} project label from the Tasks board yet.`
+                        : `The board still has ${tasks.length} tracked task${tasks.length === 1 ? "" : "s"}; this filter just is not showing any of them.`}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center justify-center gap-2">
@@ -686,6 +747,20 @@ export default function TasksPageClient({
                   >
                     Show all statuses
                   </button>
+                  {showMismatchOnly && (
+                    <button
+                      type="button"
+                      onClick={handleToggleMismatchOnly}
+                      className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
+                      style={{
+                        backgroundColor: "transparent",
+                        color: "#FFD60A",
+                        border: "1px solid color-mix(in srgb, #FFD60A 34%, transparent)",
+                      }}
+                    >
+                      Show all visible tasks
+                    </button>
+                  )}
                   {projectFocus && (
                     <button
                       onClick={() => {
