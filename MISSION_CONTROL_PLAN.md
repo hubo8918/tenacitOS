@@ -615,6 +615,23 @@ Connect to real OpenClaw execution:
 - Next:
   - move to the first real Projects owner/phase editing flow, or add dependency tracking if keeping momentum on Tasks stays cleaner.
 
+### 2026-03-11 21:5x
+- Step: Projects owner/phase editing flow v1
+- Files:
+  - `src/app/(dashboard)/agents/projects/page.tsx`
+  - `src/app/(dashboard)/agents/projects/ProjectsPageClient.tsx`
+  - `src/components/ProjectCard.tsx`
+- Validation:
+  - `npx eslint src/components/ProjectCard.tsx "src/app/(dashboard)/agents/projects/ProjectsPageClient.tsx" "src/app/(dashboard)/agents/projects/page.tsx"`
+  - `npm run build`
+- Commit: current checkpoint commit (`feat(projects): add owner and phase editing flow`)
+- Result:
+  - Projects now exposes a first real planning editor for project owner and current phase metadata instead of only a generic status/progress tweak box.
+  - Project cards now show owner and current-phase summaries inline, so the saved planning metadata is visible without opening the editor.
+  - The edit flow uses real team options, updates the stored owner/phase metadata through `/api/projects`, and surfaces backend save errors instead of silently assuming success.
+- Next:
+  - either deepen Projects with participating-agent or dependency visibility, or return to Tasks for dependency tracking.
+
 ---
 
 ## How to Update This File
@@ -643,9 +660,9 @@ Suggested template:
 
 ## Current Focus
 
-**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage shipped
+**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage plus a first Projects owner/phase editor shipped
 
 **Do next:**
 1. keep the new Agents capability profile plus Team reporting-line / review-coverage / delegation flows stable and honest
-2. either add Tasks dependency tracking, or move straight to the first real Projects owner/phase editing flow
+2. either deepen Projects with participating-agent / dependency visibility, or return to Tasks for dependency tracking
 3. keep pushing coordination surfaces forward without pretending execution automation already exists

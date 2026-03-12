@@ -1,62 +1,127 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { priorityConfig, statusConfig, type Project, type ProjectPhase } from "@/data/mockProjectsData";
+import type { TeamAgent } from "@/data/mockTeamData";
 
-interface Project {
-  id: string;
-  title: string;
-  description: string;
-  status: "active" | "planning" | "paused" | "completed";
-  progress: number;
-  priority: "high" | "medium" | "low";
-  agent: { emoji: string; name: string; color: string };
-  updatedAgo: string;
-  updatedBy: string;
-}
-
-const statusConfig: Record<string, { label: string; color: string }> = {
-  active: { label: "Active", color: "#32D74B" },
-  planning: { label: "Planning", color: "#0A84FF" },
-  paused: { label: "Paused", color: "#FFD60A" },
+const phaseStatusConfig: Record<ProjectPhase["status"], { label: string; color: string }> = {
+  pending: { label: "Pending", color: "#FFD60A" },
+  in_progress: { label: "In Progress", color: "#0A84FF" },
+  blocked: { label: "Blocked", color: "#FF453A" },
   completed: { label: "Completed", color: "#8E8E93" },
 };
 
-const priorityConfig: Record<string, { label: string; color: string }> = {
-  high: { label: "high", color: "#FF453A" },
-  medium: { label: "medium", color: "#FF9F0A" },
-  low: { label: "low", color: "#0A84FF" },
-};
+const projectStatusOptions: Project["status"][] = ["active", "planning", "paused", "completed"];
+const phaseStatusOptions: ProjectPhase["status"][] = ["pending", "in_progress", "blocked", "completed"];
 
-const statusOptions: Project["status"][] = ["active", "planning", "paused", "completed"];
+const unassignedAgent = { emoji: "👤", name: "Unassigned", color: "#8E8E93" };
+
+function getCurrentPhase(project: Project): ProjectPhase | null {
+  return (
+    project.phases.find((phase) => phase.status === "in_progress") ||
+    project.phases.find((phase) => phase.status === "blocked") ||
+    project.phases.find((phase) => phase.status === "pending") ||
+    project.phases[0] ||
+    null
+  );
+}
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
 
 interface ProjectCardProps {
   project: Project;
+  teamAgents: TeamAgent[];
   onUpdate?: () => void;
 }
 
-export function ProjectCard({ project, onUpdate }: ProjectCardProps) {
+export function ProjectCard({ project, teamAgents, onUpdate }: ProjectCardProps) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [editStatus, setEditStatus] = useState(project.status);
   const [editProgress, setEditProgress] = useState(project.progress);
+  const [editOwnerAgentId, setEditOwnerAgentId] = useState(project.ownerAgentId || "");
+  const currentPhase = useMemo(() => getCurrentPhase(project), [project]);
+  const [editPhaseTitle, setEditPhaseTitle] = useState(currentPhase?.title || "");
+  const [editPhaseStatus, setEditPhaseStatus] = useState<ProjectPhase["status"]>(currentPhase?.status || "pending");
+
   const status = statusConfig[project.status];
   const priority = priorityConfig[project.priority];
+  const currentPhaseStatus = currentPhase ? phaseStatusConfig[currentPhase.status] : null;
+  const owner = useMemo(() => teamAgents.find((agent) => agent.id === project.ownerAgentId) || null, [teamAgents, project.ownerAgentId]);
+  const displayOwner = owner
+    ? { emoji: owner.emoji, name: owner.name, color: owner.color }
+    : project.ownerAgentId
+      ? project.agent
+      : unassignedAgent;
+
+  const resetDraft = () => {
+    const nextPhase = getCurrentPhase(project);
+    setEditStatus(project.status);
+    setEditProgress(project.progress);
+    setEditOwnerAgentId(project.ownerAgentId || "");
+    setEditPhaseTitle(nextPhase?.title || "");
+    setEditPhaseStatus(nextPhase?.status || "pending");
+    setSaveError(null);
+  };
 
   async function handleSave() {
+    if (saving) return;
+
     setSaving(true);
+    setSaveError(null);
+
+    const trimmedPhaseTitle = editPhaseTitle.trim();
+    const selectedOwner = teamAgents.find((agent) => agent.id === editOwnerAgentId);
+
+    let nextPhases = project.phases;
+    if (trimmedPhaseTitle) {
+      const nextPhase: ProjectPhase = {
+        id: currentPhase?.id || `${project.id}-${slugify(trimmedPhaseTitle || "phase")}`,
+        title: trimmedPhaseTitle,
+        status: editPhaseStatus,
+        ownerAgentId: editOwnerAgentId || undefined,
+        dependsOnPhaseIds: currentPhase?.dependsOnPhaseIds || [],
+      };
+
+      nextPhases = currentPhase
+        ? project.phases.map((phase) => (phase.id === currentPhase.id ? { ...phase, ...nextPhase } : phase))
+        : [nextPhase, ...project.phases];
+    }
+
     try {
-      await fetch("/api/projects", {
+      const response = await fetch("/api/projects", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: project.id,
           status: editStatus,
           progress: editProgress,
+          ownerAgentId: editOwnerAgentId || null,
+          agent: selectedOwner
+            ? { emoji: selectedOwner.emoji, name: selectedOwner.name, color: selectedOwner.color }
+            : unassignedAgent,
+          phases: nextPhases,
           updatedAgo: "just now",
+          updatedBy: "Mission Control",
         }),
       });
+
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to update project");
+      }
+
       onUpdate?.();
       setEditing(false);
+    } catch (error) {
+      console.error("Failed to update project:", error);
+      setSaveError(error instanceof Error ? error.message : "Failed to update project");
     } finally {
       setSaving(false);
     }
@@ -79,32 +144,114 @@ export function ProjectCard({ project, onUpdate }: ProjectCardProps) {
       }}
     >
       <div className="p-4 md:p-5">
-        {/* Edit overlay */}
         {editing && (
           <div className="mb-4 p-3 rounded-lg" style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
             <div className="mb-3">
-              <label className="text-[10px] font-bold uppercase tracking-wider block mb-1" style={{ color: "var(--text-muted)" }}>Status</label>
-              <div className="flex gap-1.5">
-                {statusOptions.map((s) => {
-                  const sc = statusConfig[s];
-                  const isActive = editStatus === s;
+              <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
+                Project owner and current phase
+              </p>
+              <p className="text-[11px] mt-1" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                This edits planning metadata only. It does not imply Projects already has full operational CRUD or dependency management.
+              </p>
+            </div>
+
+            <div className="mb-3">
+              <label className="text-[10px] font-bold uppercase tracking-wider block mb-1" style={{ color: "var(--text-muted)" }}>
+                Owner
+              </label>
+              <select
+                value={editOwnerAgentId}
+                onChange={(e) => setEditOwnerAgentId(e.target.value)}
+                className="w-full rounded-lg px-3 py-2 text-sm"
+                style={{
+                  backgroundColor: "var(--card)",
+                  color: "var(--text-primary)",
+                  border: "1px solid var(--border)",
+                }}
+              >
+                <option value="">Unassigned</option>
+                {teamAgents.map((agent) => (
+                  <option key={agent.id} value={agent.id}>
+                    {agent.emoji} {agent.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="mb-3">
+              <label className="text-[10px] font-bold uppercase tracking-wider block mb-1" style={{ color: "var(--text-muted)" }}>
+                Current phase
+              </label>
+              <input
+                value={editPhaseTitle}
+                onChange={(e) => setEditPhaseTitle(e.target.value)}
+                placeholder="e.g. API stabilization"
+                className="w-full rounded-lg px-3 py-2 text-sm"
+                style={{
+                  backgroundColor: "var(--card)",
+                  color: "var(--text-primary)",
+                  border: "1px solid var(--border)",
+                }}
+              />
+              <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>
+                Leave blank to keep the current phase list unchanged.
+              </p>
+            </div>
+
+            <div className="mb-3">
+              <label className="text-[10px] font-bold uppercase tracking-wider block mb-1" style={{ color: "var(--text-muted)" }}>
+                Phase status
+              </label>
+              <div className="flex gap-1.5 flex-wrap">
+                {phaseStatusOptions.map((phaseStatus) => {
+                  const config = phaseStatusConfig[phaseStatus];
+                  const isActive = editPhaseStatus === phaseStatus;
                   return (
                     <button
-                      key={s}
-                      onClick={() => setEditStatus(s)}
+                      key={phaseStatus}
+                      type="button"
+                      onClick={() => setEditPhaseStatus(phaseStatus)}
                       className="text-[10px] font-bold px-2 py-1 rounded-full transition-all"
                       style={{
-                        backgroundColor: isActive ? `color-mix(in srgb, ${sc.color} 25%, transparent)` : "transparent",
-                        color: isActive ? sc.color : "var(--text-muted)",
-                        border: `1px solid ${isActive ? sc.color : "var(--border)"}`,
+                        backgroundColor: isActive ? `color-mix(in srgb, ${config.color} 25%, transparent)` : "transparent",
+                        color: isActive ? config.color : "var(--text-muted)",
+                        border: `1px solid ${isActive ? config.color : "var(--border)"}`,
                       }}
                     >
-                      {sc.label}
+                      {config.label}
                     </button>
                   );
                 })}
               </div>
             </div>
+
+            <div className="mb-3">
+              <label className="text-[10px] font-bold uppercase tracking-wider block mb-1" style={{ color: "var(--text-muted)" }}>
+                Status
+              </label>
+              <div className="flex gap-1.5 flex-wrap">
+                {projectStatusOptions.map((projectStatus) => {
+                  const config = statusConfig[projectStatus];
+                  const isActive = editStatus === projectStatus;
+                  return (
+                    <button
+                      key={projectStatus}
+                      type="button"
+                      onClick={() => setEditStatus(projectStatus)}
+                      className="text-[10px] font-bold px-2 py-1 rounded-full transition-all"
+                      style={{
+                        backgroundColor: isActive ? `color-mix(in srgb, ${config.color} 25%, transparent)` : "transparent",
+                        color: isActive ? config.color : "var(--text-muted)",
+                        border: `1px solid ${isActive ? config.color : "var(--border)"}`,
+                      }}
+                    >
+                      {config.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="mb-3">
               <label className="text-[10px] font-bold uppercase tracking-wider block mb-1" style={{ color: "var(--text-muted)" }}>
                 Progress: {editProgress}%
@@ -119,15 +266,27 @@ export function ProjectCard({ project, onUpdate }: ProjectCardProps) {
                 style={{ accentColor: statusConfig[editStatus].color }}
               />
             </div>
+
+            {saveError && (
+              <p className="text-xs mb-3" style={{ color: "var(--text-error, #ef4444)" }}>
+                {saveError}
+              </p>
+            )}
+
             <div className="flex gap-2 justify-end">
               <button
-                onClick={() => setEditing(false)}
+                type="button"
+                onClick={() => {
+                  resetDraft();
+                  setEditing(false);
+                }}
                 className="text-xs px-3 py-1 rounded-lg"
                 style={{ color: "var(--text-muted)", border: "1px solid var(--border)" }}
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleSave}
                 disabled={saving}
                 className="text-xs px-3 py-1 rounded-lg font-medium"
@@ -139,7 +298,6 @@ export function ProjectCard({ project, onUpdate }: ProjectCardProps) {
           </div>
         )}
 
-        {/* Title + Status Badge */}
         <div className="flex items-start justify-between gap-3 mb-2">
           <h3
             className="text-base font-bold truncate"
@@ -162,28 +320,72 @@ export function ProjectCard({ project, onUpdate }: ProjectCardProps) {
           </span>
         </div>
 
-        {/* Description */}
-        <p
-          className="text-sm mb-4 line-clamp-2"
-          style={{ color: "var(--text-secondary)" }}
-        >
+        <p className="text-sm mb-4 line-clamp-2" style={{ color: "var(--text-secondary)" }}>
           {project.description}
         </p>
 
-        {/* Progress Bar */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+          <div
+            className="rounded-lg px-3 py-2"
+            style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}
+          >
+            <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>
+              Owner
+            </p>
+            <div className="flex items-center gap-2 min-w-0">
+              <div
+                className="w-6 h-6 rounded-full flex items-center justify-center text-xs flex-shrink-0"
+                style={{
+                  backgroundColor: `${displayOwner.color}20`,
+                  border: `1.5px solid ${displayOwner.color}40`,
+                }}
+              >
+                {displayOwner.emoji}
+              </div>
+              <span className="text-xs font-medium truncate" style={{ color: "var(--text-secondary)" }}>
+                {displayOwner.name}
+              </span>
+            </div>
+          </div>
+
+          <div
+            className="rounded-lg px-3 py-2"
+            style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}
+          >
+            <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>
+              Current phase
+            </p>
+            {currentPhase ? (
+              <div className="min-w-0">
+                <p className="text-xs font-medium truncate" style={{ color: "var(--text-secondary)" }}>
+                  {currentPhase.title}
+                </p>
+                <span
+                  className="inline-flex mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                  style={{
+                    backgroundColor: `color-mix(in srgb, ${currentPhaseStatus?.color || "#8E8E93"} 15%, transparent)`,
+                    color: currentPhaseStatus?.color || "#8E8E93",
+                    border: `1px solid color-mix(in srgb, ${currentPhaseStatus?.color || "#8E8E93"} 30%, transparent)`,
+                  }}
+                >
+                  {currentPhaseStatus?.label || "Unknown"}
+                </span>
+              </div>
+            ) : (
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                No phase set yet
+              </p>
+            )}
+          </div>
+        </div>
+
         <div className="mb-4">
           <div className="flex items-center justify-between mb-1.5">
-            <span
-              className="text-xs font-semibold"
-              style={{ color: status.color }}
-            >
+            <span className="text-xs font-semibold" style={{ color: status.color }}>
               {project.progress}%
             </span>
           </div>
-          <div
-            className="h-2 rounded-full overflow-hidden"
-            style={{ backgroundColor: "var(--surface-elevated)" }}
-          >
+          <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: "var(--surface-elevated)" }}>
             <div
               className="h-full rounded-full transition-all duration-500 ease-out"
               style={{
@@ -195,37 +397,12 @@ export function ProjectCard({ project, onUpdate }: ProjectCardProps) {
           </div>
         </div>
 
-        {/* Footer: Agent + Updated + Priority */}
-        <div className="flex items-center justify-between">
-          {/* Agent */}
-          <div className="flex items-center gap-2">
-            <div
-              className="w-6 h-6 rounded-full flex items-center justify-center text-xs"
-              style={{
-                backgroundColor: `${project.agent.color}20`,
-                border: `1.5px solid ${project.agent.color}40`,
-              }}
-            >
-              {project.agent.emoji}
-            </div>
-            <span
-              className="text-xs font-medium"
-              style={{ color: "var(--text-secondary)" }}
-            >
-              {project.agent.name}
-            </span>
-          </div>
-
-          {/* Updated */}
-          <span
-            className="text-[10px]"
-            style={{ color: "var(--text-muted)" }}
-          >
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
             {project.updatedAgo}
             {project.updatedBy ? ` by ${project.updatedBy}` : ""}
           </span>
 
-          {/* Priority */}
           <span
             className="text-[10px] font-bold px-2 py-0.5 rounded"
             style={{
@@ -237,16 +414,23 @@ export function ProjectCard({ project, onUpdate }: ProjectCardProps) {
           </span>
         </div>
 
-        {/* Edit button */}
         {!editing && (
           <button
-            onClick={() => { setEditStatus(project.status); setEditProgress(project.progress); setEditing(true); }}
+            type="button"
+            onClick={() => {
+              resetDraft();
+              setEditing(true);
+            }}
             className="mt-3 w-full text-[10px] font-medium py-1.5 rounded-lg transition-colors"
             style={{ color: "var(--text-muted)", border: "1px solid var(--border)" }}
-            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--surface-hover)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = "var(--surface-hover)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = "transparent";
+            }}
           >
-            Edit Project
+            Edit owner / phase
           </button>
         )}
       </div>

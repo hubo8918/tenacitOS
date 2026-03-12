@@ -3,13 +3,15 @@
 import { FolderKanban } from "lucide-react";
 import { ProjectCard } from "@/components/ProjectCard";
 import type { Project } from "@/data/mockProjectsData";
+import type { TeamAgent } from "@/data/mockTeamData";
 import { useFetch } from "@/lib/useFetch";
 
 interface ProjectsPageClientProps {
   initialProjects: Project[];
+  initialTeam: TeamAgent[];
 }
 
-export default function ProjectsPageClient({ initialProjects }: ProjectsPageClientProps) {
+export default function ProjectsPageClient({ initialProjects, initialTeam }: ProjectsPageClientProps) {
   const hasInitialProjects = initialProjects.length > 0;
   const { data, loading, error, refetch } = useFetch<{ projects: Project[] }>("/api/projects", {
     initialData: hasInitialProjects ? { projects: initialProjects } : null,
@@ -68,7 +70,7 @@ export default function ProjectsPageClient({ initialProjects }: ProjectsPageClie
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
         {projects.map((project) => (
-          <ProjectCard key={project.id} project={project} onUpdate={refetch} />
+          <ProjectCard key={project.id} project={project} teamAgents={initialTeam} onUpdate={refetch} />
         ))}
       </div>
     </div>
