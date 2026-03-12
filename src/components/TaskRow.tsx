@@ -171,16 +171,71 @@ export function TaskRow({ task, agentOptions, allTasks, onUpdate }: TaskRowProps
     [dependencyOptions]
   );
 
-  const blockedByLabels = useMemo(
+  const blockedByDetails = useMemo(
     () =>
       blockedByTaskIds.map((taskId) => {
         const dependency = allTasks.find((candidate) => candidate.id === taskId);
-        return dependency ? dependency.title : taskId;
+
+        if (!dependency) {
+          return {
+            id: taskId,
+            title: taskId,
+            statusLabel: "Missing",
+            isCompleted: false,
+            isMissing: true,
+          };
+        }
+
+        return {
+          id: dependency.id,
+          title: dependency.title,
+          statusLabel: taskStatusConfig[dependency.status].label,
+          isCompleted: dependency.status === "completed",
+          isMissing: false,
+        };
       }),
     [allTasks, blockedByTaskIds]
   );
 
+  const blockedByLabels = useMemo(() => blockedByDetails.map((dependency) => dependency.title), [blockedByDetails]);
+  const staleBlockedByDetails = useMemo(
+    () => blockedByDetails.filter((dependency) => dependency.isCompleted || dependency.isMissing),
+    [blockedByDetails]
+  );
+  const missingBlockedByCount = staleBlockedByDetails.filter((dependency) => dependency.isMissing).length;
+  const completedBlockedByCount = staleBlockedByDetails.filter((dependency) => dependency.isCompleted).length;
   const dependencyPreview = blockedByLabels.slice(0, 2).join(", ");
+  const dependencyTitle = blockedByDetails
+    .map((dependency) => {
+      if (dependency.isMissing) {
+        return `${dependency.title} (missing)`;
+      }
+
+      if (dependency.isCompleted) {
+        return `${dependency.title} (${dependency.statusLabel.toLowerCase()})`;
+      }
+
+      return dependency.title;
+    })
+    .join(", ");
+  const staleBlockerSummary = [
+    missingBlockedByCount > 0 ? `${missingBlockedByCount} missing` : null,
+    completedBlockedByCount > 0 ? `${completedBlockedByCount} completed` : null,
+  ]
+    .filter(Boolean)
+    .join(" • ");
+  const staleBlockerTitle = staleBlockedByDetails
+    .map((dependency) =>
+      dependency.isMissing
+        ? `${dependency.title} is missing from the board`
+        : `${dependency.title} is already completed`
+    )
+    .join("; ");
+  const blockerSummaryColor = missingBlockedByCount > 0
+    ? "var(--status-blocked)"
+    : completedBlockedByCount > 0
+      ? "#FF9F0A"
+      : status.color;
 
   const inferredAssigneeAgentId = useMemo(() => {
     if (task.assigneeAgentId) return task.assigneeAgentId;
@@ -533,25 +588,46 @@ export function TaskRow({ task, agentOptions, allTasks, onUpdate }: TaskRowProps
               </span>
             </span>
             {blockedByTaskIds.length > 0 && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  window.open("/agents/tasks", "_blank");
-                }}
-                className="inline-flex items-center gap-1 hover:underline transition-colors"
-                style={{ color: "var(--text-muted)" }}
-                title={`Blocked by ${blockedByLabels.join(", ")}`}
-              >
-                <span>
-                  Blocked by:{" "}
-                  <span style={{ color: status.color, fontWeight: 600 }}>
-                    {dependencyPreview}
-                    {blockedByTaskIds.length > 2 ? ` +${blockedByTaskIds.length - 2}` : ""}
+              <>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.open("/agents/tasks", "_blank");
+                  }}
+                  className="inline-flex items-center gap-1 hover:underline transition-colors"
+                  style={{ color: "var(--text-muted)" }}
+                  title={`Blocked by ${dependencyTitle}`}
+                >
+                  <span>
+                    Blocked by:{" "}
+                    <span style={{ color: blockerSummaryColor, fontWeight: 600 }}>
+                      {dependencyPreview}
+                      {blockedByTaskIds.length > 2 ? ` +${blockedByTaskIds.length - 2}` : ""}
+                    </span>
                   </span>
-                </span>
-                <ExternalLink className="w-3 h-3 opacity-60 flex-shrink-0" />
-              </button>
+                  <ExternalLink className="w-3 h-3 opacity-60 flex-shrink-0" />
+                </button>
+
+                {staleBlockedByDetails.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenOwnershipEditor();
+                    }}
+                    className="inline-flex items-center rounded-full px-2 py-0.5 transition-colors"
+                    style={{
+                      color: blockerSummaryColor,
+                      backgroundColor: `color-mix(in srgb, ${blockerSummaryColor} 10%, transparent)`,
+                      border: `1px solid color-mix(in srgb, ${blockerSummaryColor} 28%, transparent)`,
+                    }}
+                    title={staleBlockerTitle}
+                  >
+                    Cleanup blockers: {staleBlockerSummary}
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>

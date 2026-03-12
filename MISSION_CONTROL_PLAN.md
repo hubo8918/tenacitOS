@@ -719,6 +719,21 @@ Connect to real OpenClaw execution:
 - Next:
   - either add project dependency visibility on Projects, or improve how Tasks surfaces stale blocker cleanup from the main board state.
 
+### 2026-03-12 01:23
+- Step: Tasks stale blocker cleanup board visibility
+- Files:
+  - `src/components/TaskRow.tsx`
+- Validation:
+  - `npx eslint src/components/TaskRow.tsx`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(tasks): surface blocker cleanup on board`)
+- Result:
+  - Task rows now flag missing or already-completed blockers directly in the main board state instead of hiding that cleanup need inside the routing editor.
+  - The visible blocker summary now labels stale blocker state more honestly, and the row exposes a direct cleanup affordance back into the routing editor.
+  - This keeps dependency state trustworthy without pretending stale blockers are still active work.
+- Next:
+  - either add project dependency visibility on Projects, or widen the Tasks board-level attention summary only if stale blocker cleanup still feels too easy to miss.
+
 ---
 
 ## How to Update This File
@@ -747,9 +762,9 @@ Suggested template:
 
 ## Current Focus
 
-**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + dependency visibility + a first dependency editor + a first dependency cycle guard, plus a first Projects owner/phase editor and participating-agent visibility shipped
+**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, a first Projects owner/phase editor, and participating-agent visibility shipped
 
 **Do next:**
 1. keep the new Agents capability profile plus Team reporting-line / review-coverage / delegation flows stable and honest
-2. either deepen Projects with dependency visibility, or improve how Tasks surfaces stale blocker cleanup from the main board state
+2. deepen Projects with dependency visibility, unless another tighter trust issue appears first on Tasks
 3. keep pushing coordination surfaces forward without pretending execution automation already exists
