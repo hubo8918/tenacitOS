@@ -831,6 +831,21 @@ Connect to real OpenClaw execution:
 - Next:
   - keep Project ↔ Task linkage read-only, then return to the next tight Tasks/Projects trust issue instead of widening into fake cross-page editing.
 
+### 2026-03-12 05:xx
+- Step: Tasks project-focused create-form defaults
+- Files:
+  - `src/app/(dashboard)/agents/tasks/TasksPageClient.tsx`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/agents/tasks/TasksPageClient.tsx"`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(tasks): prefill project-focused task intake`)
+- Result:
+  - When Tasks is opened from a Project-specific focus, the create form now starts with that project label instead of asking the operator to retype it.
+  - The create-flow copy now says that default is coming from the current project focus and stays editable, so the handoff remains explicit instead of silently locking the field.
+  - This keeps Project ↔ Task linkage read-only on Projects while making the focused handoff into real task creation more direct.
+- Next:
+  - keep Project ↔ Task linkage read-only, and if the next step stays narrow, add a focused create-task CTA when a project-filtered board currently shows zero visible tasks.
+
 ---
 
 ## How to Update This File

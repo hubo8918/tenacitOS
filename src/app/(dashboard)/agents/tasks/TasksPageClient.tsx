@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ListTodo, ArrowUpDown, Plus } from "lucide-react";
 import { TaskRow } from "@/components/TaskRow";
@@ -77,7 +77,7 @@ export default function TasksPageClient({ initialTasks, initialTaskAgents }: Tas
   const [creatingTask, setCreatingTask] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
-  const [newProject, setNewProject] = useState("");
+  const [newProject, setNewProject] = useState(projectFocus);
   const [newDueDate, setNewDueDate] = useState(() => getLocalDateInputValue(7));
   const [newStatus, setNewStatus] = useState<Task["status"]>("pending");
   const [newPriority, setNewPriority] = useState<Task["priority"]>("medium");
@@ -131,9 +131,15 @@ export default function TasksPageClient({ initialTasks, initialTaskAgents }: Tas
     }
   };
 
+  useEffect(() => {
+    if (!showCreateForm) {
+      setNewProject(projectFocus);
+    }
+  }, [projectFocus, showCreateForm]);
+
   const resetCreateForm = () => {
     setNewTitle("");
-    setNewProject("");
+    setNewProject(projectFocus);
     setNewDueDate(getLocalDateInputValue(7));
     setNewStatus("pending");
     setNewPriority("medium");
@@ -149,6 +155,7 @@ export default function TasksPageClient({ initialTasks, initialTaskAgents }: Tas
     }
 
     setCreateError(null);
+    setNewProject(projectFocus);
     setShowCreateForm(true);
   };
 
@@ -362,6 +369,11 @@ export default function TasksPageClient({ initialTasks, initialTaskAgents }: Tas
                 This first CRUD milestone keeps creation honest: title, board status, priority, due date, project,
                 and initial owner all save here. Reviewer and handoff can still be added from the row-level routing editor after creation.
               </p>
+              {projectFocus && (
+                <p className="mt-2 text-xs" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                  Opened from Projects for <span style={{ color: "var(--text-primary)" }}>{projectFocus}</span>; the project field starts with that label but stays editable here.
+                </p>
+              )}
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
