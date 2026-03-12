@@ -1065,6 +1065,21 @@ Connect to real OpenClaw execution:
 - Next:
   - keep Project ↔ Task linkage read-only, then reassess the next tight Tasks/Projects trust issue instead of widening into fake cross-page editing.
 
+### 2026-03-12 12:24
+- Step: Tasks missing targeted-handoff state
+- Files:
+  - `src/app/(dashboard)/agents/tasks/TasksPageClient.tsx`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/agents/tasks/TasksPageClient.tsx"`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(tasks): clarify missing targeted handoff state`)
+- Result:
+  - A Projects → Tasks targeted handoff now stays honest when the requested task no longer belongs to the focused project label or has disappeared from the board.
+  - The Tasks page explains why the requested row is missing instead of quietly dropping operators onto a misleading focused board that looks like the handoff still succeeded.
+  - When the task still exists under a different saved project label, the page now offers a direct path into that task's current Tasks view without pretending Projects can repair the linkage inline.
+- Next:
+  - keep Project ↔ Task linkage read-only, and if the next trust step stays narrow, add the same honest missing-target explanation for mismatch-specific handoffs after cleanup removes the requested row.
+
 ---
 
 ## How to Update This File

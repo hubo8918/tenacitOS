@@ -149,12 +149,35 @@ export default function TasksPageClient({
     () => scopedTasks.find((task) => task.id === requestedTaskId) || null,
     [requestedTaskId, scopedTasks]
   );
+  const requestedTaskAnywhere = useMemo(
+    () => tasks.find((task) => task.id === requestedTaskId) || null,
+    [requestedTaskId, tasks]
+  );
   const requestedMismatchTask = useMemo(
     () => projectLabelMismatchTasks.find((task) => task.id === requestedTaskId) || null,
     [projectLabelMismatchTasks, requestedTaskId]
   );
+  const requestedTaskOutsideFocus = Boolean(
+    requestedTaskId &&
+      projectFocus &&
+      !showMismatchOnly &&
+      !requestedTask &&
+      requestedTaskAnywhere
+  );
+  const requestedTaskMissingFromBoard = Boolean(
+    requestedTaskId &&
+      !showMismatchOnly &&
+      !requestedTask &&
+      !requestedTaskAnywhere
+  );
+  const requestedTaskCurrentViewHref = requestedTaskAnywhere
+    ? requestedTaskAnywhere.project.trim()
+      ? `/agents/tasks?project=${encodeURIComponent(requestedTaskAnywhere.project.trim())}&task=${encodeURIComponent(requestedTaskAnywhere.id)}`
+      : `/agents/tasks?task=${encodeURIComponent(requestedTaskAnywhere.id)}`
+    : "/agents/tasks";
   const showMismatchHandoffNotice = showMismatchOnly && Boolean(requestedMismatchTask);
   const showTargetedTaskHandoffNotice = !showMismatchOnly && Boolean(requestedTask);
+  const showMissingTargetedTaskNotice = requestedTaskOutsideFocus || requestedTaskMissingFromBoard;
 
   const focusedProjectTaskCount = scopedTasks.length;
 
@@ -510,6 +533,53 @@ export default function TasksPageClient({
           >
             Clear focus
           </a>
+        </div>
+      )}
+
+      {showMissingTargetedTaskNotice && (
+        <div
+          className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2 text-xs"
+          style={{
+            backgroundColor: "color-mix(in srgb, #FF9F0A 10%, var(--surface-elevated))",
+            border: "1px solid color-mix(in srgb, #FF9F0A 30%, transparent)",
+          }}
+        >
+          <div className="space-y-1">
+            <p className="font-semibold" style={{ color: "#FF9F0A" }}>
+              {requestedTaskOutsideFocus && requestedTaskAnywhere
+                ? `Focused task handoff moved outside ${projectFocus}`
+                : "Requested linked task is no longer on this board"}
+            </p>
+            <p style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
+              {requestedTaskOutsideFocus && requestedTaskAnywhere
+                ? `This Tasks view opened from Projects for ${projectFocus}, but the requested task \"${requestedTaskAnywhere.title}\" is now saved under ${requestedTaskAnywhere.project.trim() ? `the ${requestedTaskAnywhere.project} project label` : "no project label"}. Projects stays read-only for linkage, so this focused board does not pretend that task still belongs here.`
+                : "This Tasks view opened from a direct Projects handoff, but the requested task is no longer present on the current Tasks board. Projects stays read-only for linkage here, so Mission Control shows the missing-target state instead of pretending the row still exists."}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {requestedTaskOutsideFocus && requestedTaskAnywhere && (
+              <a
+                href={requestedTaskCurrentViewHref}
+                className="rounded-full px-3 py-1 font-semibold"
+                style={{
+                  color: "#FF9F0A",
+                  border: "1px solid color-mix(in srgb, #FF9F0A 34%, transparent)",
+                }}
+              >
+                {requestedTaskAnywhere.project.trim() ? "Open task in its current Tasks view" : "Open task on full Tasks board"}
+              </a>
+            )}
+            <a
+              href="/agents/tasks"
+              className="rounded-full px-3 py-1 font-semibold"
+              style={{
+                color: "#FF9F0A",
+                border: "1px solid color-mix(in srgb, #FF9F0A 34%, transparent)",
+              }}
+            >
+              Open full Tasks board
+            </a>
+          </div>
         </div>
       )}
 
