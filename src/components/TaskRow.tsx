@@ -62,10 +62,17 @@ interface TaskRowProps {
   task: Task;
   agentOptions: TaskAgentOption[];
   allTasks: Task[];
+  hasProjectTitleMatch?: boolean | null;
   onUpdate?: () => void;
 }
 
-export function TaskRow({ task, agentOptions, allTasks, onUpdate }: TaskRowProps) {
+export function TaskRow({
+  task,
+  agentOptions,
+  allTasks,
+  hasProjectTitleMatch = null,
+  onUpdate,
+}: TaskRowProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [editingDetails, setEditingDetails] = useState(false);
   const [savingDetails, setSavingDetails] = useState(false);
@@ -262,6 +269,8 @@ export function TaskRow({ task, agentOptions, allTasks, onUpdate }: TaskRowProps
     name: task.agent.name,
     color: task.agent.color,
   });
+  const projectFocusHref = `/agents/projects?project=${encodeURIComponent(task.project.trim())}`;
+  const projectLabelMismatch = hasProjectTitleMatch === false;
 
   useEffect(() => {
     if (!showMenu) return;
@@ -668,18 +677,35 @@ export function TaskRow({ task, agentOptions, allTasks, onUpdate }: TaskRowProps
         </div>
 
         <div className="flex-[1.5] min-w-0">
-          <button
-            type="button"
-            onClick={() => {
-              window.open(`/agents/projects?project=${encodeURIComponent(task.project)}`, "_blank");
-            }}
-            className="text-xs truncate block text-left hover:underline hover:text-[var(--text-secondary)] transition-colors flex items-center gap-1.5"
-            style={{ color: "var(--text-muted)" }}
-            title={`Open matching project in Projects: ${task.project}`}
-          >
-            {task.project}
-            <ExternalLink className="w-3 h-3 opacity-60 flex-shrink-0" />
-          </button>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                window.open(projectFocusHref, "_blank");
+              }}
+              className="text-xs truncate block text-left hover:underline hover:text-[var(--text-secondary)] transition-colors flex items-center gap-1.5 max-w-full"
+              style={{ color: projectLabelMismatch ? "#FF9F0A" : "var(--text-muted)" }}
+              title={projectLabelMismatch
+                ? `No exact Projects title currently matches \"${task.project}\". Opening Projects will show the mismatch state for this saved task label.`
+                : `Open matching project in Projects: ${task.project}`}
+            >
+              <span className="truncate">{task.project}</span>
+              <ExternalLink className="w-3 h-3 opacity-60 flex-shrink-0" />
+            </button>
+            {projectLabelMismatch && (
+              <span
+                className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                style={{
+                  color: "#FF9F0A",
+                  backgroundColor: "color-mix(in srgb, #FF9F0A 14%, transparent)",
+                  border: "1px solid color-mix(in srgb, #FF9F0A 28%, transparent)",
+                }}
+                title="This task's saved project label does not exactly match any current project title on the Projects board."
+              >
+                No exact match
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="flex-[1]">

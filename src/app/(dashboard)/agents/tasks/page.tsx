@@ -1,6 +1,8 @@
 import TasksPageClient from "./TasksPageClient";
 import { getAgentTasks } from "@/lib/agent-tasks-data";
 import { getAgentsSummary } from "@/lib/agents-data";
+import { getProjects } from "@/lib/projects-data";
+import type { Project } from "@/data/mockProjectsData";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +30,26 @@ async function getTaskAgentOptions() {
   }
 }
 
+async function getInitialProjects(): Promise<Project[]> {
+  try {
+    return await getProjects();
+  } catch {
+    return [];
+  }
+}
+
 export default async function TasksPage() {
-  const [initialTasks, initialTaskAgents] = await Promise.all([getInitialTasks(), getTaskAgentOptions()]);
-  return <TasksPageClient initialTasks={initialTasks} initialTaskAgents={initialTaskAgents} />;
+  const [initialTasks, initialTaskAgents, initialProjects] = await Promise.all([
+    getInitialTasks(),
+    getTaskAgentOptions(),
+    getInitialProjects(),
+  ]);
+
+  return (
+    <TasksPageClient
+      initialTasks={initialTasks}
+      initialTaskAgents={initialTaskAgents}
+      initialProjects={initialProjects}
+    />
+  );
 }

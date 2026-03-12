@@ -6,6 +6,7 @@ import { ListTodo, ArrowUpDown, Plus } from "lucide-react";
 import { TaskRow } from "@/components/TaskRow";
 import { taskPriorityConfig, taskStatusConfig } from "@/data/mockTasksData";
 import type { Task } from "@/data/mockTasksData";
+import type { Project } from "@/data/mockProjectsData";
 import { useFetch } from "@/lib/useFetch";
 
 type StatusFilter = "all" | "in_progress" | "completed" | "pending" | "blocked";
@@ -57,9 +58,14 @@ interface TaskAgentOption {
 interface TasksPageClientProps {
   initialTasks: Task[];
   initialTaskAgents: TaskAgentOption[];
+  initialProjects: Project[];
 }
 
-export default function TasksPageClient({ initialTasks, initialTaskAgents }: TasksPageClientProps) {
+export default function TasksPageClient({
+  initialTasks,
+  initialTaskAgents,
+  initialProjects,
+}: TasksPageClientProps) {
   const searchParams = useSearchParams();
   const projectFocus = searchParams.get("project")?.trim() || "";
   const normalizedProjectFocus = normalizeProjectLabel(projectFocus);
@@ -68,7 +74,17 @@ export default function TasksPageClient({ initialTasks, initialTaskAgents }: Tas
     initialData: hasInitialTasks ? { tasks: initialTasks } : null,
     fetchOnMount: !hasInitialTasks,
   });
+  const hasInitialProjects = initialProjects.length > 0;
+  const { data: projectsData } = useFetch<{ projects: Project[] }>("/api/projects", {
+    initialData: hasInitialProjects ? { projects: initialProjects } : null,
+    fetchOnMount: !hasInitialProjects,
+  });
   const tasks = useMemo(() => data?.tasks || [], [data]);
+  const normalizedProjectTitles = useMemo(
+    () => new Set((projectsData?.projects || []).map((project) => normalizeProjectLabel(project.title))),
+    [projectsData]
+  );
+  const canCheckProjectMatches = Boolean(projectsData);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sortField, setSortField] = useState<SortField>("status");
@@ -588,7 +604,14 @@ export default function TasksPageClient({ initialTasks, initialTaskAgents }: Tas
 
             {filteredTasks.length > 0 ? (
               filteredTasks.map((task) => (
-                <TaskRow key={task.id} task={task} agentOptions={initialTaskAgents} allTasks={tasks} onUpdate={refetch} />
+                <TaskRow
+                  key={task.id}
+                  task={task}
+                  agentOptions={initialTaskAgents}
+                  allTasks={tasks}
+                  hasProjectTitleMatch={canCheckProjectMatches ? normalizedProjectTitles.has(normalizeProjectLabel(task.project)) : null}
+                  onUpdate={refetch}
+                />
               ))
             ) : (
               <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">

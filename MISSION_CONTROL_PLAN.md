@@ -892,6 +892,23 @@ Connect to real OpenClaw execution:
 - Next:
   - keep Project ↔ Task linkage read-only, and if the next trust step stays narrow, surface task-label/project-title mismatches directly from Tasks before operators have to discover them through navigation.
 
+### 2026-03-12 06:5x
+- Step: Tasks project-label mismatch visibility
+- Files:
+  - `src/app/(dashboard)/agents/tasks/page.tsx`
+  - `src/app/(dashboard)/agents/tasks/TasksPageClient.tsx`
+  - `src/components/TaskRow.tsx`
+- Validation:
+  - `npx eslint src/app/(dashboard)/agents/tasks/page.tsx "src/app/(dashboard)/agents/tasks/TasksPageClient.tsx" src/components/TaskRow.tsx`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(tasks): surface project label mismatches inline`)
+- Result:
+  - Tasks now checks saved task project labels against current Projects titles and flags exact-title mismatches directly on the task row instead of making operators discover the problem only after clicking through.
+  - Mismatched task project labels keep their existing focused Projects navigation path, but the row now warns that the jump will land in a mismatch state until titles line up.
+  - This keeps Project ↔ Task linkage read-only while surfacing cross-page label drift earlier and more honestly.
+- Next:
+  - keep Project ↔ Task linkage read-only, and if the next trust step stays narrow, add a board-level mismatch attention summary so label drift is visible before opening individual rows.
+
 ---
 
 ## How to Update This File
@@ -920,7 +937,7 @@ Suggested template:
 
 ## Current Focus
 
-**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, task-row jumps into a focused Projects view, project-focused create-form defaults plus an empty-state intake CTA, a first Projects owner/phase editor, participating-agent visibility, current-phase dependency visibility, read-only Project ↔ Task linkage visibility, a linked-task attention summary, and a zero-linked Tasks handoff shipped
+**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + direct inline visibility for task-label/project-title mismatches + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, task-row jumps into a focused Projects view, project-focused create-form defaults plus an empty-state intake CTA, a first Projects owner/phase editor, participating-agent visibility, current-phase dependency visibility, read-only Project ↔ Task linkage visibility, a linked-task attention summary, and a zero-linked Tasks handoff shipped
 
 **Do next:**
 1. keep the new Agents capability profile plus Team reporting-line / review-coverage / delegation flows stable and honest
