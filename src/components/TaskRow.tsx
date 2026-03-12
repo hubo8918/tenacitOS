@@ -64,6 +64,7 @@ interface TaskRowProps {
   agentOptions: TaskAgentOption[];
   allTasks: Task[];
   hasProjectTitleMatch?: boolean | null;
+  isTemporarilyHighlighted?: boolean;
   onUpdate?: () => void;
 }
 
@@ -73,6 +74,7 @@ export function TaskRow({
   agentOptions,
   allTasks,
   hasProjectTitleMatch = null,
+  isTemporarilyHighlighted = false,
   onUpdate,
 }: TaskRowProps) {
   const [showMenu, setShowMenu] = useState(false);
@@ -571,6 +573,9 @@ export function TaskRow({
       id={rowId}
       style={{
         borderBottom: "1px solid var(--border)",
+        backgroundColor: isTemporarilyHighlighted ? "color-mix(in srgb, #FFD60A 12%, transparent)" : "transparent",
+        boxShadow: isTemporarilyHighlighted ? "inset 3px 0 0 #FFD60A" : "none",
+        transition: "background-color 220ms ease, box-shadow 220ms ease",
       }}
     >
       <div

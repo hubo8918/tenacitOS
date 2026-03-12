@@ -91,6 +91,7 @@ export default function TasksPageClient({
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [showMismatchOnly, setShowMismatchOnly] = useState(mismatchOnlyRequested);
   const [pendingMismatchTaskId, setPendingMismatchTaskId] = useState<string | null>(mismatchTaskIdRequested || null);
+  const [highlightedMismatchTaskId, setHighlightedMismatchTaskId] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>("status");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -201,6 +202,7 @@ export default function TasksPageClient({
       return next;
     });
     setPendingMismatchTaskId(null);
+    setHighlightedMismatchTaskId(null);
   };
 
   const handleJumpToFirstMismatch = () => {
@@ -210,6 +212,7 @@ export default function TasksPageClient({
 
     setStatusFilter("all");
     setShowMismatchOnly(true);
+    setHighlightedMismatchTaskId(null);
     setPendingMismatchTaskId(projectLabelMismatchTasks[0]?.id || null);
   };
 
@@ -220,6 +223,7 @@ export default function TasksPageClient({
 
     setStatusFilter("all");
     setShowMismatchOnly(true);
+    setHighlightedMismatchTaskId(null);
     setPendingMismatchTaskId(requestedMismatchTask.id);
   };
 
@@ -254,9 +258,22 @@ export default function TasksPageClient({
 
     window.requestAnimationFrame(() => {
       row.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightedMismatchTaskId(requestedMismatchTask.id);
     });
     setPendingMismatchTaskId(null);
   }, [filteredTasks, pendingMismatchTaskId]);
+
+  useEffect(() => {
+    if (!highlightedMismatchTaskId) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setHighlightedMismatchTaskId((current) => (current === highlightedMismatchTaskId ? null : current));
+    }, 3200);
+
+    return () => window.clearTimeout(timeout);
+  }, [highlightedMismatchTaskId]);
 
   useEffect(() => {
     if (!showCreateForm) {
@@ -493,7 +510,7 @@ export default function TasksPageClient({
               Focused mismatch handoff: {requestedMismatchTask.title}
             </p>
             <p style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
-              This mismatch-only view opened on a specific task from Projects. Look for the <span style={{ color: "#FF9F0A" }}>No exact match</span> badge and the row&apos;s <span style={{ color: "#FF9F0A" }}>Fix label</span> action to correct the saved project label through the existing task-details editor.
+              This mismatch-only view opened on a specific task from Projects. The requested row briefly highlights after each targeted jump so the <span style={{ color: "#FF9F0A" }}>No exact match</span> badge and row&apos;s <span style={{ color: "#FF9F0A" }}>Fix label</span> action are easier to spot in the existing task-details editor flow.
             </p>
           </div>
           <button
@@ -808,6 +825,7 @@ export default function TasksPageClient({
                   agentOptions={initialTaskAgents}
                   allTasks={tasks}
                   hasProjectTitleMatch={canCheckProjectMatches ? normalizedProjectTitles.has(normalizeProjectLabel(task.project)) : null}
+                  isTemporarilyHighlighted={task.id === highlightedMismatchTaskId}
                   onUpdate={refetch}
                 />
               ))
