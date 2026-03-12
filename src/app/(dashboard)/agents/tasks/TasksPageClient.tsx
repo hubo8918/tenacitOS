@@ -69,7 +69,7 @@ export default function TasksPageClient({
   const searchParams = useSearchParams();
   const projectFocus = searchParams.get("project")?.trim() || "";
   const mismatchOnlyRequested = searchParams.get("mismatch") === "1";
-  const mismatchTaskIdRequested = searchParams.get("task")?.trim() || "";
+  const requestedTaskId = searchParams.get("task")?.trim() || "";
   const normalizedProjectFocus = normalizeProjectLabel(projectFocus);
   const hasInitialTasks = initialTasks.length > 0;
   const { data, loading, error, refetch } = useFetch<{ tasks: Task[] }>("/api/agent-tasks", {
@@ -90,8 +90,8 @@ export default function TasksPageClient({
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [showMismatchOnly, setShowMismatchOnly] = useState(mismatchOnlyRequested);
-  const [pendingMismatchTaskId, setPendingMismatchTaskId] = useState<string | null>(mismatchTaskIdRequested || null);
-  const [highlightedMismatchTaskId, setHighlightedMismatchTaskId] = useState<string | null>(null);
+  const [pendingTargetTaskId, setPendingTargetTaskId] = useState<string | null>(requestedTaskId || null);
+  const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>("status");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -145,11 +145,16 @@ export default function TasksPageClient({
 
     return `No exact Projects title match for ${topLabels.join(", ")}${remainingLabelCount > 0 ? ` +${remainingLabelCount} more` : ""}.`;
   }, [projectLabelMismatchTasks]);
+  const requestedTask = useMemo(
+    () => scopedTasks.find((task) => task.id === requestedTaskId) || null,
+    [requestedTaskId, scopedTasks]
+  );
   const requestedMismatchTask = useMemo(
-    () => projectLabelMismatchTasks.find((task) => task.id === mismatchTaskIdRequested) || null,
-    [mismatchTaskIdRequested, projectLabelMismatchTasks]
+    () => projectLabelMismatchTasks.find((task) => task.id === requestedTaskId) || null,
+    [projectLabelMismatchTasks, requestedTaskId]
   );
   const showMismatchHandoffNotice = showMismatchOnly && Boolean(requestedMismatchTask);
+  const showTargetedTaskHandoffNotice = !showMismatchOnly && Boolean(requestedTask);
 
   const focusedProjectTaskCount = scopedTasks.length;
 
@@ -201,8 +206,8 @@ export default function TasksPageClient({
       }
       return next;
     });
-    setPendingMismatchTaskId(null);
-    setHighlightedMismatchTaskId(null);
+    setPendingTargetTaskId(null);
+    setHighlightedTaskId(null);
   };
 
   const handleJumpToFirstMismatch = () => {
@@ -212,8 +217,8 @@ export default function TasksPageClient({
 
     setStatusFilter("all");
     setShowMismatchOnly(true);
-    setHighlightedMismatchTaskId(null);
-    setPendingMismatchTaskId(projectLabelMismatchTasks[0]?.id || null);
+    setHighlightedTaskId(null);
+    setPendingTargetTaskId(projectLabelMismatchTasks[0]?.id || null);
   };
 
   const handleJumpToRequestedMismatch = () => {
@@ -223,17 +228,28 @@ export default function TasksPageClient({
 
     setStatusFilter("all");
     setShowMismatchOnly(true);
-    setHighlightedMismatchTaskId(null);
-    setPendingMismatchTaskId(requestedMismatchTask.id);
+    setHighlightedTaskId(null);
+    setPendingTargetTaskId(requestedMismatchTask.id);
+  };
+
+  const handleJumpToRequestedTask = () => {
+    if (!requestedTask) {
+      return;
+    }
+
+    setStatusFilter("all");
+    setShowMismatchOnly(false);
+    setHighlightedTaskId(null);
+    setPendingTargetTaskId(requestedTask.id);
   };
 
   useEffect(() => {
     setShowMismatchOnly(mismatchOnlyRequested);
-    setPendingMismatchTaskId(mismatchTaskIdRequested || null);
+    setPendingTargetTaskId(requestedTaskId || null);
     if (mismatchOnlyRequested) {
       setStatusFilter("all");
     }
-  }, [mismatchOnlyRequested, mismatchTaskIdRequested, normalizedProjectFocus]);
+  }, [mismatchOnlyRequested, normalizedProjectFocus, requestedTaskId]);
 
   useEffect(() => {
     if (showMismatchOnly && projectLabelMismatchCount === 0) {
@@ -242,38 +258,38 @@ export default function TasksPageClient({
   }, [projectLabelMismatchCount, showMismatchOnly]);
 
   useEffect(() => {
-    if (!pendingMismatchTaskId) {
+    if (!pendingTargetTaskId) {
       return;
     }
 
-    const requestedMismatchTask = filteredTasks.find((task) => task.id === pendingMismatchTaskId);
-    if (!requestedMismatchTask) {
+    const requestedTaskRow = filteredTasks.find((task) => task.id === pendingTargetTaskId);
+    if (!requestedTaskRow) {
       return;
     }
 
-    const row = document.getElementById(`task-row-${requestedMismatchTask.id}`);
+    const row = document.getElementById(`task-row-${requestedTaskRow.id}`);
     if (!row) {
       return;
     }
 
     window.requestAnimationFrame(() => {
       row.scrollIntoView({ behavior: "smooth", block: "center" });
-      setHighlightedMismatchTaskId(requestedMismatchTask.id);
+      setHighlightedTaskId(requestedTaskRow.id);
     });
-    setPendingMismatchTaskId(null);
-  }, [filteredTasks, pendingMismatchTaskId]);
+    setPendingTargetTaskId(null);
+  }, [filteredTasks, pendingTargetTaskId]);
 
   useEffect(() => {
-    if (!highlightedMismatchTaskId) {
+    if (!highlightedTaskId) {
       return;
     }
 
     const timeout = window.setTimeout(() => {
-      setHighlightedMismatchTaskId((current) => (current === highlightedMismatchTaskId ? null : current));
+      setHighlightedTaskId((current) => (current === highlightedTaskId ? null : current));
     }, 3200);
 
     return () => window.clearTimeout(timeout);
-  }, [highlightedMismatchTaskId]);
+  }, [highlightedTaskId]);
 
   useEffect(() => {
     if (!showCreateForm) {
@@ -494,6 +510,37 @@ export default function TasksPageClient({
           >
             Clear focus
           </a>
+        </div>
+      )}
+
+      {showTargetedTaskHandoffNotice && requestedTask && (
+        <div
+          className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2 text-xs"
+          style={{
+            backgroundColor: "color-mix(in srgb, #0A84FF 10%, var(--surface-elevated))",
+            border: "1px solid color-mix(in srgb, #0A84FF 28%, transparent)",
+          }}
+        >
+          <div className="space-y-1">
+            <p className="font-semibold" style={{ color: "#0A84FF" }}>
+              Focused task handoff: {requestedTask.title}
+            </p>
+            <p style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
+              This Tasks view opened from a specific linked task on Projects. Projects stays read-only for linkage, so the handoff lands on the requested row here and briefly highlights it instead of pretending the project card can edit task state inline.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleJumpToRequestedTask}
+            className="rounded-full px-3 py-1 font-semibold transition-colors"
+            style={{
+              color: "#0A84FF",
+              backgroundColor: "transparent",
+              border: "1px solid color-mix(in srgb, #0A84FF 36%, transparent)",
+            }}
+          >
+            Jump back to requested task
+          </button>
         </div>
       )}
 
@@ -825,7 +872,7 @@ export default function TasksPageClient({
                   agentOptions={initialTaskAgents}
                   allTasks={tasks}
                   hasProjectTitleMatch={canCheckProjectMatches ? normalizedProjectTitles.has(normalizeProjectLabel(task.project)) : null}
-                  isTemporarilyHighlighted={task.id === highlightedMismatchTaskId}
+                  isTemporarilyHighlighted={task.id === highlightedTaskId}
                   onUpdate={refetch}
                 />
               ))

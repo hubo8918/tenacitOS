@@ -58,8 +58,12 @@ function slugify(value: string) {
     .replace(/^-|-$/g, "");
 }
 
-function getProjectTasksHref(projectTitle: string) {
-  return `/agents/tasks?project=${encodeURIComponent(projectTitle)}`;
+function getProjectTasksHref(projectTitle: string, taskId?: string) {
+  const params = new URLSearchParams({ project: projectTitle });
+  if (taskId) {
+    params.set("task", taskId);
+  }
+  return `/agents/tasks?${params.toString()}`;
 }
 
 interface ProjectCardProps {
@@ -588,12 +592,20 @@ export function ProjectCard({
               {visibleLinkedTasks.map((task) => {
                 const taskStatus = taskStatusConfig[task.status];
                 const isOverdueTask = isTaskOverdue(task.dueDate, task.status);
+                const linkedTaskHref = getProjectTasksHref(project.title, task.id);
                 return (
                   <div key={task.id} className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-xs font-medium truncate" style={{ color: "var(--text-secondary)" }}>
+                      <a
+                        href={linkedTaskHref}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs font-medium truncate hover:underline"
+                        style={{ color: "var(--text-secondary)" }}
+                        title={`Open ${task.title} in the focused Tasks view`}
+                      >
                         {task.title}
-                      </p>
+                      </a>
                       <p
                         className="text-[10px]"
                         style={{ color: isOverdueTask ? "var(--status-blocked)" : "var(--text-muted)" }}

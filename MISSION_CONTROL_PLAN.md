@@ -1049,6 +1049,22 @@ Connect to real OpenClaw execution:
 - Next:
   - keep Project ↔ Task linkage read-only, then reassess the next tight Tasks/Projects trust issue instead of widening into fake cross-page editing.
 
+### 2026-03-12 11:5x
+- Step: Projects linked-task targeted handoff
+- Files:
+  - `src/components/ProjectCard.tsx`
+  - `src/app/(dashboard)/agents/tasks/TasksPageClient.tsx`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/agents/tasks/TasksPageClient.tsx" src/components/ProjectCard.tsx`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(projects): target linked-task handoff into Tasks`)
+- Result:
+  - Linked task titles on Project cards now open the focused Tasks view on that specific task instead of only dropping operators onto the broader project board.
+  - The Tasks board now honors that targeted handoff even outside mismatch cleanup, briefly highlighting the requested row and giving operators a jump-back control if they scroll away.
+  - This keeps Project ↔ Task linkage read-only while making the existing cross-page navigation more direct for real blocked/overdue task follow-up.
+- Next:
+  - keep Project ↔ Task linkage read-only, then reassess the next tight Tasks/Projects trust issue instead of widening into fake cross-page editing.
+
 ---
 
 ## How to Update This File
