@@ -106,6 +106,36 @@ export default function TasksPageClient({
         : tasks,
     [tasks, normalizedProjectFocus]
   );
+  const projectLabelMismatchTasks = useMemo(() => {
+    if (!canCheckProjectMatches) {
+      return [];
+    }
+
+    return scopedTasks.filter((task) => {
+      const trimmedProject = task.project.trim();
+      return Boolean(trimmedProject) && !normalizedProjectTitles.has(normalizeProjectLabel(trimmedProject));
+    });
+  }, [canCheckProjectMatches, normalizedProjectTitles, scopedTasks]);
+  const projectLabelMismatchCount = projectLabelMismatchTasks.length;
+  const projectLabelMismatchPreview = useMemo(() => {
+    if (projectLabelMismatchTasks.length === 0) {
+      return "";
+    }
+
+    const labelCounts = new Map<string, number>();
+    projectLabelMismatchTasks.forEach((task) => {
+      const trimmedProject = task.project.trim();
+      labelCounts.set(trimmedProject, (labelCounts.get(trimmedProject) || 0) + 1);
+    });
+
+    const topLabels = Array.from(labelCounts.entries())
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 2)
+      .map(([label]) => label);
+    const remainingLabelCount = labelCounts.size - topLabels.length;
+
+    return `No exact Projects title match for ${topLabels.join(", ")}${remainingLabelCount > 0 ? ` +${remainingLabelCount} more` : ""}.`;
+  }, [projectLabelMismatchTasks]);
 
   const focusedProjectTaskCount = scopedTasks.length;
 
@@ -497,7 +527,7 @@ export default function TasksPageClient({
         </div>
       )}
 
-      {(blockedCount > 0 || overdueCount > 0) && (
+      {(blockedCount > 0 || overdueCount > 0 || projectLabelMismatchCount > 0) && (
         <div
           className="mb-6 flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
           style={{
@@ -531,6 +561,23 @@ export default function TasksPageClient({
             >
               {overdueCount} overdue
             </span>
+          )}
+          {projectLabelMismatchCount > 0 && (
+            <>
+              <span
+                className="rounded-full px-2 py-1 font-semibold"
+                style={{
+                  color: "#FFD60A",
+                  backgroundColor: "color-mix(in srgb, #FFD60A 16%, transparent)",
+                  border: "1px solid color-mix(in srgb, #FFD60A 30%, transparent)",
+                }}
+              >
+                {projectLabelMismatchCount} project label mismatch{projectLabelMismatchCount === 1 ? "" : "es"}
+              </span>
+              <span style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                {projectLabelMismatchPreview} Clean them up from the affected task rows so focused Projects navigation stays honest.
+              </span>
+            </>
           )}
         </div>
       )}
