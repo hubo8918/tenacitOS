@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import type { CSSProperties } from "react";
 import { MoreHorizontal } from "lucide-react";
-import type { Task } from "@/data/mockTasksData";
+import { taskPriorityConfig, taskStatusConfig, type Task } from "@/data/mockTasksData";
 
 function parseLocalDate(dateString: string) {
   const [year, month, day] = dateString.split("-").map(Number);
@@ -31,19 +31,6 @@ interface TaskAgentOption {
   color: string;
 }
 
-const statusConfig: Record<string, { label: string; color: string }> = {
-  in_progress: { label: "In Progress", color: "#0A84FF" },
-  completed: { label: "Completed", color: "#32D74B" },
-  pending: { label: "Pending", color: "#FFD60A" },
-  blocked: { label: "Blocked", color: "#FF453A" },
-};
-
-const priorityConfig: Record<string, { label: string; color: string }> = {
-  high: { label: "High", color: "#FF453A" },
-  medium: { label: "Medium", color: "#FF9F0A" },
-  low: { label: "Low", color: "#0A84FF" },
-};
-
 const unassignedAgent: TaskAgentOption = {
   id: "",
   name: "Unassigned",
@@ -59,17 +46,25 @@ interface TaskRowProps {
 
 export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
   const [showMenu, setShowMenu] = useState(false);
+  const [editingDetails, setEditingDetails] = useState(false);
+  const [savingDetails, setSavingDetails] = useState(false);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
   const [editingOwnership, setEditingOwnership] = useState(false);
   const [savingOwnership, setSavingOwnership] = useState(false);
   const [ownershipError, setOwnershipError] = useState<string | null>(null);
+  const [title, setTitle] = useState(task.title);
+  const [project, setProject] = useState(task.project);
+  const [dueDate, setDueDate] = useState(task.dueDate);
+  const [statusValue, setStatusValue] = useState<Task["status"]>(task.status);
+  const [priorityValue, setPriorityValue] = useState<Task["priority"]>(task.priority);
   const [assigneeAgentId, setAssigneeAgentId] = useState("");
   const [reviewerAgentId, setReviewerAgentId] = useState("");
   const [handoffToAgentId, setHandoffToAgentId] = useState("");
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
-  const status = statusConfig[task.status];
-  const priority = priorityConfig[task.priority];
+  const status = taskStatusConfig[task.status];
+  const priority = taskPriorityConfig[task.priority];
   const isOverdue = isTaskOverdue(task.dueDate) && task.status !== "completed";
 
   const inferredAssigneeAgentId = useMemo(() => {
@@ -115,13 +110,31 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
   }, [showMenu]);
 
   useEffect(() => {
+    setTitle(task.title);
+    setProject(task.project);
+    setDueDate(task.dueDate);
+    setStatusValue(task.status);
+    setPriorityValue(task.priority);
+    setDetailsError(null);
+  }, [task.dueDate, task.priority, task.project, task.status, task.title]);
+
+  useEffect(() => {
     setAssigneeAgentId(inferredAssigneeAgentId);
     setReviewerAgentId(task.reviewerAgentId || "");
     setHandoffToAgentId(task.handoffToAgentId || "");
     setOwnershipError(null);
   }, [inferredAssigneeAgentId, task.reviewerAgentId, task.handoffToAgentId]);
 
-  const handleStatusChange = async (newStatus: string) => {
+  const resetDetailsDraft = () => {
+    setTitle(task.title);
+    setProject(task.project);
+    setDueDate(task.dueDate);
+    setStatusValue(task.status);
+    setPriorityValue(task.priority);
+    setDetailsError(null);
+  };
+
+  const handleStatusChange = async (newStatus: Task["status"]) => {
     setShowMenu(false);
     try {
       await fetch("/api/agent-tasks", {
@@ -145,8 +158,62 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
     }
   };
 
+  const handleOpenDetailsEditor = () => {
+    setShowMenu(false);
+    setEditingOwnership(false);
+    resetDetailsDraft();
+    setEditingDetails(true);
+  };
+
+  const handleSaveDetails = async () => {
+    const trimmedTitle = title.trim();
+    const trimmedProject = project.trim();
+
+    if (!trimmedTitle) {
+      setDetailsError("Title is required.");
+      return;
+    }
+
+    if (!dueDate) {
+      setDetailsError("Due date is required.");
+      return;
+    }
+
+    setSavingDetails(true);
+    setDetailsError(null);
+
+    try {
+      const response = await fetch("/api/agent-tasks", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: task.id,
+          title: trimmedTitle,
+          project: trimmedProject,
+          dueDate,
+          status: statusValue,
+          priority: priorityValue,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to save task details");
+      }
+
+      setEditingDetails(false);
+      onUpdate?.();
+    } catch (err) {
+      console.error("Failed to update task details:", err);
+      setDetailsError(err instanceof Error ? err.message : "Failed to save task details");
+    } finally {
+      setSavingDetails(false);
+    }
+  };
+
   const handleOpenOwnershipEditor = () => {
     setShowMenu(false);
+    setEditingDetails(false);
     setAssigneeAgentId(inferredAssigneeAgentId);
     setReviewerAgentId(task.reviewerAgentId || "");
     setHandoffToAgentId(task.handoffToAgentId || "");
@@ -345,6 +412,18 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
             >
               <button
                 style={menuItemStyle}
+                onClick={handleOpenDetailsEditor}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = "var(--surface-hover)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "transparent";
+                }}
+              >
+                Edit task details
+              </button>
+              <button
+                style={menuItemStyle}
                 onClick={handleOpenOwnershipEditor}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.backgroundColor = "var(--surface-hover)";
@@ -425,6 +504,128 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
           )}
         </div>
       </div>
+
+      {editingDetails && (
+        <div className="px-4 pb-3">
+          <div
+            className="rounded-xl p-3 md:p-4"
+            style={{
+              backgroundColor: "var(--surface-elevated)",
+              border: "1px solid var(--border)",
+            }}
+          >
+            <div className="flex flex-col gap-3">
+              <div>
+                <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                  Task details
+                </p>
+                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                  Edit the core board fields here: title, project, due date, status, and priority. Reviewer and handoff stay in the routing editor so this row does not pretend to be a giant everything form.
+                </p>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                <label className="flex flex-col gap-1.5 text-xs font-semibold xl:col-span-2" style={{ color: "var(--text-secondary)" }}>
+                  Title
+                  <input
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    style={inputStyle}
+                    aria-label={`Title for ${task.title}`}
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1.5 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                  Project
+                  <input
+                    value={project}
+                    onChange={(e) => setProject(e.target.value)}
+                    style={inputStyle}
+                    aria-label={`Project for ${task.title}`}
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1.5 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                  Due date
+                  <input
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    style={inputStyle}
+                    aria-label={`Due date for ${task.title}`}
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1.5 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                  Status
+                  <select
+                    value={statusValue}
+                    onChange={(e) => setStatusValue(e.target.value as Task["status"])}
+                    style={inputStyle}
+                    aria-label={`Status for ${task.title}`}
+                  >
+                    {Object.entries(taskStatusConfig).map(([value, config]) => (
+                      <option key={value} value={value}>
+                        {config.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="flex flex-col gap-1.5 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                  Priority
+                  <select
+                    value={priorityValue}
+                    onChange={(e) => setPriorityValue(e.target.value as Task["priority"])}
+                    style={inputStyle}
+                    aria-label={`Priority for ${task.title}`}
+                  >
+                    {Object.entries(taskPriorityConfig).map(([value, config]) => (
+                      <option key={value} value={value}>
+                        {config.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              {detailsError && (
+                <p className="text-xs font-medium" style={{ color: "var(--status-blocked)" }}>
+                  {detailsError}
+                </p>
+              )}
+
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => {
+                    resetDetailsDraft();
+                    setEditingDetails(false);
+                  }}
+                  className="text-xs px-3 py-1.5 rounded-lg transition-colors"
+                  style={{
+                    color: "var(--text-secondary)",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveDetails}
+                  disabled={savingDetails}
+                  className="text-xs px-3 py-1.5 rounded-lg transition-colors"
+                  style={{
+                    backgroundColor: "var(--accent)",
+                    color: "#000",
+                    opacity: savingDetails ? 0.6 : 1,
+                  }}
+                >
+                  {savingDetails ? "Saving..." : "Save details"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {editingOwnership && (
         <div className="px-4 pb-3">

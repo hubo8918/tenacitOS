@@ -101,7 +101,13 @@ To avoid fake progress or silent drift:
   - due date
   - initial owner
 - row actions already support status updates and delete
-- **Still missing broader edit coverage, delete trust polish, dependency tracking, and project linkage.**
+- row-level details editing now supports:
+  - title
+  - project
+  - due date
+  - status
+  - priority
+- **Still missing delete trust polish, dependency tracking, and project linkage.**
 
 #### Projects
 - SSR initial data
@@ -267,6 +273,7 @@ Tasks should clearly show:
 - **Phase 3 kickoff is now active**
 - Files trust/stability pass is complete enough to widen back into Tasks
 - first true Tasks CRUD milestone is now in place through real task creation
+- Tasks now also supports a first honest row-level details edit flow for core board fields
 - **Not done at the CRUD/orchestration layer**
 
 ### Exit criteria
@@ -337,7 +344,7 @@ Connect to real OpenClaw execution:
 ## Immediate Priority Queue
 
 ### P0
-1. Deepen Tasks CRUD one honest step at a time (next best candidate: real edit fields beyond routing, or delete confirmation / trust polish if needed)
+1. Deepen Tasks CRUD one honest step at a time (next best candidate: delete confirmation / trust polish, then visible project linkage or dependency tracking)
 2. Start the first real Projects owner/phase editing flow
 3. Make Project ↔ Task linkage visible and editable once Tasks/Projects both have a stable CRUD foothold
 
@@ -559,6 +566,21 @@ Connect to real OpenClaw execution:
 - Next:
   - either deepen Tasks with the first broader edit/delete trust pass, or move to the first real Projects owner/phase editing milestone if that stays cleaner.
 
+### 2026-03-11 18:5x
+- Step: Tasks row-level details editor
+- Files:
+  - `src/components/TaskRow.tsx`
+- Validation:
+  - `npx eslint src/components/TaskRow.tsx`
+  - `npm run build`
+- Commit: current checkpoint commit (`feat(tasks): add row-level details editor`)
+- Result:
+  - Tasks can now edit the core board fields directly from the row action menu instead of only creating tasks and changing routing.
+  - The new details editor saves title, project, due date, status, and priority through the existing `/api/agent-tasks` path.
+  - Reviewer and handoff remain in the separate routing editor, so the board gained broader edit coverage without pretending to be a giant all-fields form.
+- Next:
+  - give Tasks delete/status actions the same trust treatment with confirmation and real backend error handling, or move to visible project linkage if that lands cleaner.
+
 ---
 
 ## How to Update This File
@@ -587,9 +609,9 @@ Suggested template:
 
 ## Current Focus
 
-**Current focus:** Files trust/stability is in a good stop state, and Phase 3 is now underway with the first true Tasks CRUD milestone shipped
+**Current focus:** Files trust/stability is in a good stop state, and Phase 3 is now underway with real Tasks create + row-level details editing shipped
 
 **Do next:**
 1. keep the new Agents capability profile plus Team reporting-line / review-coverage / delegation flows stable and honest
-2. deepen Tasks with the next honest CRUD step (broader edit fields and/or delete trust polish) without turning the board into fake full editability
+2. deepen Tasks with the next honest trust step (delete/status confirmation + backend error handling, or visible project linkage) without turning the board into fake full editability
 3. then move to the first real Projects owner/phase editing flow instead of widening into execution automation
