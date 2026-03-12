@@ -35,6 +35,31 @@ function isTaskOverdue(task: Task) {
   return dueDate < startOfToday;
 }
 
+function isUrgentLinkedTask(task: Task) {
+  return task.status === "blocked" || isTaskOverdue(task);
+}
+
+function compareLinkedTaskPreviewPriority(a: Task, b: Task) {
+  const getRank = (task: Task) => {
+    if (task.status === "blocked") return 0;
+    if (isTaskOverdue(task)) return 1;
+    if (task.status !== "completed") return 2;
+    return 3;
+  };
+
+  const rankDiff = getRank(a) - getRank(b);
+  if (rankDiff !== 0) {
+    return rankDiff;
+  }
+
+  const dueDateDiff = parseLocalDate(a.dueDate).getTime() - parseLocalDate(b.dueDate).getTime();
+  if (dueDateDiff !== 0) {
+    return dueDateDiff;
+  }
+
+  return a.title.localeCompare(b.title);
+}
+
 function getLocalDateInputValue(offsetDays = 0) {
   const date = new Date();
   date.setDate(date.getDate() + offsetDays);
@@ -173,6 +198,21 @@ export default function TasksPageClient({
       !requestedTask &&
       !requestedTaskAnywhere
   );
+  const projectFocusPreviewTasks = useMemo(
+    () => [...scopedTasks].sort(compareLinkedTaskPreviewPriority),
+    [scopedTasks]
+  );
+  const replacementUrgentOverflowTask = useMemo(() => {
+    if (!isUrgentOverflowHandoff) {
+      return null;
+    }
+
+    return (
+      projectFocusPreviewTasks
+        .slice(3)
+        .find((task) => task.id !== requestedTaskId && isUrgentLinkedTask(task)) || null
+    );
+  }, [isUrgentOverflowHandoff, projectFocusPreviewTasks, requestedTaskId]);
   const requestedTaskCurrentViewHref = requestedTaskAnywhere
     ? requestedTaskAnywhere.project.trim()
       ? `/agents/tasks?project=${encodeURIComponent(requestedTaskAnywhere.project.trim())}&task=${encodeURIComponent(requestedTaskAnywhere.id)}`
@@ -274,6 +314,17 @@ export default function TasksPageClient({
     setShowMismatchOnly(false);
     setHighlightedTaskId(null);
     setPendingTargetTaskId(requestedTask.id);
+  };
+
+  const handleJumpToReplacementUrgentOverflowTask = () => {
+    if (!replacementUrgentOverflowTask) {
+      return;
+    }
+
+    setStatusFilter("all");
+    setShowMismatchOnly(false);
+    setHighlightedTaskId(null);
+    setPendingTargetTaskId(replacementUrgentOverflowTask.id);
   };
 
   useEffect(() => {
@@ -556,21 +607,42 @@ export default function TasksPageClient({
         >
           <div className="space-y-1">
             <p className="font-semibold" style={{ color: "#FF9F0A" }}>
-              {requestedTaskOutsideFocus && requestedTaskAnywhere
-                ? `Focused task handoff moved outside ${projectFocus}`
-                : isUrgentOverflowHandoff
-                  ? "Requested hidden urgent task is no longer on this board"
-                  : "Requested linked task is no longer on this board"}
+              {isUrgentOverflowHandoff && requestedTaskOutsideFocus && requestedTaskAnywhere
+                ? `Requested hidden urgent task moved outside ${projectFocus}`
+                : requestedTaskOutsideFocus && requestedTaskAnywhere
+                  ? `Focused task handoff moved outside ${projectFocus}`
+                  : isUrgentOverflowHandoff
+                    ? "Requested hidden urgent task is no longer on this board"
+                    : "Requested linked task is no longer on this board"}
             </p>
             <p style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
-              {requestedTaskOutsideFocus && requestedTaskAnywhere
-                ? `This Tasks view opened from Projects for ${projectFocus}, but the requested task \"${requestedTaskAnywhere.title}\" is now saved under ${requestedTaskAnywhere.project.trim() ? `the ${requestedTaskAnywhere.project} project label` : "no project label"}. Projects stays read-only for linkage, so this focused board does not pretend that task still belongs here.`
-                : isUrgentOverflowHandoff
-                  ? "This Tasks view opened from the Projects urgent-overflow handoff, but the requested hidden blocked/overdue task is no longer present on the current Tasks board. Projects stays read-only for linkage here, so Mission Control shows the missing-target state instead of pretending the urgent-overflow shortcut still has a live row to land on."
-                  : "This Tasks view opened from a direct Projects handoff, but the requested task is no longer present on the current Tasks board. Projects stays read-only for linkage here, so Mission Control shows the missing-target state instead of pretending the row still exists."}
+              {isUrgentOverflowHandoff && requestedTaskOutsideFocus && requestedTaskAnywhere
+                ? replacementUrgentOverflowTask
+                  ? `This Tasks view opened from the Projects urgent-overflow handoff, but the requested hidden blocked/overdue task \"${requestedTaskAnywhere.title}\" is now saved under ${requestedTaskAnywhere.project.trim() ? `the ${requestedTaskAnywhere.project} project label` : "no project label"}. Projects stays read-only for linkage here, so Mission Control does not pretend that task still belongs under ${projectFocus}; instead, you can jump to the current first hidden urgent task still queued beyond the three-row preview for this project.`
+                  : `This Tasks view opened from the Projects urgent-overflow handoff, but the requested hidden blocked/overdue task \"${requestedTaskAnywhere.title}\" is now saved under ${requestedTaskAnywhere.project.trim() ? `the ${requestedTaskAnywhere.project} project label` : "no project label"}. Projects stays read-only for linkage here, so this focused board does not pretend that task still belongs under ${projectFocus}.`
+                : requestedTaskOutsideFocus && requestedTaskAnywhere
+                  ? `This Tasks view opened from Projects for ${projectFocus}, but the requested task \"${requestedTaskAnywhere.title}\" is now saved under ${requestedTaskAnywhere.project.trim() ? `the ${requestedTaskAnywhere.project} project label` : "no project label"}. Projects stays read-only for linkage, so this focused board does not pretend that task still belongs here.`
+                  : isUrgentOverflowHandoff
+                    ? replacementUrgentOverflowTask
+                      ? `This Tasks view opened from the Projects urgent-overflow handoff, but the requested hidden blocked/overdue task is no longer present on the current Tasks board. Projects stays read-only for linkage here, so Mission Control shows the missing-target state instead of pretending the original urgent-overflow shortcut still has a live row to land on. The current board still has another hidden urgent task beyond the three-row Projects preview, and you can jump straight to it here.`
+                      : "This Tasks view opened from the Projects urgent-overflow handoff, but the requested hidden blocked/overdue task is no longer present on the current Tasks board. Projects stays read-only for linkage here, so Mission Control shows the missing-target state instead of pretending the urgent-overflow shortcut still has a live row to land on."
+                    : "This Tasks view opened from a direct Projects handoff, but the requested task is no longer present on the current Tasks board. Projects stays read-only for linkage here, so Mission Control shows the missing-target state instead of pretending the row still exists."}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {isUrgentOverflowHandoff && replacementUrgentOverflowTask && (
+              <button
+                type="button"
+                onClick={handleJumpToReplacementUrgentOverflowTask}
+                className="rounded-full px-3 py-1 font-semibold"
+                style={{
+                  color: "#FF9F0A",
+                  border: "1px solid color-mix(in srgb, #FF9F0A 34%, transparent)",
+                }}
+              >
+                Jump to current hidden urgent task
+              </button>
+            )}
             {requestedTaskOutsideFocus && requestedTaskAnywhere && (
               <a
                 href={requestedTaskCurrentViewHref}

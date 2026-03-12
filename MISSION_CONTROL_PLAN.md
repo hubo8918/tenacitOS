@@ -1187,6 +1187,21 @@ Connect to real OpenClaw execution:
 - Next:
   - keep Project ↔ Task linkage read-only, then reassess the next tight Tasks/Projects trust issue instead of widening into fake cross-page editing.
 
+### 2026-03-12 17:xx
+- Step: Tasks urgent-overflow missing-target recovery
+- Files:
+  - `src/app/(dashboard)/agents/tasks/TasksPageClient.tsx`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/agents/tasks/TasksPageClient.tsx"`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(tasks): recover urgent-overflow handoff when target moves`)
+- Result:
+  - If a Projects urgent-overflow handoff opens Tasks after the originally targeted hidden urgent task moved away or disappeared, the Tasks view now stays honest without dead-ending.
+  - When another hidden blocked or overdue task still exists beyond the reconstructed three-row Projects preview for that focused project, Tasks now offers a direct jump to that current urgent row instead of pretending the original shortcut still has a live target.
+  - This keeps Project ↔ Task linkage read-only while making the urgent-overflow recovery path more useful and explicit.
+- Next:
+  - keep Project ↔ Task linkage read-only, and if the next trust pass stays narrow, surface the same recovery option from the Projects-side urgent-overflow summary when the original target is already gone.
+
 ---
 
 ## How to Update This File
