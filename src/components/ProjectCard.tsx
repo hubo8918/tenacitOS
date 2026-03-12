@@ -17,6 +17,30 @@ const phaseStatusOptions: ProjectPhase["status"][] = ["pending", "in_progress", 
 
 const unassignedAgent = { emoji: "👤", name: "Unassigned", color: "#8E8E93" };
 
+function parseLocalDate(dateString: string) {
+  const [year, month, day] = dateString.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function isTaskOverdue(dateString: string, status: Task["status"]) {
+  if (status === "completed") {
+    return false;
+  }
+
+  const dueDate = parseLocalDate(dateString);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  return dueDate < startOfToday;
+}
+
+function getLinkedTaskAttentionSummary(tasks: Task[]) {
+  const openCount = tasks.filter((task) => task.status !== "completed").length;
+  const blockedCount = tasks.filter((task) => task.status === "blocked").length;
+  const overdueCount = tasks.filter((task) => isTaskOverdue(task.dueDate, task.status)).length;
+
+  return { openCount, blockedCount, overdueCount };
+}
+
 function getCurrentPhase(project: Project): ProjectPhase | null {
   return (
     project.phases.find((phase) => phase.status === "in_progress") ||
@@ -98,10 +122,7 @@ export function ProjectCard({
     return { resolved, unresolvedIds };
   }, [currentPhase, project.phases]);
   const visibleLinkedTasks = useMemo(() => linkedTasks.slice(0, 3), [linkedTasks]);
-  const openLinkedTaskCount = useMemo(
-    () => linkedTasks.filter((task) => task.status !== "completed").length,
-    [linkedTasks]
-  );
+  const linkedTaskAttention = useMemo(() => getLinkedTaskAttentionSummary(linkedTasks), [linkedTasks]);
 
   const resetDraft = () => {
     const nextPhase = getCurrentPhase(project);
@@ -537,7 +558,14 @@ export function ProjectCard({
                 : linkedTasksUnavailable
                   ? "Unavailable"
                   : linkedTasks.length > 0
-                    ? `${linkedTasks.length} total • ${openLinkedTaskCount} open`
+                    ? [
+                        `${linkedTasks.length} total`,
+                        `${linkedTaskAttention.openCount} open`,
+                        linkedTaskAttention.blockedCount > 0 ? `${linkedTaskAttention.blockedCount} blocked` : null,
+                        linkedTaskAttention.overdueCount > 0 ? `${linkedTaskAttention.overdueCount} overdue` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" • ")
                     : "0 linked"}
             </span>
           </div>
@@ -554,14 +582,22 @@ export function ProjectCard({
             <div className="space-y-2">
               {visibleLinkedTasks.map((task) => {
                 const taskStatus = taskStatusConfig[task.status];
+                const isOverdueTask = isTaskOverdue(task.dueDate, task.status);
                 return (
                   <div key={task.id} className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="text-xs font-medium truncate" style={{ color: "var(--text-secondary)" }}>
                         {task.title}
                       </p>
-                      <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-                        {task.dueDate ? `Due ${task.dueDate}` : "No due date"}
+                      <p
+                        className="text-[10px]"
+                        style={{ color: isOverdueTask ? "var(--status-blocked)" : "var(--text-muted)" }}
+                      >
+                        {task.dueDate
+                          ? isOverdueTask
+                            ? `Overdue since ${task.dueDate}`
+                            : `Due ${task.dueDate}`
+                          : "No due date"}
                       </p>
                     </div>
                     <span
