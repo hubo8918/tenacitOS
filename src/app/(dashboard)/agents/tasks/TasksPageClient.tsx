@@ -175,7 +175,14 @@ export default function TasksPageClient({
       ? `/agents/tasks?project=${encodeURIComponent(requestedTaskAnywhere.project.trim())}&task=${encodeURIComponent(requestedTaskAnywhere.id)}`
       : `/agents/tasks?task=${encodeURIComponent(requestedTaskAnywhere.id)}`
     : "/agents/tasks";
+  const requestedMismatchTaskResolved = Boolean(
+    canCheckProjectMatches && showMismatchOnly && requestedTaskId && !requestedMismatchTask && requestedTaskAnywhere
+  );
+  const requestedMismatchTaskMissing = Boolean(
+    canCheckProjectMatches && showMismatchOnly && requestedTaskId && !requestedMismatchTask && !requestedTaskAnywhere
+  );
   const showMismatchHandoffNotice = showMismatchOnly && Boolean(requestedMismatchTask);
+  const showMissingMismatchTaskNotice = requestedMismatchTaskResolved || requestedMismatchTaskMissing;
   const showTargetedTaskHandoffNotice = !showMismatchOnly && Boolean(requestedTask);
   const showMissingTargetedTaskNotice = requestedTaskOutsideFocus || requestedTaskMissingFromBoard;
 
@@ -642,6 +649,53 @@ export default function TasksPageClient({
           >
             Jump back to requested row
           </button>
+        </div>
+      )}
+
+      {showMissingMismatchTaskNotice && (
+        <div
+          className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2 text-xs"
+          style={{
+            backgroundColor: "color-mix(in srgb, #FFD60A 10%, var(--surface-elevated))",
+            border: "1px solid color-mix(in srgb, #FFD60A 28%, transparent)",
+          }}
+        >
+          <div className="space-y-1">
+            <p className="font-semibold" style={{ color: "#FFD60A" }}>
+              {requestedMismatchTaskResolved && requestedTaskAnywhere
+                ? `Requested mismatch row no longer needs mismatch-only cleanup: ${requestedTaskAnywhere.title}`
+                : "Requested mismatch row is no longer on this board"}
+            </p>
+            <p style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
+              {requestedMismatchTaskResolved && requestedTaskAnywhere
+                ? `This mismatch-only view opened from Projects for a specific label-drift row, but "${requestedTaskAnywhere.title}" no longer appears here because it is now saved under ${requestedTaskAnywhere.project.trim() ? `the ${requestedTaskAnywhere.project} project label` : "no project label"}. Projects stays read-only for linkage, so Mission Control points you to the task's current Tasks view instead of pretending it still belongs in mismatch-only cleanup.`
+                : "This mismatch-only view opened from Projects for a specific label-drift row, but that task is no longer present on the current Tasks board. Projects stays read-only for linkage here, so Mission Control shows the missing-target state instead of pretending the cleanup row still exists."}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {requestedMismatchTaskResolved && requestedTaskAnywhere && (
+              <a
+                href={requestedTaskCurrentViewHref}
+                className="rounded-full px-3 py-1 font-semibold"
+                style={{
+                  color: "#FFD60A",
+                  border: "1px solid color-mix(in srgb, #FFD60A 36%, transparent)",
+                }}
+              >
+                {requestedTaskAnywhere.project.trim() ? "Open task in its current Tasks view" : "Open task on full Tasks board"}
+              </a>
+            )}
+            <a
+              href="/agents/tasks"
+              className="rounded-full px-3 py-1 font-semibold"
+              style={{
+                color: "#FFD60A",
+                border: "1px solid color-mix(in srgb, #FFD60A 36%, transparent)",
+              }}
+            >
+              Open full Tasks board
+            </a>
+          </div>
         </div>
       )}
 

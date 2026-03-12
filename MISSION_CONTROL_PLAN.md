@@ -1080,6 +1080,21 @@ Connect to real OpenClaw execution:
 - Next:
   - keep Project ↔ Task linkage read-only, and if the next trust step stays narrow, add the same honest missing-target explanation for mismatch-specific handoffs after cleanup removes the requested row.
 
+### 2026-03-12 13:xx
+- Step: Tasks missing mismatch-handoff state
+- Files:
+  - `src/app/(dashboard)/agents/tasks/TasksPageClient.tsx`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/agents/tasks/TasksPageClient.tsx"`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(tasks): explain missing mismatch handoff state`)
+- Result:
+  - A Projects → Tasks mismatch-only handoff now stays honest when the requested cleanup row no longer appears because the label drift was already fixed or the task disappeared.
+  - The Tasks page now explains that missing mismatch-target state instead of quietly leaving operators in mismatch-only mode with no indication of what changed.
+  - When the task still exists outside mismatch-only cleanup, the page offers a direct path into that task's current Tasks view without pretending Projects can repair linkage inline.
+- Next:
+  - keep Project ↔ Task linkage read-only, then reassess the next tight Tasks/Projects trust issue instead of widening into fake cross-page editing.
+
 ---
 
 ## How to Update This File
