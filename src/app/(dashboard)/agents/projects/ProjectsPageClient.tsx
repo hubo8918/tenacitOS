@@ -72,6 +72,10 @@ export default function ProjectsPageClient({
 
     return `${topLabels.join(", ")}${remainingLabelCount > 0 ? ` +${remainingLabelCount} more` : ""}`;
   })();
+  const firstMismatchTaskId = taskProjectLabelMismatchTasks[0]?.id || "";
+  const mismatchTasksHref = firstMismatchTaskId
+    ? `/agents/tasks?mismatch=1&task=${encodeURIComponent(firstMismatchTaskId)}`
+    : "/agents/tasks?mismatch=1";
   const showTaskProjectMismatchSummary = !projectFocus && !linkedTasksLoading && !linkedTasksUnavailable && taskProjectLabelMismatchTasks.length > 0;
 
   const activeCount = visibleProjects.filter((p) => p.status === "active").length;
@@ -165,18 +169,18 @@ export default function ProjectsPageClient({
               Task ↔ Project label drift needs cleanup
             </p>
             <p style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
-              {taskProjectLabelMismatchTasks.length} task project label mismatch{taskProjectLabelMismatchTasks.length === 1 ? "" : "es"} currently do not map to an exact Projects title ({taskProjectLabelMismatchPreview}). Projects stays read-only here instead of pretending those tasks are linked.
+              {taskProjectLabelMismatchTasks.length} task project label mismatch{taskProjectLabelMismatchTasks.length === 1 ? "" : "es"} currently do not map to an exact Projects title ({taskProjectLabelMismatchPreview}). Projects stays read-only here instead of pretending those tasks are linked, so this handoff lands on the first affected Tasks row for cleanup.
             </p>
           </div>
           <a
-            href="/agents/tasks?mismatch=1"
+            href={mismatchTasksHref}
             className="rounded-full px-3 py-1 font-medium"
             style={{
               color: "#FFD60A",
               border: "1px solid color-mix(in srgb, #FFD60A 32%, transparent)",
             }}
           >
-            Open mismatch-only Tasks view
+            Open first mismatched task in Tasks
           </a>
         </div>
       )}

@@ -69,6 +69,7 @@ export default function TasksPageClient({
   const searchParams = useSearchParams();
   const projectFocus = searchParams.get("project")?.trim() || "";
   const mismatchOnlyRequested = searchParams.get("mismatch") === "1";
+  const mismatchTaskIdRequested = searchParams.get("task")?.trim() || "";
   const normalizedProjectFocus = normalizeProjectLabel(projectFocus);
   const hasInitialTasks = initialTasks.length > 0;
   const { data, loading, error, refetch } = useFetch<{ tasks: Task[] }>("/api/agent-tasks", {
@@ -89,7 +90,7 @@ export default function TasksPageClient({
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [showMismatchOnly, setShowMismatchOnly] = useState(mismatchOnlyRequested);
-  const [jumpToFirstMismatchPending, setJumpToFirstMismatchPending] = useState(false);
+  const [pendingMismatchTaskId, setPendingMismatchTaskId] = useState<string | null>(mismatchTaskIdRequested || null);
   const [sortField, setSortField] = useState<SortField>("status");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -194,7 +195,7 @@ export default function TasksPageClient({
       }
       return next;
     });
-    setJumpToFirstMismatchPending(false);
+    setPendingMismatchTaskId(null);
   };
 
   const handleJumpToFirstMismatch = () => {
@@ -204,16 +205,16 @@ export default function TasksPageClient({
 
     setStatusFilter("all");
     setShowMismatchOnly(true);
-    setJumpToFirstMismatchPending(true);
+    setPendingMismatchTaskId(projectLabelMismatchTasks[0]?.id || null);
   };
 
   useEffect(() => {
     setShowMismatchOnly(mismatchOnlyRequested);
-    setJumpToFirstMismatchPending(false);
+    setPendingMismatchTaskId(mismatchTaskIdRequested || null);
     if (mismatchOnlyRequested) {
       setStatusFilter("all");
     }
-  }, [mismatchOnlyRequested, normalizedProjectFocus]);
+  }, [mismatchOnlyRequested, mismatchTaskIdRequested, normalizedProjectFocus]);
 
   useEffect(() => {
     if (showMismatchOnly && projectLabelMismatchCount === 0) {
@@ -222,16 +223,16 @@ export default function TasksPageClient({
   }, [projectLabelMismatchCount, showMismatchOnly]);
 
   useEffect(() => {
-    if (!jumpToFirstMismatchPending) {
+    if (!pendingMismatchTaskId) {
       return;
     }
 
-    const firstMismatchTask = filteredTasks.find((task) => projectLabelMismatchTaskIds.has(task.id));
-    if (!firstMismatchTask) {
+    const requestedMismatchTask = filteredTasks.find((task) => task.id === pendingMismatchTaskId);
+    if (!requestedMismatchTask) {
       return;
     }
 
-    const row = document.getElementById(`task-row-${firstMismatchTask.id}`);
+    const row = document.getElementById(`task-row-${requestedMismatchTask.id}`);
     if (!row) {
       return;
     }
@@ -239,8 +240,8 @@ export default function TasksPageClient({
     window.requestAnimationFrame(() => {
       row.scrollIntoView({ behavior: "smooth", block: "center" });
     });
-    setJumpToFirstMismatchPending(false);
-  }, [filteredTasks, jumpToFirstMismatchPending, projectLabelMismatchTaskIds]);
+    setPendingMismatchTaskId(null);
+  }, [filteredTasks, pendingMismatchTaskId]);
 
   useEffect(() => {
     if (!showCreateForm) {
