@@ -800,6 +800,21 @@ Connect to real OpenClaw execution:
 - Next:
   - keep Project ↔ Task linkage read-only, then return to the next tighter trust issue on Tasks/Projects instead of widening into fake cross-page editing.
 
+### 2026-03-12 03:5x
+- Step: Tasks project-focus scoped board summaries
+- Files:
+  - `src/app/(dashboard)/agents/tasks/TasksPageClient.tsx`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/agents/tasks/TasksPageClient.tsx"`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(tasks): scope project-focused board summaries`)
+- Result:
+  - When Tasks opens from a Project-specific focus, the board summary, attention badges, and status-filter counts now stay scoped to that project instead of quietly mixing in global board counts.
+  - This keeps the focused Project ↔ Task navigation honest: operators now see the state of the selected project's tasks rather than unrelated work from other projects.
+  - The task rows still use the full board data for dependency context, so this narrows the visible trust boundary without widening into cross-page editing.
+- Next:
+  - keep Project ↔ Task linkage read-only, and if the next step stays narrow, either add a clearer zero-linked-task affordance from Projects or return to the next tight Tasks/Projects trust issue.
+
 ---
 
 ## How to Update This File
@@ -828,7 +843,7 @@ Suggested template:
 
 ## Current Focus
 
-**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, a first Projects owner/phase editor, participating-agent visibility, current-phase dependency visibility, read-only Project ↔ Task linkage visibility, and a linked-task attention summary shipped
+**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, a first Projects owner/phase editor, participating-agent visibility, current-phase dependency visibility, read-only Project ↔ Task linkage visibility, and a linked-task attention summary shipped
 
 **Do next:**
 1. keep the new Agents capability profile plus Team reporting-line / review-coverage / delegation flows stable and honest

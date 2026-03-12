@@ -83,21 +83,18 @@ export default function TasksPageClient({ initialTasks, initialTaskAgents }: Tas
   const [newPriority, setNewPriority] = useState<Task["priority"]>("medium");
   const [newAssigneeAgentId, setNewAssigneeAgentId] = useState("");
 
-  const focusedProjectTaskCount = useMemo(
+  const scopedTasks = useMemo(
     () =>
       normalizedProjectFocus
-        ? tasks.filter((task) => normalizeProjectLabel(task.project) === normalizedProjectFocus).length
-        : tasks.length,
+        ? tasks.filter((task) => normalizeProjectLabel(task.project) === normalizedProjectFocus)
+        : tasks,
     [tasks, normalizedProjectFocus]
   );
 
-  const filteredTasks = useMemo(() => {
-    const result = [...tasks];
-    const projectFiltered = normalizedProjectFocus
-      ? result.filter((task) => normalizeProjectLabel(task.project) === normalizedProjectFocus)
-      : result;
+  const focusedProjectTaskCount = scopedTasks.length;
 
-    const filtered = statusFilter === "all" ? projectFiltered : projectFiltered.filter((task) => task.status === statusFilter);
+  const filteredTasks = useMemo(() => {
+    const filtered = statusFilter === "all" ? [...scopedTasks] : scopedTasks.filter((task) => task.status === statusFilter);
 
     filtered.sort((a, b) => {
       let cmp = 0;
@@ -123,7 +120,7 @@ export default function TasksPageClient({ initialTasks, initialTaskAgents }: Tas
     });
 
     return filtered;
-  }, [tasks, normalizedProjectFocus, statusFilter, sortField, sortDir]);
+  }, [scopedTasks, statusFilter, sortField, sortDir]);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
@@ -214,10 +211,10 @@ export default function TasksPageClient({ initialTasks, initialTaskAgents }: Tas
     }
   };
 
-  const inProgressCount = tasks.filter((task) => task.status === "in_progress").length;
-  const completedCount = tasks.filter((task) => task.status === "completed").length;
-  const blockedCount = tasks.filter((task) => task.status === "blocked").length;
-  const overdueCount = tasks.filter(isTaskOverdue).length;
+  const inProgressCount = scopedTasks.filter((task) => task.status === "in_progress").length;
+  const completedCount = scopedTasks.filter((task) => task.status === "completed").length;
+  const blockedCount = scopedTasks.filter((task) => task.status === "blocked").length;
+  const overdueCount = scopedTasks.filter(isTaskOverdue).length;
 
   const filterButtons: { key: StatusFilter; label: string }[] = [
     { key: "all", label: "All" },
@@ -297,7 +294,7 @@ export default function TasksPageClient({ initialTasks, initialTaskAgents }: Tas
             Tasks
           </h1>
           <p style={{ color: "var(--text-secondary)", fontSize: "14px" }}>
-            Coordination board &bull; {tasks.length} tracked &bull; {inProgressCount} in progress &bull; {completedCount} completed
+            Coordination board &bull; {scopedTasks.length} {projectFocus ? "in focus" : "tracked"} &bull; {inProgressCount} in progress &bull; {completedCount} completed
           </p>
           <p className="mt-2 text-sm" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
             Use this page to track shared work across agents and projects. Task status here reflects backlog progress,
@@ -533,8 +530,8 @@ export default function TasksPageClient({ initialTasks, initialTaskAgents }: Tas
                   }}
                 >
                   {button.label}
-                  {button.key === "all" && ` (${tasks.length})`}
-                  {button.key !== "all" && ` (${tasks.filter((task) => task.status === button.key).length})`}
+                  {button.key === "all" && ` (${scopedTasks.length})`}
+                  {button.key !== "all" && ` (${scopedTasks.filter((task) => task.status === button.key).length})`}
                 </button>
               );
             })}
