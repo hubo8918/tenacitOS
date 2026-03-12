@@ -116,7 +116,9 @@ To avoid fake progress or silent drift:
 #### Projects
 - SSR initial data
 - unreadable stored data no longer masquerades as an empty portfolio
-- **Still missing full operational CRUD + ownership flow.**
+- first owner/current-phase planning editor is now live
+- participating-agent visibility now reads directly on each project card
+- **Still missing full operational CRUD, dependency visibility/editing, and linked-task management.**
 
 #### Calendar
 - SSR initial task-backed calendar data
@@ -665,6 +667,21 @@ Connect to real OpenClaw execution:
 - Next:
   - either deepen dependency editing with better filtering / cycle handling, or move to Projects participating-agent / dependency visibility.
 
+### 2026-03-11 23:5x
+- Step: Projects participating-agent visibility v1
+- Files:
+  - `src/components/ProjectCard.tsx`
+- Validation:
+  - `npx eslint src/components/ProjectCard.tsx`
+  - `npm run build`
+- Commit: current checkpoint commit (`feat(projects): expose participating agents`)
+- Result:
+  - Project cards now surface participating-agent metadata inline instead of leaving collaboration scope hidden in stored fields.
+  - Cards show up to three agent avatars plus an overflow count so cross-project staffing reads at a glance without pretending Projects already has full participant editing.
+  - This keeps the trust boundary honest: Projects is clearer about who is involved without pretending the page already has a full coordination matrix.
+- Next:
+  - either add project dependency visibility, or return to Tasks dependency-editor safety/filtering.
+
 ---
 
 ## How to Update This File
@@ -693,9 +710,9 @@ Suggested template:
 
 ## Current Focus
 
-**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + dependency visibility + a first dependency editor, plus a first Projects owner/phase editor shipped
+**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + dependency visibility + a first dependency editor, plus a first Projects owner/phase editor and participating-agent visibility shipped
 
 **Do next:**
 1. keep the new Agents capability profile plus Team reporting-line / review-coverage / delegation flows stable and honest
-2. either deepen the Tasks dependency editor (filtering / cycle safety / better cross-linking), or move to Projects participating-agent / dependency visibility
+2. either deepen Projects with dependency visibility, or return to Tasks dependency-editor safety/filtering
 3. keep pushing coordination surfaces forward without pretending execution automation already exists

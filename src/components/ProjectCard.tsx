@@ -60,6 +60,13 @@ export function ProjectCard({ project, teamAgents, onUpdate }: ProjectCardProps)
       ? project.agent
       : unassignedAgent;
 
+  const participatingAgents = useMemo(
+    () =>
+      teamAgents.filter((agent) => project.participatingAgentIds.includes(agent.id)).slice(0, 3),
+    [teamAgents, project.participatingAgentIds]
+  );
+  const participatingCount = project.participatingAgentIds.length;
+
   const resetDraft = () => {
     const nextPhase = getCurrentPhase(project);
     setEditStatus(project.status);
@@ -378,6 +385,50 @@ export function ProjectCard({ project, teamAgents, onUpdate }: ProjectCardProps)
             )}
           </div>
         </div>
+
+        {/* Participating agents section */}
+        {participatingCount > 0 && (
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
+                Participating agents
+              </span>
+              {participatingCount > 3 && (
+                <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                  {participatingCount - 3} more
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {participatingAgents.map((agent) => (
+                <div
+                  key={agent.id}
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-xs flex-shrink-0"
+                  style={{
+                    backgroundColor: `${agent.color}20`,
+                    border: `1.5px solid ${agent.color}40`,
+                  }}
+                  title={`${agent.name} (${agent.role || "Team member"})`}
+                >
+                  {agent.emoji}
+                </div>
+              ))}
+              {participatingCount > participatingAgents.length && (
+                <div
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] flex-shrink-0"
+                  style={{
+                    backgroundColor: "var(--surface-elevated)",
+                    border: "1.5px solid var(--border)",
+                    color: "var(--text-muted)",
+                  }}
+                  title={`${participatingCount} total participating agents`}
+                >
+                  {participatingCount}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="mb-4">
           <div className="flex items-center justify-between mb-1.5">
