@@ -1,7 +1,9 @@
 import { headers } from "next/headers";
 import ProjectsPageClient from "./ProjectsPageClient";
-import { getProjects } from "@/lib/projects-data";
+import type { Task } from "@/data/mockTasksData";
 import type { TeamAgent } from "@/data/mockTeamData";
+import { getAgentTasks } from "@/lib/agent-tasks-data";
+import { getProjects } from "@/lib/projects-data";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +12,15 @@ async function getInitialProjects() {
     return await getProjects();
   } catch {
     return [];
+  }
+}
+
+async function getInitialTasks(): Promise<{ tasks: Task[]; available: boolean }> {
+  try {
+    const tasks = await getAgentTasks();
+    return { tasks, available: true };
+  } catch {
+    return { tasks: [], available: false };
   }
 }
 
@@ -39,6 +50,18 @@ async function getInitialTeam(): Promise<TeamAgent[]> {
 }
 
 export default async function ProjectsPage() {
-  const [initialProjects, initialTeam] = await Promise.all([getInitialProjects(), getInitialTeam()]);
-  return <ProjectsPageClient initialProjects={initialProjects} initialTeam={initialTeam} />;
+  const [{ tasks: initialTasks, available: initialTasksAvailable }, initialProjects, initialTeam] = await Promise.all([
+    getInitialTasks(),
+    getInitialProjects(),
+    getInitialTeam(),
+  ]);
+
+  return (
+    <ProjectsPageClient
+      initialProjects={initialProjects}
+      initialTeam={initialTeam}
+      initialTasks={initialTasks}
+      initialTasksAvailable={initialTasksAvailable}
+    />
+  );
 }

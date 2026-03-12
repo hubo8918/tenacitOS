@@ -3,21 +3,44 @@
 import { FolderKanban } from "lucide-react";
 import { ProjectCard } from "@/components/ProjectCard";
 import type { Project } from "@/data/mockProjectsData";
+import type { Task } from "@/data/mockTasksData";
 import type { TeamAgent } from "@/data/mockTeamData";
 import { useFetch } from "@/lib/useFetch";
 
 interface ProjectsPageClientProps {
   initialProjects: Project[];
   initialTeam: TeamAgent[];
+  initialTasks: Task[];
+  initialTasksAvailable: boolean;
 }
 
-export default function ProjectsPageClient({ initialProjects, initialTeam }: ProjectsPageClientProps) {
+function normalizeProjectLabel(value: string) {
+  return value.trim().toLowerCase();
+}
+
+export default function ProjectsPageClient({
+  initialProjects,
+  initialTeam,
+  initialTasks,
+  initialTasksAvailable,
+}: ProjectsPageClientProps) {
   const hasInitialProjects = initialProjects.length > 0;
   const { data, loading, error, refetch } = useFetch<{ projects: Project[] }>("/api/projects", {
     initialData: hasInitialProjects ? { projects: initialProjects } : null,
     fetchOnMount: !hasInitialProjects,
   });
+  const {
+    data: tasksData,
+    loading: tasksLoading,
+    error: tasksError,
+  } = useFetch<{ tasks: Task[] }>("/api/agent-tasks", {
+    initialData: initialTasksAvailable ? { tasks: initialTasks } : null,
+    fetchOnMount: !initialTasksAvailable,
+  });
   const projects = data?.projects || [];
+  const tasks = tasksData?.tasks || [];
+  const linkedTasksLoading = tasksLoading && !tasksData && !tasksError;
+  const linkedTasksUnavailable = Boolean(tasksError) && !tasksData && !tasksLoading;
 
   const activeCount = projects.filter((p) => p.status === "active").length;
   const planningCount = projects.filter((p) => p.status === "planning").length;
@@ -69,9 +92,23 @@ export default function ProjectsPageClient({ initialProjects, initialTeam }: Pro
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-        {projects.map((project) => (
-          <ProjectCard key={project.id} project={project} teamAgents={initialTeam} onUpdate={refetch} />
-        ))}
+        {projects.map((project) => {
+          const linkedTasks = tasks.filter(
+            (task) => normalizeProjectLabel(task.project) === normalizeProjectLabel(project.title)
+          );
+
+          return (
+            <ProjectCard
+              key={project.id}
+              project={project}
+              teamAgents={initialTeam}
+              linkedTasks={linkedTasks}
+              linkedTasksLoading={linkedTasksLoading}
+              linkedTasksUnavailable={linkedTasksUnavailable}
+              onUpdate={refetch}
+            />
+          );
+        })}
       </div>
     </div>
   );

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { priorityConfig, statusConfig, type Project, type ProjectPhase } from "@/data/mockProjectsData";
+import { taskStatusConfig, type Task } from "@/data/mockTasksData";
 import type { TeamAgent } from "@/data/mockTeamData";
 
 const phaseStatusConfig: Record<ProjectPhase["status"], { label: string; color: string }> = {
@@ -36,10 +37,20 @@ function slugify(value: string) {
 interface ProjectCardProps {
   project: Project;
   teamAgents: TeamAgent[];
+  linkedTasks: Task[];
+  linkedTasksLoading?: boolean;
+  linkedTasksUnavailable?: boolean;
   onUpdate?: () => void;
 }
 
-export function ProjectCard({ project, teamAgents, onUpdate }: ProjectCardProps) {
+export function ProjectCard({
+  project,
+  teamAgents,
+  linkedTasks,
+  linkedTasksLoading = false,
+  linkedTasksUnavailable = false,
+  onUpdate,
+}: ProjectCardProps) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -86,6 +97,11 @@ export function ProjectCard({ project, teamAgents, onUpdate }: ProjectCardProps)
 
     return { resolved, unresolvedIds };
   }, [currentPhase, project.phases]);
+  const visibleLinkedTasks = useMemo(() => linkedTasks.slice(0, 3), [linkedTasks]);
+  const openLinkedTaskCount = useMemo(
+    () => linkedTasks.filter((task) => task.status !== "completed").length,
+    [linkedTasks]
+  );
 
   const resetDraft = () => {
     const nextPhase = getCurrentPhase(project);
@@ -506,6 +522,85 @@ export function ProjectCard({ project, teamAgents, onUpdate }: ProjectCardProps)
             )}
           </div>
         )}
+
+        <div
+          className="mb-4 rounded-lg px-3 py-2"
+          style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}
+        >
+          <div className="flex items-center justify-between gap-2 mb-1.5">
+            <span className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
+              Linked tasks
+            </span>
+            <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+              {linkedTasksLoading
+                ? "Loading..."
+                : linkedTasksUnavailable
+                  ? "Unavailable"
+                  : linkedTasks.length > 0
+                    ? `${linkedTasks.length} total • ${openLinkedTaskCount} open`
+                    : "0 linked"}
+            </span>
+          </div>
+
+          {linkedTasksLoading ? (
+            <p className="text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
+              Loading task linkage from the Tasks board...
+            </p>
+          ) : linkedTasksUnavailable ? (
+            <p className="text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
+              Tasks data is unavailable right now, so project linkage stays read-only until the Tasks board can be loaded again.
+            </p>
+          ) : linkedTasks.length > 0 ? (
+            <div className="space-y-2">
+              {visibleLinkedTasks.map((task) => {
+                const taskStatus = taskStatusConfig[task.status];
+                return (
+                  <div key={task.id} className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium truncate" style={{ color: "var(--text-secondary)" }}>
+                        {task.title}
+                      </p>
+                      <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                        {task.dueDate ? `Due ${task.dueDate}` : "No due date"}
+                      </p>
+                    </div>
+                    <span
+                      className="inline-flex items-center rounded-full px-2 py-1 text-[10px] font-medium whitespace-nowrap"
+                      style={{
+                        backgroundColor: `color-mix(in srgb, ${taskStatus.color} 12%, transparent)`,
+                        color: taskStatus.color,
+                        border: `1px solid color-mix(in srgb, ${taskStatus.color} 28%, transparent)`,
+                      }}
+                    >
+                      {taskStatus.label}
+                    </span>
+                  </div>
+                );
+              })}
+
+              <div className="flex items-center justify-between gap-2 pt-1">
+                <p className="text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
+                  Read-only summary from Tasks based on current task project labels; editing still lives on the Tasks board.
+                </p>
+                {linkedTasks.length > visibleLinkedTasks.length && (
+                  <a
+                    href="/agents/tasks"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[10px] font-medium whitespace-nowrap"
+                    style={{ color: "#0A84FF" }}
+                  >
+                    View more ↗
+                  </a>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
+              No tasks currently link back to this project from the Tasks board labels saved on each task.
+            </p>
+          )}
+        </div>
 
         <div className="mb-4">
           <div className="flex items-center justify-between mb-1.5">

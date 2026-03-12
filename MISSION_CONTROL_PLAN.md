@@ -124,7 +124,8 @@ To avoid fake progress or silent drift:
 - first owner/current-phase planning editor is now live
 - participating-agent visibility now reads directly on each project card
 - current-phase dependency visibility now reads directly on each project card
-- **Still missing full operational CRUD, dependency editing, and linked-task management.**
+- project ↔ task linkage now reads directly on each project card as a read-only Tasks summary
+- **Still missing full operational CRUD, dependency editing, and linked-task editing.**
 
 #### Calendar
 - SSR initial task-backed calendar data
@@ -356,14 +357,14 @@ Connect to real OpenClaw execution:
 ## Immediate Priority Queue
 
 ### P0
-1. Deepen Tasks CRUD one honest step at a time (next best candidate: delete confirmation / trust polish, then visible project linkage or dependency tracking)
-2. Start the first real Projects owner/phase editing flow
-3. Make Project ↔ Task linkage visible and editable once Tasks/Projects both have a stable CRUD foothold
+1. Deepen Tasks CRUD one honest step at a time (next best candidate: keep task/project coordination flows honest without widening into fake automation)
+2. Deepen Projects one honest step at a time beyond owner/phase editing and read-only coordination visibility
+3. Keep Project ↔ Task linkage honest; only widen beyond read-only visibility when the backing linkage model is stable enough for real editing
 
 ### P1
 4. Strengthen Agents runtime/delegate-matrix clarity without pretending runtime config is more editable than it is
-5. Make Project ↔ Task linkage visible and editable
-6. Turn Calendar into a clearer workload/planning surface
+5. Turn Calendar into a clearer workload/planning surface
+6. Add execution/run history layer only after the coordination surfaces stay trustworthy
 
 ### P2
 7. Add execution/run history layer
@@ -750,6 +751,23 @@ Connect to real OpenClaw execution:
 - Next:
   - either add visible Project ↔ Task linkage from Projects, or add a narrower dependency editor only if the read-only summary proves useful.
 
+### 2026-03-12 02:xx
+- Step: Projects linked-task visibility v1
+- Files:
+  - `src/app/(dashboard)/agents/projects/page.tsx`
+  - `src/app/(dashboard)/agents/projects/ProjectsPageClient.tsx`
+  - `src/components/ProjectCard.tsx`
+- Validation:
+  - `npx eslint src/app/(dashboard)/agents/projects/page.tsx src/app/(dashboard)/agents/projects/ProjectsPageClient.tsx src/components/ProjectCard.tsx`
+  - `npm run build`
+- Commit: current checkpoint commit (`feat(projects): surface linked task visibility`)
+- Result:
+  - Project cards now surface linked task summaries directly from the Tasks board instead of leaving Project ↔ Task linkage implicit.
+  - The Projects page keeps this honest by treating the linkage as a read-only summary based on current task project labels, with editing still living on Tasks.
+  - Tasks data load failure now shows as unavailable instead of quietly reading like zero linked work.
+- Next:
+  - either keep Project ↔ Task linkage read-only until a stable editing model exists, or return to the next tighter trust issue on Tasks/Projects.
+
 ---
 
 ## How to Update This File
@@ -778,9 +796,9 @@ Suggested template:
 
 ## Current Focus
 
-**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, a first Projects owner/phase editor, participating-agent visibility, and current-phase dependency visibility shipped
+**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, a first Projects owner/phase editor, participating-agent visibility, current-phase dependency visibility, and read-only Project ↔ Task linkage visibility shipped
 
 **Do next:**
 1. keep the new Agents capability profile plus Team reporting-line / review-coverage / delegation flows stable and honest
-2. make Project ↔ Task linkage clearer from Projects, unless a tighter trust issue appears first on Tasks
+2. keep Project ↔ Task linkage honest; only widen beyond read-only visibility when the linkage model is stable enough for real editing
 3. keep pushing coordination surfaces forward without pretending execution automation already exists
