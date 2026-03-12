@@ -144,6 +144,11 @@ export default function TasksPageClient({
 
     return `No exact Projects title match for ${topLabels.join(", ")}${remainingLabelCount > 0 ? ` +${remainingLabelCount} more` : ""}.`;
   }, [projectLabelMismatchTasks]);
+  const requestedMismatchTask = useMemo(
+    () => projectLabelMismatchTasks.find((task) => task.id === mismatchTaskIdRequested) || null,
+    [mismatchTaskIdRequested, projectLabelMismatchTasks]
+  );
+  const showMismatchHandoffNotice = showMismatchOnly && Boolean(requestedMismatchTask);
 
   const focusedProjectTaskCount = scopedTasks.length;
 
@@ -462,6 +467,25 @@ export default function TasksPageClient({
           >
             Clear focus
           </a>
+        </div>
+      )}
+
+      {showMismatchHandoffNotice && requestedMismatchTask && (
+        <div
+          className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2 text-xs"
+          style={{
+            backgroundColor: "color-mix(in srgb, #FFD60A 10%, var(--surface-elevated))",
+            border: "1px solid color-mix(in srgb, #FFD60A 28%, transparent)",
+          }}
+        >
+          <div className="space-y-1">
+            <p className="font-semibold" style={{ color: "#FFD60A" }}>
+              Focused mismatch handoff: {requestedMismatchTask.title}
+            </p>
+            <p style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
+              This mismatch-only view opened on a specific task from Projects. Look for the <span style={{ color: "#FF9F0A" }}>No exact match</span> badge and the row&apos;s <span style={{ color: "#FF9F0A" }}>Fix label</span> action to correct the saved project label through the existing task-details editor.
+            </p>
+          </div>
         </div>
       )}
 

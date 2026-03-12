@@ -1003,6 +1003,21 @@ Connect to real OpenClaw execution:
 - Next:
   - keep Project ↔ Task linkage read-only, and if the next trust step stays narrow, make the mismatch-only Tasks view explain when the handoff landed on a specific row that already has a direct fix path.
 
+### 2026-03-12 10:xx
+- Step: Tasks targeted mismatch handoff explanation
+- Files:
+  - `src/app/(dashboard)/agents/tasks/TasksPageClient.tsx`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/agents/tasks/TasksPageClient.tsx"`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(tasks): explain targeted mismatch handoff`)
+- Result:
+  - The mismatch-only Tasks view now explains when Projects handed off to a specific mismatched row instead of only dropping the operator into filtered mode.
+  - That notice explicitly points at the existing `No exact match` badge and row-level `Fix label` action, so cleanup still happens through the real saved task project field instead of pretending Projects can repair linkage inline.
+  - This keeps Project ↔ Task linkage read-only while making the handoff state more legible once the board scrolls to the requested row.
+- Next:
+  - keep Project ↔ Task linkage read-only, and if the next trust step stays narrow, make the targeted mismatch handoff easier to re-find after scrolling away from the requested row.
+
 ---
 
 ## How to Update This File
