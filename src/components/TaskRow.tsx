@@ -59,6 +59,7 @@ interface DependencyOption {
 }
 
 interface TaskRowProps {
+  rowId?: string;
   task: Task;
   agentOptions: TaskAgentOption[];
   allTasks: Task[];
@@ -67,6 +68,7 @@ interface TaskRowProps {
 }
 
 export function TaskRow({
+  rowId,
   task,
   agentOptions,
   allTasks,
@@ -566,6 +568,7 @@ export function TaskRow({
 
   return (
     <div
+      id={rowId}
       style={{
         borderBottom: "1px solid var(--border)",
       }}

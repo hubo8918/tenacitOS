@@ -940,6 +940,22 @@ Connect to real OpenClaw execution:
 - Next:
   - keep Project ↔ Task linkage read-only, and if the next trust step stays narrow, add a quick-jump affordance from the mismatch summary into the first affected row instead of widening into fake cross-page editing.
 
+### 2026-03-12 08:20
+- Step: Tasks mismatch-summary quick jump
+- Files:
+  - `src/app/(dashboard)/agents/tasks/TasksPageClient.tsx`
+  - `src/components/TaskRow.tsx`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/agents/tasks/TasksPageClient.tsx" src/components/TaskRow.tsx`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(tasks): jump from mismatch summary to first affected row`)
+- Result:
+  - The Tasks mismatch summary can now jump straight into the first affected row instead of making operators scan the board after seeing label drift.
+  - That jump also turns on the mismatch-only view and clears status filtering first, so the handoff lands on a visible affected row instead of pretending hidden rows are already in view.
+  - This keeps Project ↔ Task linkage read-only while making mismatch cleanup faster and more honest.
+- Next:
+  - keep Project ↔ Task linkage read-only, then reassess the next tight Tasks/Projects trust issue instead of widening into fake cross-page editing.
+
 ---
 
 ## How to Update This File

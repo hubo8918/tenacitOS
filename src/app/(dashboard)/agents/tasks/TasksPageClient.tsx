@@ -88,6 +88,7 @@ export default function TasksPageClient({
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [showMismatchOnly, setShowMismatchOnly] = useState(false);
+  const [jumpToFirstMismatchPending, setJumpToFirstMismatchPending] = useState(false);
   const [sortField, setSortField] = useState<SortField>("status");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -192,10 +193,22 @@ export default function TasksPageClient({
       }
       return next;
     });
+    setJumpToFirstMismatchPending(false);
+  };
+
+  const handleJumpToFirstMismatch = () => {
+    if (projectLabelMismatchCount === 0) {
+      return;
+    }
+
+    setStatusFilter("all");
+    setShowMismatchOnly(true);
+    setJumpToFirstMismatchPending(true);
   };
 
   useEffect(() => {
     setShowMismatchOnly(false);
+    setJumpToFirstMismatchPending(false);
   }, [normalizedProjectFocus]);
 
   useEffect(() => {
@@ -203,6 +216,27 @@ export default function TasksPageClient({
       setShowMismatchOnly(false);
     }
   }, [projectLabelMismatchCount, showMismatchOnly]);
+
+  useEffect(() => {
+    if (!jumpToFirstMismatchPending) {
+      return;
+    }
+
+    const firstMismatchTask = filteredTasks.find((task) => projectLabelMismatchTaskIds.has(task.id));
+    if (!firstMismatchTask) {
+      return;
+    }
+
+    const row = document.getElementById(`task-row-${firstMismatchTask.id}`);
+    if (!row) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      row.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    setJumpToFirstMismatchPending(false);
+  }, [filteredTasks, jumpToFirstMismatchPending, projectLabelMismatchTaskIds]);
 
   useEffect(() => {
     if (!showCreateForm) {
@@ -606,6 +640,18 @@ export default function TasksPageClient({
               </span>
               <button
                 type="button"
+                onClick={handleJumpToFirstMismatch}
+                className="rounded-full px-3 py-1 font-semibold transition-colors"
+                style={{
+                  color: "#FFD60A",
+                  backgroundColor: "transparent",
+                  border: "1px solid color-mix(in srgb, #FFD60A 36%, transparent)",
+                }}
+              >
+                Jump to first mismatch
+              </button>
+              <button
+                type="button"
                 onClick={handleToggleMismatchOnly}
                 className="rounded-full px-3 py-1 font-semibold transition-colors"
                 style={{
@@ -706,6 +752,7 @@ export default function TasksPageClient({
               filteredTasks.map((task) => (
                 <TaskRow
                   key={task.id}
+                  rowId={`task-row-${task.id}`}
                   task={task}
                   agentOptions={initialTaskAgents}
                   allTasks={tasks}
