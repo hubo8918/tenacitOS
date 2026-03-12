@@ -25,13 +25,28 @@ function asOptionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
+function getBlockedByTaskIds(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.length > 0)
+    : [];
+}
+
+function taskDependsOn(taskId: string, targetTaskId: string, tasksById: Map<string, AgentTask>, visited = new Set<string>()): boolean {
+  if (taskId === targetTaskId) return true;
+  if (visited.has(taskId)) return false;
+
+  visited.add(taskId);
+  const task = tasksById.get(taskId);
+  if (!task) return false;
+
+  return task.blockedByTaskIds.some((blockedTaskId) => taskDependsOn(blockedTaskId, targetTaskId, tasksById, visited));
+}
+
 function getTaskRoutingValidationError(body: Record<string, unknown>): string | null {
   const assigneeAgentId = asOptionalString(body.assigneeAgentId);
   const reviewerAgentId = asOptionalString(body.reviewerAgentId);
   const handoffToAgentId = asOptionalString(body.handoffToAgentId);
-  const blockedByTaskIds = Array.isArray(body.blockedByTaskIds)
-    ? body.blockedByTaskIds.filter((value): value is string => typeof value === "string" && value.length > 0)
-    : [];
+  const blockedByTaskIds = getBlockedByTaskIds(body.blockedByTaskIds);
 
   if (assigneeAgentId && reviewerAgentId && assigneeAgentId === reviewerAgentId) {
     return "Reviewer must be different from the owner.";
@@ -43,6 +58,31 @@ function getTaskRoutingValidationError(body: Record<string, unknown>): string | 
 
   if (typeof body.id === "string" && blockedByTaskIds.includes(body.id)) {
     return "A task cannot depend on itself.";
+  }
+
+  return null;
+}
+
+function getTaskDependencyValidationError(body: Record<string, unknown>, tasks: AgentTask[]): string | null {
+  if (typeof body.id !== "string") {
+    return null;
+  }
+
+  const blockedByTaskIds = getBlockedByTaskIds(body.blockedByTaskIds);
+  if (blockedByTaskIds.length === 0) {
+    return null;
+  }
+
+  const tasksById = new Map(tasks.map((task) => [task.id, task]));
+
+  for (const blockedTaskId of blockedByTaskIds) {
+    if (!tasksById.has(blockedTaskId)) {
+      return `Blocking task \"${blockedTaskId}\" was not found.`;
+    }
+
+    if (taskDependsOn(blockedTaskId, body.id, tasksById)) {
+      return "A task cannot depend on a task that already depends on it.";
+    }
   }
 
   return null;
@@ -130,6 +170,11 @@ export async function PUT(request: NextRequest) {
     }
 
     const tasks = await getAgentTasks();
+    const dependencyValidationError = getTaskDependencyValidationError(body, tasks);
+    if (dependencyValidationError) {
+      return NextResponse.json({ error: dependencyValidationError }, { status: 400 });
+    }
+
     const index = tasks.findIndex((t) => t.id === body.id);
 
     if (index === -1) {

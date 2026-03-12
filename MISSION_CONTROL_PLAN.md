@@ -682,6 +682,22 @@ Connect to real OpenClaw execution:
 - Next:
   - either add project dependency visibility, or return to Tasks dependency-editor safety/filtering.
 
+### 2026-03-12 00:25
+- Step: Tasks dependency cycle guard v1
+- Files:
+  - `src/components/TaskRow.tsx`
+  - `src/app/api/agent-tasks/route.ts`
+- Validation:
+  - `npx eslint src/components/TaskRow.tsx src/app/api/agent-tasks/route.ts`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(tasks): block dependency cycles`)
+- Result:
+  - The Tasks routing editor now disables blocker choices that would create a dependency cycle and explains why those options are unavailable.
+  - Saving task blockers now gets the same trust guard on the backend, so `/api/agent-tasks` rejects cycles instead of persisting impossible dependency chains.
+  - This keeps dependency editing honest without pretending Mission Control already has a full dependency-graph management surface.
+- Next:
+  - either add project dependency visibility on Projects, or improve task dependency filtering for stale/completed blockers.
+
 ---
 
 ## How to Update This File
@@ -710,9 +726,9 @@ Suggested template:
 
 ## Current Focus
 
-**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + dependency visibility + a first dependency editor, plus a first Projects owner/phase editor and participating-agent visibility shipped
+**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + dependency visibility + a first dependency editor + a first dependency cycle guard, plus a first Projects owner/phase editor and participating-agent visibility shipped
 
 **Do next:**
 1. keep the new Agents capability profile plus Team reporting-line / review-coverage / delegation flows stable and honest
-2. either deepen Projects with dependency visibility, or return to Tasks dependency-editor safety/filtering
+2. either deepen Projects with dependency visibility, or return to Tasks dependency filtering for stale/completed blockers
 3. keep pushing coordination surfaces forward without pretending execution automation already exists

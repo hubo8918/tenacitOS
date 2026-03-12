@@ -24,6 +24,15 @@ function isTaskOverdue(dateString: string) {
   return dueDate < startOfToday;
 }
 
+function taskDependsOn(taskId: string, targetTaskId: string, dependencyMap: Map<string, string[]>, visited = new Set<string>()): boolean {
+  if (taskId === targetTaskId) return true;
+  if (visited.has(taskId)) return false;
+
+  visited.add(taskId);
+  const blockedByTaskIds = dependencyMap.get(taskId) || [];
+  return blockedByTaskIds.some((blockedTaskId) => taskDependsOn(blockedTaskId, targetTaskId, dependencyMap, visited));
+}
+
 interface TaskAgentOption {
   id: string;
   name: string;
@@ -74,6 +83,23 @@ export function TaskRow({ task, agentOptions, allTasks, onUpdate }: TaskRowProps
   const priority = taskPriorityConfig[task.priority];
   const isOverdue = isTaskOverdue(task.dueDate) && task.status !== "completed";
   const blockedByTaskIds = useMemo(() => task.blockedByTaskIds || [], [task.blockedByTaskIds]);
+
+  const dependencyMap = useMemo(
+    () => new Map(allTasks.map((candidate) => [candidate.id, candidate.blockedByTaskIds || []])),
+    [allTasks]
+  );
+
+  const cycleCandidateIds = useMemo(() => {
+    const nextCycleCandidates = new Set<string>();
+
+    allTasks.forEach((candidate) => {
+      if (candidate.id !== task.id && taskDependsOn(candidate.id, task.id, dependencyMap)) {
+        nextCycleCandidates.add(candidate.id);
+      }
+    });
+
+    return nextCycleCandidates;
+  }, [allTasks, dependencyMap, task.id]);
 
   const dependencyCandidates = useMemo(
     () =>
@@ -328,6 +354,13 @@ export function TaskRow({ task, agentOptions, allTasks, onUpdate }: TaskRowProps
 
     if (blockedByDraft.includes(task.id)) {
       setOwnershipError("A task cannot depend on itself.");
+      return;
+    }
+
+    const cycleTask = blockedByDraft.find((taskId) => cycleCandidateIds.has(taskId));
+    if (cycleTask) {
+      const cycleTaskTitle = allTasks.find((candidate) => candidate.id === cycleTask)?.title || cycleTask;
+      setOwnershipError(`Cannot save blocker \"${cycleTaskTitle}\" because it already depends on this task.`);
       return;
     }
 
@@ -983,7 +1016,7 @@ export function TaskRow({ task, agentOptions, allTasks, onUpdate }: TaskRowProps
                       Blocking tasks
                     </p>
                     <p className="mt-1 text-[11px]" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
-                      Pick the tasks that must land before this one can move. Same-project tasks are listed first.
+                      Pick the tasks that must land before this one can move. Same-project tasks are listed first, and tasks that would create a dependency cycle stay disabled.
                     </p>
                   </div>
                   <span className="text-[11px] font-medium" style={{ color: "var(--text-muted)" }}>
@@ -995,18 +1028,24 @@ export function TaskRow({ task, agentOptions, allTasks, onUpdate }: TaskRowProps
                   {dependencyCandidates.length > 0 ? (
                     dependencyCandidates.map((candidate) => {
                       const isChecked = blockedByDraft.includes(candidate.id);
+                      const isCycleCandidate = cycleCandidateIds.has(candidate.id);
+                      const disableSelection = isCycleCandidate && !isChecked;
+
                       return (
                         <label
                           key={candidate.id}
-                          className="flex items-start gap-2 rounded-lg px-3 py-2 cursor-pointer"
+                          className="flex items-start gap-2 rounded-lg px-3 py-2"
                           style={{
                             border: "1px solid var(--border)",
                             backgroundColor: isChecked ? "var(--surface-hover)" : "transparent",
+                            cursor: disableSelection ? "not-allowed" : "pointer",
+                            opacity: disableSelection ? 0.65 : 1,
                           }}
                         >
                           <input
                             type="checkbox"
                             checked={isChecked}
+                            disabled={disableSelection}
                             onChange={(event) => {
                               setBlockedByDraft((current) =>
                                 event.target.checked
@@ -1022,6 +1061,11 @@ export function TaskRow({ task, agentOptions, allTasks, onUpdate }: TaskRowProps
                             <span className="block text-[11px] truncate" style={{ color: "var(--text-muted)" }}>
                               {candidate.project} • {taskStatusConfig[candidate.status].label}
                             </span>
+                            {isCycleCandidate && (
+                              <span className="block text-[11px] mt-1" style={{ color: "var(--status-blocked)" }}>
+                                Would create a dependency cycle with this task
+                              </span>
+                            )}
                           </span>
                         </label>
                       );
