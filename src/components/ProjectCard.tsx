@@ -641,7 +641,7 @@ export function ProjectCard({
               </p>
               <div className="flex items-center justify-between gap-2 pt-1">
                 <p className="text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
-                  Projects stays read-only for linkage here; add or relabel work from the Tasks board.
+                  Projects stays read-only for linkage here; open the focused Tasks view for this project, then use New task there if you want the intake form to start with this project label prefilled.
                 </p>
                 <a
                   href={projectTasksHref}

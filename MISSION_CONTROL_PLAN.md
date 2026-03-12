@@ -861,6 +861,21 @@ Connect to real OpenClaw execution:
 - Next:
   - keep Project ↔ Task linkage read-only, and if the next step stays narrow, tighten the zero-linked Projects handoff copy so it explicitly points at the now-prefilled focused task intake.
 
+### 2026-03-12 05:5x
+- Step: Projects zero-linked handoff copy points to focused intake
+- Files:
+  - `src/components/ProjectCard.tsx`
+- Validation:
+  - `npx eslint src/components/ProjectCard.tsx`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(projects): clarify focused intake handoff copy`)
+- Result:
+  - The zero-linked state on Project cards now explicitly tells operators to open the focused Tasks view for that project and use the existing New task flow there.
+  - The handoff copy now says that the task intake form starts with the project label prefilled, so the read-only Projects trust boundary stays clear while the next action is easier to discover.
+  - This keeps Project ↔ Task linkage read-only on Projects and tightens the cross-page handoff instead of widening into fake inline editing.
+- Next:
+  - keep Project ↔ Task linkage read-only, then return to the next tight Tasks/Projects trust issue instead of widening into fake cross-page editing.
+
 ---
 
 ## How to Update This File
