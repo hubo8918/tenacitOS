@@ -58,6 +58,10 @@ function slugify(value: string) {
     .replace(/^-|-$/g, "");
 }
 
+function getProjectTasksHref(projectTitle: string) {
+  return `/agents/tasks?project=${encodeURIComponent(projectTitle)}`;
+}
+
 interface ProjectCardProps {
   project: Project;
   teamAgents: TeamAgent[];
@@ -123,6 +127,7 @@ export function ProjectCard({
   }, [currentPhase, project.phases]);
   const visibleLinkedTasks = useMemo(() => linkedTasks.slice(0, 3), [linkedTasks]);
   const linkedTaskAttention = useMemo(() => getLinkedTaskAttentionSummary(linkedTasks), [linkedTasks]);
+  const projectTasksHref = getProjectTasksHref(project.title);
 
   const resetDraft = () => {
     const nextPhase = getCurrentPhase(project);
@@ -618,17 +623,15 @@ export function ProjectCard({
                 <p className="text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
                   Read-only summary from Tasks based on current task project labels; editing still lives on the Tasks board.
                 </p>
-                {linkedTasks.length > visibleLinkedTasks.length && (
-                  <a
-                    href="/agents/tasks"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-[10px] font-medium whitespace-nowrap"
-                    style={{ color: "#0A84FF" }}
-                  >
-                    View more ↗
-                  </a>
-                )}
+                <a
+                  href={projectTasksHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[10px] font-medium whitespace-nowrap"
+                  style={{ color: "#0A84FF" }}
+                >
+                  {linkedTasks.length > visibleLinkedTasks.length ? "View all in Tasks ↗" : "Open in Tasks ↗"}
+                </a>
               </div>
             </div>
           ) : (

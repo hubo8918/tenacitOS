@@ -784,6 +784,22 @@ Connect to real OpenClaw execution:
 - Next:
   - keep Project ↔ Task linkage read-only, and if the next trust step stays narrow, make read-only navigation between a project card and its linked tasks more direct.
 
+### 2026-03-12 03:xx
+- Step: Projects linked-task navigation focus v1
+- Files:
+  - `src/components/ProjectCard.tsx`
+  - `src/app/(dashboard)/agents/tasks/TasksPageClient.tsx`
+- Validation:
+  - `npx eslint src/components/ProjectCard.tsx "src/app/(dashboard)/agents/tasks/TasksPageClient.tsx"`
+  - `npm run build`
+- Commit: current checkpoint commit (`feat(projects): add focused task navigation`)
+- Result:
+  - Project cards now open the Tasks board with a project-specific focus instead of sending operators to an unfiltered task list.
+  - The Tasks page now makes that project focus explicit, preserves existing status filters inside the focused set, and offers a clear path back to the full board.
+  - This keeps Project ↔ Task linkage read-only while making cross-page navigation more direct and honest.
+- Next:
+  - keep Project ↔ Task linkage read-only, then return to the next tighter trust issue on Tasks/Projects instead of widening into fake cross-page editing.
+
 ---
 
 ## How to Update This File

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ListTodo, ArrowUpDown, Plus } from "lucide-react";
 import { TaskRow } from "@/components/TaskRow";
 import { taskPriorityConfig, taskStatusConfig } from "@/data/mockTasksData";
@@ -42,6 +43,10 @@ function getLocalDateInputValue(offsetDays = 0) {
   return `${year}-${month}-${day}`;
 }
 
+function normalizeProjectLabel(value: string) {
+  return value.trim().toLowerCase();
+}
+
 interface TaskAgentOption {
   id: string;
   name: string;
@@ -55,6 +60,9 @@ interface TasksPageClientProps {
 }
 
 export default function TasksPageClient({ initialTasks, initialTaskAgents }: TasksPageClientProps) {
+  const searchParams = useSearchParams();
+  const projectFocus = searchParams.get("project")?.trim() || "";
+  const normalizedProjectFocus = normalizeProjectLabel(projectFocus);
   const hasInitialTasks = initialTasks.length > 0;
   const { data, loading, error, refetch } = useFetch<{ tasks: Task[] }>("/api/agent-tasks", {
     initialData: hasInitialTasks ? { tasks: initialTasks } : null,
@@ -75,10 +83,21 @@ export default function TasksPageClient({ initialTasks, initialTaskAgents }: Tas
   const [newPriority, setNewPriority] = useState<Task["priority"]>("medium");
   const [newAssigneeAgentId, setNewAssigneeAgentId] = useState("");
 
+  const focusedProjectTaskCount = useMemo(
+    () =>
+      normalizedProjectFocus
+        ? tasks.filter((task) => normalizeProjectLabel(task.project) === normalizedProjectFocus).length
+        : tasks.length,
+    [tasks, normalizedProjectFocus]
+  );
+
   const filteredTasks = useMemo(() => {
     const result = [...tasks];
+    const projectFiltered = normalizedProjectFocus
+      ? result.filter((task) => normalizeProjectLabel(task.project) === normalizedProjectFocus)
+      : result;
 
-    const filtered = statusFilter === "all" ? result : result.filter((task) => task.status === statusFilter);
+    const filtered = statusFilter === "all" ? projectFiltered : projectFiltered.filter((task) => task.status === statusFilter);
 
     filtered.sort((a, b) => {
       let cmp = 0;
@@ -104,7 +123,7 @@ export default function TasksPageClient({ initialTasks, initialTaskAgents }: Tas
     });
 
     return filtered;
-  }, [tasks, statusFilter, sortField, sortDir]);
+  }, [tasks, normalizedProjectFocus, statusFilter, sortField, sortDir]);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
@@ -299,6 +318,35 @@ export default function TasksPageClient({ initialTasks, initialTaskAgents }: Tas
           {showCreateForm ? "Close task intake" : "New task"}
         </button>
       </div>
+
+      {projectFocus && (
+        <div
+          className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2 text-xs"
+          style={{
+            backgroundColor: "var(--surface-elevated)",
+            border: "1px solid var(--border)",
+          }}
+        >
+          <div className="space-y-1">
+            <p className="font-semibold" style={{ color: "var(--text-primary)" }}>
+              Project focus: {projectFocus}
+            </p>
+            <p style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
+              Opened from Projects. Showing {focusedProjectTaskCount} linked task{focusedProjectTaskCount === 1 ? "" : "s"} before status filters.
+            </p>
+          </div>
+          <a
+            href="/agents/tasks"
+            className="rounded-full px-3 py-1 font-medium"
+            style={{
+              color: "#0A84FF",
+              border: "1px solid color-mix(in srgb, #0A84FF 28%, transparent)",
+            }}
+          >
+            Clear focus
+          </a>
+        </div>
+      )}
 
       {showCreateForm && (
         <div
@@ -539,20 +587,37 @@ export default function TasksPageClient({ initialTasks, initialTaskAgents }: Tas
                     No {activeFilterLabel.toLowerCase()} tasks right now
                   </p>
                   <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                    The board still has {tasks.length} tracked task{tasks.length === 1 ? "" : "s"}; this filter just is not showing any of them.
+                    {projectFocus
+                      ? `The ${projectFocus} focus is active, and the current status filter is not showing any matching tasks.`
+                      : `The board still has ${tasks.length} tracked task${tasks.length === 1 ? "" : "s"}; this filter just is not showing any of them.`}
                   </p>
                 </div>
-                <button
-                  onClick={() => setStatusFilter("all")}
-                  className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
-                  style={{
-                    backgroundColor: "var(--surface-elevated)",
-                    color: "var(--text-primary)",
-                    border: "1px solid var(--border)",
-                  }}
-                >
-                  Show all tasks
-                </button>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <button
+                    onClick={() => setStatusFilter("all")}
+                    className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
+                    style={{
+                      backgroundColor: "var(--surface-elevated)",
+                      color: "var(--text-primary)",
+                      border: "1px solid var(--border)",
+                    }}
+                  >
+                    Show all statuses
+                  </button>
+                  {projectFocus && (
+                    <a
+                      href="/agents/tasks"
+                      className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
+                      style={{
+                        backgroundColor: "transparent",
+                        color: "#0A84FF",
+                        border: "1px solid color-mix(in srgb, #0A84FF 28%, transparent)",
+                      }}
+                    >
+                      Clear project focus
+                    </a>
+                  )}
+                </div>
               </div>
             )}
           </div>
