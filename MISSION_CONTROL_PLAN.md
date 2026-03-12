@@ -66,13 +66,21 @@ To avoid fake progress or silent drift:
   - tier
   - badge
   - tags
+  - `reportsTo`
+  - `canReviewFor`
+  - `canDelegateTo`
 
 #### Agents
 - Better first paint and trust semantics landed earlier:
   - SSR initial data
   - unavailable state instead of misleading empty page
   - delayed-sync banner
-- **Still not a true config surface yet.**
+- Agents now has a first true Mission Control config surface for planning metadata:
+  - `canLead`
+  - `canReview`
+  - `canExecute`
+  - `workTypes`
+- Runtime fields are still intentionally read-only.
 
 #### Tasks
 - SSR initial data
@@ -98,7 +106,10 @@ To avoid fake progress or silent drift:
 
 #### Files
 - Real CRUD/edit/upload flows already exist
-- may still need stability/polish work later
+- browse / write / download now share a unified workspace path resolver
+- file editing now supports workspace-relative, absolute, and `~` paths that still resolve inside known workspaces
+- create-file/create-folder no longer fake success when the backend rejects the request
+- still needs one more trust/stability pass around directory-load and upload failure UX
 
 #### Platform stability
 - OpenClaw upgraded to `2026.3.8`
@@ -164,13 +175,12 @@ Add/normalize fields for:
 - `summary`
 
 ### Status
-- **Current phase**
-- **Started**
-- Task/project data and API contracts now preserve first-pass orchestration fields
-- Tasks page now exposes the first safe routing edit flow for assignee/reviewer/handoff metadata
+- foundational schema work landed and is no longer the immediate focus
+- task/project data and API contracts preserve first-pass orchestration fields
+- Tasks page exposes the first safe routing edit flow for assignee / reviewer / handoff metadata
 
 ### Next micro-step
-- Build on the new Agents capability profile by surfacing relationship/delegation metadata next, or shift to the Team relationship editor now that Agents has its first real editable config flow.
+- keep downstream UI flows honest as later phases build on this schema; do not widen Phase 1 for its own sake
 
 ---
 
@@ -315,19 +325,19 @@ Connect to real OpenClaw execution:
 ## Immediate Priority Queue
 
 ### P0
-1. Phase 1 data model for orchestration fields
-2. First real editable flow on Agents page
-3. First real task create/edit/assign flow
+1. Finish the current Files trust/stability pass (directory-load + upload failure handling, plus any tiny UX fallout)
+2. Start the first true Tasks create/edit/delete flow without breaking the existing routing editor
+3. Start the first real Projects owner/phase editing flow
 
 ### P1
-4. Team relationship editor
-5. Project owner + phase model
-6. Project ↔ task linkage
+4. Strengthen Agents runtime/delegate-matrix clarity without pretending runtime config is more editable than it is
+5. Make Project ↔ Task linkage visible and editable
+6. Turn Calendar into a clearer workload/planning surface
 
 ### P2
-7. Calendar workload view
-8. Execution/run history layer
-9. Henry-led orchestration hooks
+7. Add execution/run history layer
+8. Add Henry-led orchestration hooks only after Phases 1–5 are stable
+9. Broaden Team/Agents relationship metadata only if the narrower flows prove useful in practice
 
 ---
 
@@ -492,6 +502,20 @@ Connect to real OpenClaw execution:
 - Next:
   - if Files gets one more trust pass, give directory-load/upload failures the same explicit error treatment before widening back into broader product work.
 
+### 2026-03-11 18:13
+- Step: Plan refresh after overnight Mission Control work
+- Files:
+  - `MISSION_CONTROL_PLAN.md`
+- Validation:
+  - manual plan consistency pass against current checkpoint log + `memory/2026-03-11.md`
+- Commit: current checkpoint commit (`docs(plan): refresh mission control priorities`)
+- Result:
+  - The current-state summary now reflects that Agents has a real capability-profile editor, Team has three relationship fields, and Files already received path-hardening + create-flow trust fixes.
+  - Phase 1 and the immediate priority queue no longer point at work that has already shipped.
+  - Current focus now explicitly points to finishing the Files trust/stability pass before widening back into Tasks/Projects.
+- Next:
+  - complete the remaining Files trust/stability pass, then return to the first real Tasks/Projects CRUD flows.
+
 ---
 
 ## How to Update This File
@@ -520,9 +544,9 @@ Suggested template:
 
 ## Current Focus
 
-**Current focus:** Phase 2 — turn Agents and Team into honest configuration surfaces
+**Current focus:** Phase 2 surfaces are now established; immediate attention shifts to Files trust/stability before widening back into Tasks/Projects
 
 **Do next:**
 1. keep the new Agents capability profile plus Team reporting-line / review-coverage / delegation flows stable and honest
-2. harden the newly unified file-edit path with a small smoke test and any UX polish that falls out of real use
-3. avoid widening into execution automation until more coordination metadata is truly editable
+2. finish the Files trust/stability pass, especially directory-load and upload failure UX
+3. then return to the first true Tasks/Projects CRUD flows instead of widening into execution automation
