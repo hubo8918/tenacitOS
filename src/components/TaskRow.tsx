@@ -52,6 +52,11 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
   const [editingOwnership, setEditingOwnership] = useState(false);
   const [savingOwnership, setSavingOwnership] = useState(false);
   const [ownershipError, setOwnershipError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionPending, setActionPending] = useState<"status" | "delete" | null>(null);
+  const [pendingStatusLabel, setPendingStatusLabel] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [confirmingStatus, setConfirmingStatus] = useState<Task["status"] | null>(null);
   const [title, setTitle] = useState(task.title);
   const [project, setProject] = useState(task.project);
   const [dueDate, setDueDate] = useState(task.dueDate);
@@ -125,6 +130,14 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
     setOwnershipError(null);
   }, [inferredAssigneeAgentId, task.reviewerAgentId, task.handoffToAgentId]);
 
+  useEffect(() => {
+    setActionError(null);
+    setActionPending(null);
+    setPendingStatusLabel(null);
+    setConfirmingDelete(false);
+    setConfirmingStatus(null);
+  }, [task.id, task.status, task.title, task.project, task.dueDate, task.priority]);
+
   const resetDetailsDraft = () => {
     setTitle(task.title);
     setProject(task.project);
@@ -135,31 +148,82 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
   };
 
   const handleStatusChange = async (newStatus: Task["status"]) => {
+    if (actionPending) return;
+
+    const newStatusLabel = taskStatusConfig[newStatus].label;
     setShowMenu(false);
+    setConfirmingDelete(false);
+    setConfirmingStatus(newStatus);
+    setActionError(null);
+    setPendingStatusLabel(newStatusLabel);
+  };
+
+  const confirmStatusChange = async (newStatus: Task["status"]) => {
+    if (actionPending) return;
+
+    setConfirmingStatus(null);
+    setActionError(null);
+    setActionPending("status");
+    setPendingStatusLabel(taskStatusConfig[newStatus].label);
+
     try {
-      await fetch("/api/agent-tasks", {
+      const response = await fetch("/api/agent-tasks", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: task.id, status: newStatus }),
       });
+
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to update task status");
+      }
+
       onUpdate?.();
     } catch (err) {
       console.error("Failed to update task:", err);
+      setActionError(err instanceof Error ? err.message : "Failed to update task status");
+    } finally {
+      setActionPending(null);
+      setPendingStatusLabel(null);
     }
   };
 
-  const handleDelete = async () => {
+  const handleRequestDelete = () => {
     setShowMenu(false);
+    setEditingDetails(false);
+    setEditingOwnership(false);
+    setConfirmingStatus(null);
+    setActionError(null);
+    setConfirmingDelete(true);
+  };
+
+  const handleDelete = async () => {
+    if (actionPending) return;
+
+    setActionError(null);
+    setActionPending("delete");
+
     try {
-      await fetch(`/api/agent-tasks?id=${task.id}`, { method: "DELETE" });
+      const response = await fetch(`/api/agent-tasks?id=${task.id}`, { method: "DELETE" });
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to delete task");
+      }
+
+      setConfirmingDelete(false);
       onUpdate?.();
     } catch (err) {
       console.error("Failed to delete task:", err);
+      setActionError(err instanceof Error ? err.message : "Failed to delete task");
+    } finally {
+      setActionPending(null);
     }
   };
 
   const handleOpenDetailsEditor = () => {
     setShowMenu(false);
+    setConfirmingDelete(false);
+    setConfirmingStatus(null);
     setEditingOwnership(false);
     resetDetailsDraft();
     setEditingDetails(true);
@@ -213,6 +277,8 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
 
   const handleOpenOwnershipEditor = () => {
     setShowMenu(false);
+    setConfirmingDelete(false);
+    setConfirmingStatus(null);
     setEditingDetails(false);
     setAssigneeAgentId(inferredAssigneeAgentId);
     setReviewerAgentId(task.reviewerAgentId || "");
@@ -443,8 +509,9 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
               />
               {task.status !== "completed" && (
                 <button
-                  style={menuItemStyle}
+                  style={{ ...menuItemStyle, opacity: actionPending ? 0.6 : 1 }}
                   onClick={() => handleStatusChange("completed")}
+                  disabled={Boolean(actionPending)}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.backgroundColor = "var(--surface-hover)";
                   }}
@@ -457,8 +524,9 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
               )}
               {task.status !== "in_progress" && (
                 <button
-                  style={menuItemStyle}
+                  style={{ ...menuItemStyle, opacity: actionPending ? 0.6 : 1 }}
                   onClick={() => handleStatusChange("in_progress")}
+                  disabled={Boolean(actionPending)}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.backgroundColor = "var(--surface-hover)";
                   }}
@@ -470,8 +538,9 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
                 </button>
               )}
               <button
-                style={menuItemStyle}
+                style={{ ...menuItemStyle, opacity: actionPending ? 0.6 : 1 }}
                 onClick={() => handleStatusChange("pending")}
+                disabled={Boolean(actionPending)}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.backgroundColor = "var(--surface-hover)";
                 }}
@@ -489,8 +558,9 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
                 }}
               />
               <button
-                style={{ ...menuItemStyle, color: "#FF453A" }}
-                onClick={handleDelete}
+                style={{ ...menuItemStyle, color: "#FF453A", opacity: actionPending ? 0.6 : 1 }}
+                onClick={handleRequestDelete}
+                disabled={Boolean(actionPending)}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.backgroundColor = "var(--surface-hover)";
                 }}
@@ -504,6 +574,116 @@ export function TaskRow({ task, agentOptions, onUpdate }: TaskRowProps) {
           )}
         </div>
       </div>
+
+      {(confirmingDelete || confirmingStatus || actionError || actionPending) && (
+        <div className="px-4 pb-3">
+          <div
+            className="rounded-xl p-3 md:p-4"
+            style={{
+              backgroundColor: "var(--surface-elevated)",
+              border: "1px solid var(--border)",
+            }}
+          >
+            <div className="flex flex-col gap-3">
+              {confirmingDelete && (
+                <>
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                      Delete this task?
+                    </p>
+                    <p className="text-xs mt-1" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+                      This removes the task from the coordination board. Mission Control does not yet have an undo flow for deletes, so confirm before removing it.
+                    </p>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => {
+                        setConfirmingDelete(false);
+                        setActionError(null);
+                      }}
+                      disabled={actionPending === "delete"}
+                      className="text-xs px-3 py-1.5 rounded-lg transition-colors"
+                      style={{
+                        color: "var(--text-secondary)",
+                        border: "1px solid var(--border)",
+                        opacity: actionPending === "delete" ? 0.6 : 1,
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleDelete}
+                      disabled={actionPending === "delete"}
+                      className="text-xs px-3 py-1.5 rounded-lg transition-colors"
+                      style={{
+                        backgroundColor: "#FF453A",
+                        color: "#fff",
+                        opacity: actionPending === "delete" ? 0.6 : 1,
+                      }}
+                    >
+                      {actionPending === "delete" ? "Deleting..." : "Confirm delete"}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {confirmingStatus && (
+                <>
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                      Change task status to {pendingStatusLabel || taskStatusConfig[confirmingStatus].label}?
+                    </p>
+                    <p className="text-xs mt-1" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+                      This marks the task as {(pendingStatusLabel || taskStatusConfig[confirmingStatus].label).toLowerCase()}. The task ownership and handoff metadata remain unchanged.
+                    </p>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => {
+                        setConfirmingStatus(null);
+                        setActionError(null);
+                      }}
+                      disabled={actionPending === "status"}
+                      className="text-xs px-3 py-1.5 rounded-lg transition-colors"
+                      style={{
+                        color: "var(--text-secondary)",
+                        border: "1px solid var(--border)",
+                        opacity: actionPending === "status" ? 0.6 : 1,
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => confirmStatusChange(confirmingStatus)}
+                      disabled={actionPending === "status"}
+                      className="text-xs px-3 py-1.5 rounded-lg transition-colors"
+                      style={{
+                        backgroundColor: "var(--accent)",
+                        color: "#000",
+                        opacity: actionPending === "status" ? 0.6 : 1,
+                      }}
+                    >
+                      {actionPending === "status" ? "Updating..." : "Confirm change"}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {actionPending === "status" && (
+                <p className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+                  Updating status to {pendingStatusLabel || "the selected state"}...
+                </p>
+              )}
+
+              {actionError && (
+                <p className="text-xs font-medium" style={{ color: "var(--status-blocked)" }}>
+                  {actionError}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {editingDetails && (
         <div className="px-4 pb-3">

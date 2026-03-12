@@ -107,7 +107,11 @@ To avoid fake progress or silent drift:
   - due date
   - status
   - priority
-- **Still missing delete trust polish, dependency tracking, and project linkage.**
+- row actions now handle status/delete more honestly:
+  - delete confirmation
+  - explicit backend error handling
+  - no silent false-success path for status/delete actions
+- **Still missing dependency tracking and project linkage.**
 
 #### Projects
 - SSR initial data
@@ -581,6 +585,21 @@ Connect to real OpenClaw execution:
 - Next:
   - give Tasks delete/status actions the same trust treatment with confirmation and real backend error handling, or move to visible project linkage if that lands cleaner.
 
+### 2026-03-11 21:xx
+- Step: Tasks row-action trust pass
+- Files:
+  - `src/components/TaskRow.tsx`
+- Validation:
+  - `npx eslint src/components/TaskRow.tsx`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(tasks): require status confirmation before row actions`)
+- Result:
+  - Task row actions now treat status changes with the same explicit confirmation pattern already used for deletes.
+  - Status updates still go through the existing `/api/agent-tasks` path, but now make the change explicit before sending and preserve the returned backend error message if the update fails.
+  - This keeps row actions honest: Mission Control no longer flips task state immediately from the menu while pretending every update succeeded.
+- Next:
+  - either expose visible project linkage on Tasks, or move to the first real Projects owner/phase editing flow if that lands cleaner.
+
 ---
 
 ## How to Update This File
@@ -609,9 +628,9 @@ Suggested template:
 
 ## Current Focus
 
-**Current focus:** Files trust/stability is in a good stop state, and Phase 3 is now underway with real Tasks create + row-level details editing shipped
+**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation shipped
 
 **Do next:**
 1. keep the new Agents capability profile plus Team reporting-line / review-coverage / delegation flows stable and honest
-2. deepen Tasks with the next honest trust step (delete/status confirmation + backend error handling, or visible project linkage) without turning the board into fake full editability
+2. deepen Tasks with the next honest coordination step (visible project linkage or dependency tracking) without turning the board into fake full editability
 3. then move to the first real Projects owner/phase editing flow instead of widening into execution automation
