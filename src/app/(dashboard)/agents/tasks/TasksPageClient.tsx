@@ -70,6 +70,7 @@ export default function TasksPageClient({
   const projectFocus = searchParams.get("project")?.trim() || "";
   const mismatchOnlyRequested = searchParams.get("mismatch") === "1";
   const requestedTaskId = searchParams.get("task")?.trim() || "";
+  const requestedTaskSource = searchParams.get("taskSource")?.trim() || "";
   const normalizedProjectFocus = normalizeProjectLabel(projectFocus);
   const hasInitialTasks = initialTasks.length > 0;
   const { data, loading, error, refetch } = useFetch<{ tasks: Task[] }>("/api/agent-tasks", {
@@ -157,6 +158,8 @@ export default function TasksPageClient({
     () => projectLabelMismatchTasks.find((task) => task.id === requestedTaskId) || null,
     [projectLabelMismatchTasks, requestedTaskId]
   );
+  const isUrgentOverflowHandoff = requestedTaskSource === "urgent-overflow";
+  const isLinkedPreviewHandoff = requestedTaskSource === "linked-preview";
   const requestedTaskOutsideFocus = Boolean(
     requestedTaskId &&
       projectFocus &&
@@ -555,12 +558,16 @@ export default function TasksPageClient({
             <p className="font-semibold" style={{ color: "#FF9F0A" }}>
               {requestedTaskOutsideFocus && requestedTaskAnywhere
                 ? `Focused task handoff moved outside ${projectFocus}`
-                : "Requested linked task is no longer on this board"}
+                : isUrgentOverflowHandoff
+                  ? "Requested hidden urgent task is no longer on this board"
+                  : "Requested linked task is no longer on this board"}
             </p>
             <p style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
               {requestedTaskOutsideFocus && requestedTaskAnywhere
                 ? `This Tasks view opened from Projects for ${projectFocus}, but the requested task \"${requestedTaskAnywhere.title}\" is now saved under ${requestedTaskAnywhere.project.trim() ? `the ${requestedTaskAnywhere.project} project label` : "no project label"}. Projects stays read-only for linkage, so this focused board does not pretend that task still belongs here.`
-                : "This Tasks view opened from a direct Projects handoff, but the requested task is no longer present on the current Tasks board. Projects stays read-only for linkage here, so Mission Control shows the missing-target state instead of pretending the row still exists."}
+                : isUrgentOverflowHandoff
+                  ? "This Tasks view opened from the Projects urgent-overflow handoff, but the requested hidden blocked/overdue task is no longer present on the current Tasks board. Projects stays read-only for linkage here, so Mission Control shows the missing-target state instead of pretending the urgent-overflow shortcut still has a live row to land on."
+                  : "This Tasks view opened from a direct Projects handoff, but the requested task is no longer present on the current Tasks board. Projects stays read-only for linkage here, so Mission Control shows the missing-target state instead of pretending the row still exists."}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -600,10 +607,14 @@ export default function TasksPageClient({
         >
           <div className="space-y-1">
             <p className="font-semibold" style={{ color: "#0A84FF" }}>
-              Focused task handoff: {requestedTask.title}
+              {isUrgentOverflowHandoff ? `Focused urgent follow-up: ${requestedTask.title}` : `Focused task handoff: ${requestedTask.title}`}
             </p>
             <p style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
-              This Tasks view opened from a specific linked task on Projects. Projects stays read-only for linkage, so the handoff lands on the requested row here and briefly highlights it instead of pretending the project card can edit task state inline.
+              {isUrgentOverflowHandoff
+                ? "This Tasks view opened from the Projects card's urgent-overflow handoff. That CTA only exists when blocked or overdue linked work still sits beyond the three-row preview, so the handoff lands on the first hidden urgent task here and briefly highlights it instead of pretending the Project card preview already showed every urgent item."
+                : isLinkedPreviewHandoff
+                  ? "This Tasks view opened from a specific linked task in the Projects card preview. Projects stays read-only for linkage, so the handoff lands on the requested row here and briefly highlights it instead of pretending the project card can edit task state inline."
+                  : "This Tasks view opened from a specific linked task on Projects. Projects stays read-only for linkage, so the handoff lands on the requested row here and briefly highlights it instead of pretending the project card can edit task state inline."}
             </p>
           </div>
           <button
@@ -616,7 +627,7 @@ export default function TasksPageClient({
               border: "1px solid color-mix(in srgb, #0A84FF 36%, transparent)",
             }}
           >
-            Jump back to requested task
+            {isUrgentOverflowHandoff ? "Jump back to hidden urgent task" : "Jump back to requested task"}
           </button>
         </div>
       )}

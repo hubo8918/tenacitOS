@@ -1156,6 +1156,22 @@ Connect to real OpenClaw execution:
 - Next:
   - keep Project ↔ Task linkage read-only, then reassess the next tight Tasks/Projects trust issue instead of widening into fake cross-page editing.
 
+### 2026-03-12 15:5x
+- Step: Tasks urgent-overflow handoff explanation
+- Files:
+  - `src/components/ProjectCard.tsx`
+  - `src/app/(dashboard)/agents/tasks/TasksPageClient.tsx`
+- Validation:
+  - `npx eslint src/components/ProjectCard.tsx "src/app/(dashboard)/agents/tasks/TasksPageClient.tsx"`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(tasks): explain urgent-overflow handoff target`)
+- Result:
+  - Project-card linked-task handoffs now label whether a targeted Tasks jump came from the visible preview or from the urgent-overflow CTA.
+  - When Tasks opens from urgent overflow, the page now explicitly says the handoff picked the first hidden blocked or overdue task beyond the three-row preview instead of making that target feel arbitrary.
+  - Missing-target fallback copy for that urgent-overflow path now stays honest about why the shortcut no longer has a live row to land on.
+- Next:
+  - keep Project ↔ Task linkage read-only, and if the next trust step stays narrow, consider making the Projects-side urgent-overflow summary name the first hidden urgent task before the handoff.
+
 ---
 
 ## How to Update This File

@@ -83,10 +83,17 @@ function slugify(value: string) {
     .replace(/^-|-$/g, "");
 }
 
-function getProjectTasksHref(projectTitle: string, taskId?: string) {
+function getProjectTasksHref(
+  projectTitle: string,
+  taskId?: string,
+  taskSource?: "linked-preview" | "urgent-overflow"
+) {
   const params = new URLSearchParams({ project: projectTitle });
   if (taskId) {
     params.set("task", taskId);
+  }
+  if (taskSource) {
+    params.set("taskSource", taskSource);
   }
   return `/agents/tasks?${params.toString()}`;
 }
@@ -166,7 +173,7 @@ export function ProjectCard({
   );
   const linkedTaskAttention = useMemo(() => getLinkedTaskAttentionSummary(linkedTasks), [linkedTasks]);
   const projectTasksHref = getProjectTasksHref(project.title);
-  const urgentOverflowTasksHref = getProjectTasksHref(project.title, firstHiddenUrgentLinkedTask?.id);
+  const urgentOverflowTasksHref = getProjectTasksHref(project.title, firstHiddenUrgentLinkedTask?.id, "urgent-overflow");
 
   const resetDraft = () => {
     const nextPhase = getCurrentPhase(project);
@@ -627,7 +634,7 @@ export function ProjectCard({
               {visibleLinkedTasks.map((task) => {
                 const taskStatus = taskStatusConfig[task.status];
                 const isOverdueTask = isTaskOverdue(task.dueDate, task.status);
-                const linkedTaskHref = getProjectTasksHref(project.title, task.id);
+                const linkedTaskHref = getProjectTasksHref(project.title, task.id, "linked-preview");
                 return (
                   <div key={task.id} className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
