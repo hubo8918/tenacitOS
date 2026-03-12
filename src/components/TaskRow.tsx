@@ -671,11 +671,11 @@ export function TaskRow({ task, agentOptions, allTasks, onUpdate }: TaskRowProps
           <button
             type="button"
             onClick={() => {
-              window.open("/agents/projects", "_blank");
+              window.open(`/agents/projects?project=${encodeURIComponent(task.project)}`, "_blank");
             }}
             className="text-xs truncate block text-left hover:underline hover:text-[var(--text-secondary)] transition-colors flex items-center gap-1.5"
             style={{ color: "var(--text-muted)" }}
-            title={`View all tasks in project: ${task.project}`}
+            title={`Open matching project in Projects: ${task.project}`}
           >
             {task.project}
             <ExternalLink className="w-3 h-3 opacity-60 flex-shrink-0" />
