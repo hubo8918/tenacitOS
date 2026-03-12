@@ -232,6 +232,7 @@ export default function TasksPageClient({ initialTasks, initialTaskAgents }: Tas
   ];
   const activeFilterLabel = filterButtons.find((button) => button.key === statusFilter)?.label ?? "Current";
   const hasAnyTasks = tasks.length > 0;
+  const hasFocusedTasks = focusedProjectTaskCount > 0;
 
   const columns: { key: SortField | null; label: string; flex: string }[] = [
     { key: "title", label: "Task", flex: "flex-[3]" },
@@ -593,11 +594,13 @@ export default function TasksPageClient({ initialTasks, initialTaskAgents }: Tas
               <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
                 <div className="space-y-1">
                   <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                    No {activeFilterLabel.toLowerCase()} tasks right now
+                    {projectFocus && !hasFocusedTasks ? `No tasks linked to ${projectFocus} yet` : `No ${activeFilterLabel.toLowerCase()} tasks right now`}
                   </p>
                   <p className="text-sm" style={{ color: "var(--text-muted)" }}>
                     {projectFocus
-                      ? `The ${projectFocus} focus is active, and the current status filter is not showing any matching tasks.`
+                      ? hasFocusedTasks
+                        ? `The ${projectFocus} focus is active, and the current status filter is not showing any matching tasks.`
+                        : `This project focus is active, but no task currently carries the ${projectFocus} project label from the Tasks board yet.`
                       : `The board still has ${tasks.length} tracked task${tasks.length === 1 ? "" : "s"}; this filter just is not showing any of them.`}
                   </p>
                 </div>
@@ -614,6 +617,22 @@ export default function TasksPageClient({ initialTasks, initialTaskAgents }: Tas
                     Show all statuses
                   </button>
                   {projectFocus && (
+                    <button
+                      onClick={() => {
+                        resetCreateForm();
+                        setStatusFilter("all");
+                        setShowCreateForm(true);
+                      }}
+                      className="px-4 py-2 text-sm font-semibold rounded-lg transition-colors"
+                      style={{
+                        backgroundColor: "var(--accent)",
+                        color: "#000",
+                      }}
+                    >
+                      Create task for this project
+                    </button>
+                  )}
+                  {projectFocus && (
                     <a
                       href="/agents/tasks"
                       className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
@@ -627,6 +646,11 @@ export default function TasksPageClient({ initialTasks, initialTaskAgents }: Tas
                     </a>
                   )}
                 </div>
+                {projectFocus && (
+                  <p className="max-w-md text-xs" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                    The intake form opens with <span style={{ color: "var(--text-primary)" }}>{projectFocus}</span> prefilled as the project label, but you can still change it before saving.
+                  </p>
+                )}
               </div>
             )}
           </div>

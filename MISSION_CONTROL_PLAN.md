@@ -846,6 +846,21 @@ Connect to real OpenClaw execution:
 - Next:
   - keep Project ↔ Task linkage read-only, and if the next step stays narrow, add a focused create-task CTA when a project-filtered board currently shows zero visible tasks.
 
+### 2026-03-12 05:3x
+- Step: Tasks project-focused empty-state intake CTA
+- Files:
+  - `src/app/(dashboard)/agents/tasks/TasksPageClient.tsx`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/agents/tasks/TasksPageClient.tsx"`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(tasks): add focused empty-state intake CTA`)
+- Result:
+  - A project-focused Tasks board now offers a direct create-task CTA when the current focus/filter combination shows zero visible tasks.
+  - The focused empty state now distinguishes between "filter is hiding linked tasks" and "this project has no linked tasks yet" instead of collapsing both cases into the same vague message.
+  - The CTA opens the existing intake form with the focused project label prefilled, keeping Project ↔ Task linkage read-only on Projects while making the handoff into real task creation more direct.
+- Next:
+  - keep Project ↔ Task linkage read-only, and if the next step stays narrow, tighten the zero-linked Projects handoff copy so it explicitly points at the now-prefilled focused task intake.
+
 ---
 
 ## How to Update This File
@@ -874,7 +889,7 @@ Suggested template:
 
 ## Current Focus
 
-**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, a first Projects owner/phase editor, participating-agent visibility, current-phase dependency visibility, read-only Project ↔ Task linkage visibility, a linked-task attention summary, and a zero-linked Tasks handoff shipped
+**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, project-focused create-form defaults plus an empty-state intake CTA, a first Projects owner/phase editor, participating-agent visibility, current-phase dependency visibility, read-only Project ↔ Task linkage visibility, a linked-task attention summary, and a zero-linked Tasks handoff shipped
 
 **Do next:**
 1. keep the new Agents capability profile plus Team reporting-line / review-coverage / delegation flows stable and honest
