@@ -673,21 +673,32 @@ export function ProjectCard({
                 );
               })}
 
-              {hiddenUrgentLinkedTaskCount > 0 && (
+              {hiddenUrgentLinkedTaskCount > 0 && firstHiddenUrgentLinkedTask && (
                 <div
                   className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-2"
                   style={{ backgroundColor: "var(--surface-hover)", border: "1px solid var(--border)" }}
                 >
-                  <p className="text-[10px]" style={{ color: "var(--text-secondary)", lineHeight: 1.4 }}>
-                    {hiddenUrgentLinkedTaskCount} more blocked or overdue linked task
-                    {hiddenUrgentLinkedTaskCount === 1 ? "" : "s"} sit beyond this three-row preview.
-                  </p>
+                  <div className="min-w-0">
+                    <p className="text-[10px]" style={{ color: "var(--text-secondary)", lineHeight: 1.4 }}>
+                      {hiddenUrgentLinkedTaskCount} more blocked or overdue linked task
+                      {hiddenUrgentLinkedTaskCount === 1 ? "" : "s"} sit beyond this three-row preview.
+                    </p>
+                    <p className="text-[10px] truncate" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
+                      First hidden urgent task: {firstHiddenUrgentLinkedTask.title}
+                      {firstHiddenUrgentLinkedTask.status === "blocked"
+                        ? " · blocked"
+                        : isTaskOverdue(firstHiddenUrgentLinkedTask.dueDate, firstHiddenUrgentLinkedTask.status)
+                          ? ` · overdue since ${firstHiddenUrgentLinkedTask.dueDate}`
+                          : ""}
+                    </p>
+                  </div>
                   <a
                     href={urgentOverflowTasksHref}
                     target="_blank"
                     rel="noreferrer"
                     className="text-[10px] font-medium whitespace-nowrap"
                     style={{ color: "#0A84FF" }}
+                    title={`Open ${firstHiddenUrgentLinkedTask.title} in the focused Tasks view`}
                   >
                     Review urgent ↗
                   </a>

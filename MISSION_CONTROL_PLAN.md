@@ -1172,6 +1172,21 @@ Connect to real OpenClaw execution:
 - Next:
   - keep Project ↔ Task linkage read-only, and if the next trust step stays narrow, consider making the Projects-side urgent-overflow summary name the first hidden urgent task before the handoff.
 
+### 2026-03-12 16:xx
+- Step: Projects urgent-overflow target naming
+- Files:
+  - `src/components/ProjectCard.tsx`
+- Validation:
+  - `npx eslint src/components/ProjectCard.tsx`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(projects): name urgent overflow handoff target`)
+- Result:
+  - The urgent-overflow summary on Project cards now names the first hidden blocked or overdue task before operators click through to Tasks.
+  - The CTA title now points at that same task, so the Projects-side summary makes the targeted handoff feel intentional instead of arbitrary.
+  - This keeps Project ↔ Task linkage read-only while making hidden urgent work easier to identify before leaving Projects.
+- Next:
+  - keep Project ↔ Task linkage read-only, then reassess the next tight Tasks/Projects trust issue instead of widening into fake cross-page editing.
+
 ---
 
 ## How to Update This File
