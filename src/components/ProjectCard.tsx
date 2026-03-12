@@ -156,12 +156,17 @@ export function ProjectCard({
   }, [currentPhase, project.phases]);
   const sortedLinkedTasks = useMemo(() => [...linkedTasks].sort(compareLinkedTaskPreviewPriority), [linkedTasks]);
   const visibleLinkedTasks = useMemo(() => sortedLinkedTasks.slice(0, 3), [sortedLinkedTasks]);
+  const firstHiddenUrgentLinkedTask = useMemo(
+    () => sortedLinkedTasks.slice(3).find(isUrgentLinkedTask) || null,
+    [sortedLinkedTasks]
+  );
   const hiddenUrgentLinkedTaskCount = useMemo(
     () => sortedLinkedTasks.slice(3).filter(isUrgentLinkedTask).length,
     [sortedLinkedTasks]
   );
   const linkedTaskAttention = useMemo(() => getLinkedTaskAttentionSummary(linkedTasks), [linkedTasks]);
   const projectTasksHref = getProjectTasksHref(project.title);
+  const urgentOverflowTasksHref = getProjectTasksHref(project.title, firstHiddenUrgentLinkedTask?.id);
 
   const resetDraft = () => {
     const nextPhase = getCurrentPhase(project);
@@ -671,7 +676,7 @@ export function ProjectCard({
                     {hiddenUrgentLinkedTaskCount === 1 ? "" : "s"} sit beyond this three-row preview.
                   </p>
                   <a
-                    href={projectTasksHref}
+                    href={urgentOverflowTasksHref}
                     target="_blank"
                     rel="noreferrer"
                     className="text-[10px] font-medium whitespace-nowrap"
