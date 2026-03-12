@@ -1126,6 +1126,21 @@ Connect to real OpenClaw execution:
 - Next:
   - keep Project ↔ Task linkage read-only, and if the next trust step stays narrow, surface when additional urgent linked tasks still exist beyond the three-row preview.
 
+### 2026-03-12 15:xx
+- Step: Projects urgent linked-task overflow summary
+- Files:
+  - `src/components/ProjectCard.tsx`
+- Validation:
+  - `npx eslint src/components/ProjectCard.tsx`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(projects): surface urgent task overflow beyond preview`)
+- Result:
+  - Project cards now stay honest when more blocked or overdue linked tasks exist beyond the visible three-row preview.
+  - The linked-task section now calls out that hidden urgent overflow explicitly and links operators into the focused Tasks view instead of implying the preview already shows all urgent work.
+  - This keeps Project ↔ Task linkage read-only while making urgent follow-up easier without widening into inline task editing.
+- Next:
+  - keep Project ↔ Task linkage read-only, and if the next trust pass stays narrow, make the urgent-overflow handoff jump to the first hidden urgent task instead of only opening the focused Tasks view.
+
 ---
 
 ## How to Update This File
@@ -1154,10 +1169,10 @@ Suggested template:
 
 ## Current Focus
 
-**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + direct inline visibility for task-label/project-title mismatches + a scoped board-level mismatch attention summary + a mismatch-only board filter + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, task-row jumps into a focused Projects view, project-focused create-form defaults plus an empty-state intake CTA, a first Projects owner/phase editor, participating-agent visibility, current-phase dependency visibility, read-only Project ↔ Task linkage visibility, a linked-task attention summary, a zero-linked Tasks handoff, and a Projects-board mismatch cleanup handoff that now lands on and briefly highlights the first affected Tasks row shipped
+**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + direct inline visibility for task-label/project-title mismatches + a scoped board-level mismatch attention summary + a mismatch-only board filter + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, task-row jumps into a focused Projects view, project-focused create-form defaults plus an empty-state intake CTA, a first Projects owner/phase editor, participating-agent visibility, current-phase dependency visibility, read-only Project ↔ Task linkage visibility, a linked-task attention summary, a zero-linked Tasks handoff, a Projects-board mismatch cleanup handoff that now lands on and briefly highlights the first affected Tasks row, and an explicit urgent-overflow notice when more blocked or overdue linked tasks sit beyond the three-row project preview
 
 **Do next:**
 1. keep the new Agents capability profile plus Team reporting-line / review-coverage / delegation flows stable and honest
 2. keep Project ↔ Task linkage honest; only widen beyond read-only visibility when the linkage model is stable enough for real editing
-3. keep pushing coordination surfaces forward without pretending execution automation already exists
-4. reassess the next tight Tasks/Projects trust issue instead of widening into fake cross-page editing
+3. if the next trust pass stays narrow, make the urgent-overflow handoff jump to the first hidden urgent task instead of only opening the focused Tasks view
+4. keep pushing coordination surfaces forward without pretending execution automation already exists

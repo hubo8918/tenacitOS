@@ -33,6 +33,10 @@ function isTaskOverdue(dateString: string, status: Task["status"]) {
   return dueDate < startOfToday;
 }
 
+function isUrgentLinkedTask(task: Task) {
+  return task.status === "blocked" || isTaskOverdue(task.dueDate, task.status);
+}
+
 function getLinkedTaskAttentionSummary(tasks: Task[]) {
   const openCount = tasks.filter((task) => task.status !== "completed").length;
   const blockedCount = tasks.filter((task) => task.status === "blocked").length;
@@ -150,9 +154,11 @@ export function ProjectCard({
 
     return { resolved, unresolvedIds };
   }, [currentPhase, project.phases]);
-  const visibleLinkedTasks = useMemo(
-    () => [...linkedTasks].sort(compareLinkedTaskPreviewPriority).slice(0, 3),
-    [linkedTasks]
+  const sortedLinkedTasks = useMemo(() => [...linkedTasks].sort(compareLinkedTaskPreviewPriority), [linkedTasks]);
+  const visibleLinkedTasks = useMemo(() => sortedLinkedTasks.slice(0, 3), [sortedLinkedTasks]);
+  const hiddenUrgentLinkedTaskCount = useMemo(
+    () => sortedLinkedTasks.slice(3).filter(isUrgentLinkedTask).length,
+    [sortedLinkedTasks]
   );
   const linkedTaskAttention = useMemo(() => getLinkedTaskAttentionSummary(linkedTasks), [linkedTasks]);
   const projectTasksHref = getProjectTasksHref(project.title);
@@ -654,6 +660,27 @@ export function ProjectCard({
                   </div>
                 );
               })}
+
+              {hiddenUrgentLinkedTaskCount > 0 && (
+                <div
+                  className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-2"
+                  style={{ backgroundColor: "var(--surface-hover)", border: "1px solid var(--border)" }}
+                >
+                  <p className="text-[10px]" style={{ color: "var(--text-secondary)", lineHeight: 1.4 }}>
+                    {hiddenUrgentLinkedTaskCount} more blocked or overdue linked task
+                    {hiddenUrgentLinkedTaskCount === 1 ? "" : "s"} sit beyond this three-row preview.
+                  </p>
+                  <a
+                    href={projectTasksHref}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[10px] font-medium whitespace-nowrap"
+                    style={{ color: "#0A84FF" }}
+                  >
+                    Review urgent ↗
+                  </a>
+                </div>
+              )}
 
               <div className="flex items-center justify-between gap-2 pt-1">
                 <p className="text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
