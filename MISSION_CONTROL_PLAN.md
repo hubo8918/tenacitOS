@@ -1265,16 +1265,6 @@ Suggested template:
 
 ---
 
-## Current Focus
-
-**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + direct inline visibility for task-label/project-title mismatches + a scoped board-level mismatch attention summary + a mismatch-only board filter + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, task-row jumps into a focused Projects view, project-focused create-form defaults plus an empty-state intake CTA, a first Projects create flow, a first Projects owner/phase editor, participating-agent visibility, current-phase dependency visibility, read-only Project ↔ Task linkage visibility, a linked-task attention summary, a zero-linked Tasks handoff, a Projects-board mismatch cleanup handoff that now lands on and briefly highlights the first affected Tasks row, and an urgent-overflow handoff that now jumps straight to the first hidden blocked or overdue linked task
-
-**Do next:**
-1. take the next honest Projects CRUD step instead of pretending the board is already fully operational
-2. keep Project ↔ Task linkage honest; only widen beyond read-only visibility when the linkage model is stable enough for real editing
-3. if stable Project ↔ Task editing requires a schema/product decision, say that explicitly before widening
-4. keep pushing coordination surfaces forward without pretending execution automation already exists
-
 ### 2026-03-12 19:09
 - Step: Projects delete coverage
 - Files:
@@ -1288,4 +1278,14 @@ Suggested template:
   - The delete copy stays honest about the trust boundary: deleting a project removes the project record only, while linked task labels still need cleanup from Tasks instead of pretending cross-page linkage updates automatically.
   - Save and delete actions now disable each other while in flight, and backend delete errors stay visible in the editor instead of failing silently.
 - Next:
-  - either add the next honest Projects CRUD/edit-management step, or stop and explicitly call out that stable Project ? Task editing needs a real schema decision before widening.
+  - either add the next honest Projects CRUD/edit-management step, or stop and explicitly call out that stable Project ↔ Task editing needs a real schema decision before widening.
+
+## Current Focus
+
+**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + direct inline visibility for task-label/project-title mismatches + a scoped board-level mismatch attention summary + a mismatch-only board filter + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, task-row jumps into a focused Projects view, project-focused create-form defaults plus an empty-state intake CTA, a first Projects create flow, a first Projects owner/phase editor, participating-agent visibility, current-phase dependency visibility, read-only Project ↔ Task linkage visibility, a linked-task attention summary, a zero-linked Tasks handoff, a Projects-board mismatch cleanup handoff that now lands on and briefly highlights the first affected Tasks row, an urgent-overflow handoff that now jumps straight to the first hidden blocked or overdue linked task, and a first honest Projects delete flow
+
+**Do next:**
+1. take the next honest Projects CRUD step instead of pretending the board is already fully operational
+2. keep Project ↔ Task linkage honest; only widen beyond read-only visibility when the linkage model is stable enough for real editing
+3. if stable Project ↔ Task editing requires a schema/product decision, say that explicitly before widening
+4. keep pushing coordination surfaces forward without pretending execution automation already exists
