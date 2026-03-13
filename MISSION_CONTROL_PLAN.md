@@ -1295,12 +1295,34 @@ Suggested template:
 - Next:
   - either add the next narrow Projects management step, or explicitly call out that project-title linkage edits need a schema decision before widening.
 
+### 2026-03-12 20:33
+- Step: Stable Project ↔ Task linkage foundation
+- Files:
+  - `src/app/(dashboard)/agents/projects/ProjectsPageClient.tsx`
+  - `src/app/(dashboard)/agents/tasks/TasksPageClient.tsx`
+  - `src/app/api/agent-tasks/route.ts`
+  - `src/components/ProjectCard.tsx`
+  - `src/components/TaskRow.tsx`
+  - `src/data/mockTasksData.ts`
+  - `src/lib/agent-tasks-data.ts`
+  - `src/lib/project-task-linkage.ts`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/agents/projects/ProjectsPageClient.tsx" "src/app/(dashboard)/agents/tasks/TasksPageClient.tsx" src/app/api/agent-tasks/route.ts src/components/ProjectCard.tsx src/components/TaskRow.tsx src/data/mockTasksData.ts src/lib/agent-tasks-data.ts src/lib/project-task-linkage.ts`
+  - `npm run build`
+- Commit: current checkpoint commit (`feat(tasks): add stable project-id linkage`)
+- Result:
+  - Tasks now persist an optional `projectId` resolved from live project records, and existing task data backfills that id on load instead of staying title-string-only forever.
+  - Project-focused views and linked-task previews now resolve via stable project ids first with legacy title fallback, so honest cross-board handoffs no longer depend only on exact title matches.
+  - Task/project mismatch UI now flags only rows that truly fail to resolve to a live Projects record; broader project-title editing and richer link-management UX still remain separate follow-on work.
+- Next:
+  - use this stable linkage model for the next honest editable task/project management step instead of widening into fake cross-page editing.
+
 ## Current Focus
 
-**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + direct inline visibility for task-label/project-title mismatches + a scoped board-level mismatch attention summary + a mismatch-only board filter + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, task-row jumps into a focused Projects view, project-focused create-form defaults plus an empty-state intake CTA, a first Projects create flow, a first Projects owner/phase editor, a first Projects participating-agent editor, current-phase dependency visibility, read-only Project ↔ Task linkage visibility, a linked-task attention summary, a zero-linked Tasks handoff, a Projects-board mismatch cleanup handoff that now lands on and briefly highlights the first affected Tasks row, an urgent-overflow handoff that now jumps straight to the first hidden blocked or overdue linked task, and a first honest Projects delete flow
+**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + direct inline visibility for task/project link mismatches + a scoped board-level mismatch attention summary + a mismatch-only board filter + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, task-row jumps into a focused Projects view, project-focused create-form defaults plus an empty-state intake CTA, a first Projects create flow, a first Projects owner/phase editor, a first Projects participating-agent editor, current-phase dependency visibility, a linked-task attention summary, a zero-linked Tasks handoff, a Projects-board mismatch cleanup handoff that now lands on and briefly highlights the first affected Tasks row, an urgent-overflow handoff that now jumps straight to the first hidden blocked or overdue linked task, a first honest Projects delete flow, and a new stable `projectId` foundation so Task ↔ Project linkage no longer depends only on exact title strings.
 
 **Do next:**
-1. take the next honest Projects CRUD step instead of pretending the board is already fully operational
-2. keep Project ↔ Task linkage honest; only widen beyond read-only visibility when the linkage model is stable enough for real editing
-3. if stable Project ↔ Task editing requires a schema/product decision, say that explicitly before widening
+1. use the new stable linkage model for the next honest editable task/project management step instead of pretending Phase 3 already has full cross-page editing
+2. keep widening Projects CRUD toward a genuinely operational board, one narrow flow at a time
+3. if project-title editing or deeper dependency UX needs a schema/product decision, say that explicitly before widening
 4. keep pushing coordination surfaces forward without pretending execution automation already exists

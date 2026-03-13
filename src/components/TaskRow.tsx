@@ -63,7 +63,9 @@ interface TaskRowProps {
   task: Task;
   agentOptions: TaskAgentOption[];
   allTasks: Task[];
-  hasProjectTitleMatch?: boolean | null;
+  linkedProjectId?: string;
+  linkedProjectTitle?: string | null;
+  hasProjectLink?: boolean | null;
   isTemporarilyHighlighted?: boolean;
   onUpdate?: () => void;
 }
@@ -73,7 +75,9 @@ export function TaskRow({
   task,
   agentOptions,
   allTasks,
-  hasProjectTitleMatch = null,
+  linkedProjectId,
+  linkedProjectTitle = null,
+  hasProjectLink = null,
   isTemporarilyHighlighted = false,
   onUpdate,
 }: TaskRowProps) {
@@ -89,8 +93,9 @@ export function TaskRow({
   const [pendingStatusLabel, setPendingStatusLabel] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [confirmingStatus, setConfirmingStatus] = useState<Task["status"] | null>(null);
+  const resolvedProjectLabel = linkedProjectTitle || task.project;
   const [title, setTitle] = useState(task.title);
-  const [project, setProject] = useState(task.project);
+  const [project, setProject] = useState(resolvedProjectLabel);
   const [dueDate, setDueDate] = useState(task.dueDate);
   const [statusValue, setStatusValue] = useState<Task["status"]>(task.status);
   const [priorityValue, setPriorityValue] = useState<Task["priority"]>(task.priority);
@@ -273,10 +278,12 @@ export function TaskRow({
     name: task.agent.name,
     color: task.agent.color,
   });
-  const projectFocusHref = task.project.trim()
-    ? `/agents/projects?project=${encodeURIComponent(task.project.trim())}&task=${encodeURIComponent(task.id)}`
-    : `/agents/projects?task=${encodeURIComponent(task.id)}`;
-  const projectLabelMismatch = hasProjectTitleMatch === false;
+  const projectFocusHref = linkedProjectId
+    ? `/agents/projects?project=${encodeURIComponent(linkedProjectTitle || task.project)}&projectId=${encodeURIComponent(linkedProjectId)}&task=${encodeURIComponent(task.id)}`
+    : task.project.trim()
+      ? `/agents/projects?project=${encodeURIComponent(task.project.trim())}&task=${encodeURIComponent(task.id)}`
+      : `/agents/projects?task=${encodeURIComponent(task.id)}`;
+  const projectLabelMismatch = hasProjectLink === false;
 
   useEffect(() => {
     if (!showMenu) return;
@@ -296,12 +303,12 @@ export function TaskRow({
 
   useEffect(() => {
     setTitle(task.title);
-    setProject(task.project);
+    setProject(resolvedProjectLabel);
     setDueDate(task.dueDate);
     setStatusValue(task.status);
     setPriorityValue(task.priority);
     setDetailsError(null);
-  }, [task.dueDate, task.priority, task.project, task.status, task.title]);
+  }, [resolvedProjectLabel, task.dueDate, task.priority, task.status, task.title]);
 
   useEffect(() => {
     setAssigneeAgentId(inferredAssigneeAgentId);
@@ -317,11 +324,11 @@ export function TaskRow({
     setPendingStatusLabel(null);
     setConfirmingDelete(false);
     setConfirmingStatus(null);
-  }, [task.id, task.status, task.title, task.project, task.dueDate, task.priority]);
+  }, [resolvedProjectLabel, task.id, task.status, task.title, task.dueDate, task.priority]);
 
   const resetDetailsDraft = () => {
     setTitle(task.title);
-    setProject(task.project);
+    setProject(resolvedProjectLabel);
     setDueDate(task.dueDate);
     setStatusValue(task.status);
     setPriorityValue(task.priority);
@@ -696,10 +703,10 @@ export function TaskRow({
               className="text-xs truncate block text-left hover:underline hover:text-[var(--text-secondary)] transition-colors flex items-center gap-1.5 max-w-full"
               style={{ color: projectLabelMismatch ? "#FF9F0A" : "var(--text-muted)" }}
               title={projectLabelMismatch
-                ? `No exact Projects title currently matches \"${task.project}\". Opening Projects will show the mismatch state for this saved task label.`
-                : `Open matching project in Projects: ${task.project}`}
+                ? `No live Projects record currently resolves from \"${task.project}\". Opening Projects will show the mismatch state for this task.`
+                : `Open linked project in Projects: ${resolvedProjectLabel || task.project}`}
             >
-              <span className="truncate">{task.project}</span>
+              <span className="truncate">{resolvedProjectLabel || "No project"}</span>
               <ExternalLink className="w-3 h-3 opacity-60 flex-shrink-0" />
             </button>
             {projectLabelMismatch && (
@@ -711,9 +718,9 @@ export function TaskRow({
                     backgroundColor: "color-mix(in srgb, #FF9F0A 14%, transparent)",
                     border: "1px solid color-mix(in srgb, #FF9F0A 28%, transparent)",
                   }}
-                  title="This task's saved project label does not exactly match any current project title on the Projects board."
+                  title="This task does not currently resolve to a live project on the Projects board."
                 >
-                  No exact match
+                  Link missing
                 </span>
                 <button
                   type="button"
@@ -727,9 +734,9 @@ export function TaskRow({
                     backgroundColor: "transparent",
                     border: "1px solid color-mix(in srgb, #FF9F0A 30%, transparent)",
                   }}
-                  title={`Edit this task's saved project label for ${task.title}`}
+                  title={`Edit this task's project field for ${task.title}`}
                 >
-                  Fix label
+                  Fix project
                 </button>
               </>
             )}

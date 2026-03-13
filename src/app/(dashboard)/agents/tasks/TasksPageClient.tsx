@@ -7,6 +7,7 @@ import { TaskRow } from "@/components/TaskRow";
 import { taskPriorityConfig, taskStatusConfig } from "@/data/mockTasksData";
 import type { Task } from "@/data/mockTasksData";
 import type { Project } from "@/data/mockProjectsData";
+import { taskHasProjectMismatch, taskLinksToProject, resolveProjectForTask, normalizeProjectLabel } from "@/lib/project-task-linkage";
 import { useFetch } from "@/lib/useFetch";
 
 type StatusFilter = "all" | "in_progress" | "completed" | "pending" | "blocked";
@@ -69,10 +70,6 @@ function getLocalDateInputValue(offsetDays = 0) {
   return `${year}-${month}-${day}`;
 }
 
-function normalizeProjectLabel(value: string) {
-  return value.trim().toLowerCase();
-}
-
 interface TaskAgentOption {
   id: string;
   name: string;
@@ -93,10 +90,10 @@ export default function TasksPageClient({
 }: TasksPageClientProps) {
   const searchParams = useSearchParams();
   const projectFocus = searchParams.get("project")?.trim() || "";
+  const projectIdFocus = searchParams.get("projectId")?.trim() || "";
   const mismatchOnlyRequested = searchParams.get("mismatch") === "1";
   const requestedTaskId = searchParams.get("task")?.trim() || "";
   const requestedTaskSource = searchParams.get("taskSource")?.trim() || "";
-  const normalizedProjectFocus = normalizeProjectLabel(projectFocus);
   const hasInitialTasks = initialTasks.length > 0;
   const { data, loading, error, refetch } = useFetch<{ tasks: Task[] }>("/api/agent-tasks", {
     initialData: hasInitialTasks ? { tasks: initialTasks } : null,
@@ -108,11 +105,14 @@ export default function TasksPageClient({
     fetchOnMount: !hasInitialProjects,
   });
   const tasks = useMemo(() => data?.tasks || [], [data]);
-  const normalizedProjectTitles = useMemo(
-    () => new Set((projectsData?.projects || []).map((project) => normalizeProjectLabel(project.title))),
-    [projectsData]
+  const projects = useMemo(() => projectsData?.projects || initialProjects, [initialProjects, projectsData]);
+  const focusedProject = useMemo(
+    () => (projectIdFocus ? projects.find((project) => project.id === projectIdFocus) || null : null),
+    [projectIdFocus, projects]
   );
-  const canCheckProjectMatches = Boolean(projectsData);
+  const effectiveProjectFocus = focusedProject?.title || projectFocus;
+  const normalizedProjectFocus = normalizeProjectLabel(effectiveProjectFocus);
+  const canCheckProjectMatches = projects.length > 0;
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [showMismatchOnly, setShowMismatchOnly] = useState(mismatchOnlyRequested);
@@ -124,29 +124,30 @@ export default function TasksPageClient({
   const [creatingTask, setCreatingTask] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
-  const [newProject, setNewProject] = useState(projectFocus);
+  const [newProject, setNewProject] = useState(effectiveProjectFocus);
   const [newDueDate, setNewDueDate] = useState(() => getLocalDateInputValue(7));
   const [newStatus, setNewStatus] = useState<Task["status"]>("pending");
   const [newPriority, setNewPriority] = useState<Task["priority"]>("medium");
   const [newAssigneeAgentId, setNewAssigneeAgentId] = useState("");
 
-  const scopedTasks = useMemo(
-    () =>
-      normalizedProjectFocus
-        ? tasks.filter((task) => normalizeProjectLabel(task.project) === normalizedProjectFocus)
-        : tasks,
-    [tasks, normalizedProjectFocus]
-  );
+  const scopedTasks = useMemo(() => {
+    if (focusedProject) {
+      return tasks.filter((task) => taskLinksToProject(task, focusedProject));
+    }
+
+    if (normalizedProjectFocus) {
+      return tasks.filter((task) => normalizeProjectLabel(task.project) === normalizedProjectFocus);
+    }
+
+    return tasks;
+  }, [focusedProject, normalizedProjectFocus, tasks]);
   const projectLabelMismatchTasks = useMemo(() => {
     if (!canCheckProjectMatches) {
       return [];
     }
 
-    return scopedTasks.filter((task) => {
-      const trimmedProject = task.project.trim();
-      return Boolean(trimmedProject) && !normalizedProjectTitles.has(normalizeProjectLabel(trimmedProject));
-    });
-  }, [canCheckProjectMatches, normalizedProjectTitles, scopedTasks]);
+    return scopedTasks.filter((task) => taskHasProjectMismatch(task, projects));
+  }, [canCheckProjectMatches, projects, scopedTasks]);
   const projectLabelMismatchCount = projectLabelMismatchTasks.length;
   const projectLabelMismatchTaskIds = useMemo(
     () => new Set(projectLabelMismatchTasks.map((task) => task.id)),
@@ -169,7 +170,7 @@ export default function TasksPageClient({
       .map(([label]) => label);
     const remainingLabelCount = labelCounts.size - topLabels.length;
 
-    return `No exact Projects title match for ${topLabels.join(", ")}${remainingLabelCount > 0 ? ` +${remainingLabelCount} more` : ""}.`;
+    return `No live Projects link for ${topLabels.join(", ")}${remainingLabelCount > 0 ? ` +${remainingLabelCount} more` : ""}.`;
   }, [projectLabelMismatchTasks]);
   const requestedTask = useMemo(
     () => scopedTasks.find((task) => task.id === requestedTaskId) || null,
@@ -187,7 +188,7 @@ export default function TasksPageClient({
   const isLinkedPreviewHandoff = requestedTaskSource === "linked-preview";
   const requestedTaskOutsideFocus = Boolean(
     requestedTaskId &&
-      projectFocus &&
+      effectiveProjectFocus &&
       !showMismatchOnly &&
       !requestedTask &&
       requestedTaskAnywhere
@@ -213,10 +214,16 @@ export default function TasksPageClient({
         .find((task) => task.id !== requestedTaskId && isUrgentLinkedTask(task)) || null
     );
   }, [isUrgentOverflowHandoff, projectFocusPreviewTasks, requestedTaskId]);
+  const requestedTaskCurrentProject = useMemo(
+    () => (requestedTaskAnywhere ? resolveProjectForTask(requestedTaskAnywhere, projects) : null),
+    [projects, requestedTaskAnywhere]
+  );
   const requestedTaskCurrentViewHref = requestedTaskAnywhere
-    ? requestedTaskAnywhere.project.trim()
-      ? `/agents/tasks?project=${encodeURIComponent(requestedTaskAnywhere.project.trim())}&task=${encodeURIComponent(requestedTaskAnywhere.id)}`
-      : `/agents/tasks?task=${encodeURIComponent(requestedTaskAnywhere.id)}`
+    ? requestedTaskCurrentProject
+      ? `/agents/tasks?project=${encodeURIComponent(requestedTaskCurrentProject.title)}&projectId=${encodeURIComponent(requestedTaskCurrentProject.id)}&task=${encodeURIComponent(requestedTaskAnywhere.id)}`
+      : requestedTaskAnywhere.project.trim()
+        ? `/agents/tasks?project=${encodeURIComponent(requestedTaskAnywhere.project.trim())}&task=${encodeURIComponent(requestedTaskAnywhere.id)}`
+        : `/agents/tasks?task=${encodeURIComponent(requestedTaskAnywhere.id)}`
     : "/agents/tasks";
   const requestedMismatchTaskResolved = Boolean(
     canCheckProjectMatches && showMismatchOnly && requestedTaskId && !requestedMismatchTask && requestedTaskAnywhere
@@ -377,13 +384,13 @@ export default function TasksPageClient({
 
   useEffect(() => {
     if (!showCreateForm) {
-      setNewProject(projectFocus);
+      setNewProject(effectiveProjectFocus);
     }
-  }, [projectFocus, showCreateForm]);
+  }, [effectiveProjectFocus, showCreateForm]);
 
   const resetCreateForm = () => {
     setNewTitle("");
-    setNewProject(projectFocus);
+    setNewProject(effectiveProjectFocus);
     setNewDueDate(getLocalDateInputValue(7));
     setNewStatus("pending");
     setNewPriority("medium");
@@ -399,7 +406,7 @@ export default function TasksPageClient({
     }
 
     setCreateError(null);
-    setNewProject(projectFocus);
+    setNewProject(effectiveProjectFocus);
     setShowCreateForm(true);
   };
 
@@ -546,7 +553,7 @@ export default function TasksPageClient({
             Tasks
           </h1>
           <p style={{ color: "var(--text-secondary)", fontSize: "14px" }}>
-            Coordination board &bull; {scopedTasks.length} {projectFocus ? "in focus" : "tracked"} &bull; {inProgressCount} in progress &bull; {completedCount} completed
+            Coordination board &bull; {scopedTasks.length} {effectiveProjectFocus ? "in focus" : "tracked"} &bull; {inProgressCount} in progress &bull; {completedCount} completed
           </p>
           <p className="mt-2 text-sm" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
             Use this page to track shared work across agents and projects. Task status here reflects backlog progress,
@@ -568,7 +575,7 @@ export default function TasksPageClient({
         </button>
       </div>
 
-      {projectFocus && (
+      {effectiveProjectFocus && (
         <div
           className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2 text-xs"
           style={{
@@ -578,7 +585,7 @@ export default function TasksPageClient({
         >
           <div className="space-y-1">
             <p className="font-semibold" style={{ color: "var(--text-primary)" }}>
-              Project focus: {projectFocus}
+              Project focus: {effectiveProjectFocus}
             </p>
             <p style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
               Opened from Projects. Showing {focusedProjectTaskCount} linked task{focusedProjectTaskCount === 1 ? "" : "s"} before status filters.
@@ -608,9 +615,9 @@ export default function TasksPageClient({
           <div className="space-y-1">
             <p className="font-semibold" style={{ color: "#FF9F0A" }}>
               {isUrgentOverflowHandoff && requestedTaskOutsideFocus && requestedTaskAnywhere
-                ? `Requested hidden urgent task moved outside ${projectFocus}`
+                ? `Requested hidden urgent task moved outside ${effectiveProjectFocus}`
                 : requestedTaskOutsideFocus && requestedTaskAnywhere
-                  ? `Focused task handoff moved outside ${projectFocus}`
+                  ? `Focused task handoff moved outside ${effectiveProjectFocus}`
                   : isUrgentOverflowHandoff
                     ? "Requested hidden urgent task is no longer on this board"
                     : "Requested linked task is no longer on this board"}
@@ -618,10 +625,10 @@ export default function TasksPageClient({
             <p style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
               {isUrgentOverflowHandoff && requestedTaskOutsideFocus && requestedTaskAnywhere
                 ? replacementUrgentOverflowTask
-                  ? `This Tasks view opened from the Projects urgent-overflow handoff, but the requested hidden blocked/overdue task \"${requestedTaskAnywhere.title}\" is now saved under ${requestedTaskAnywhere.project.trim() ? `the ${requestedTaskAnywhere.project} project label` : "no project label"}. Projects stays read-only for linkage here, so Mission Control does not pretend that task still belongs under ${projectFocus}; instead, you can jump to the current first hidden urgent task still queued beyond the three-row preview for this project.`
-                  : `This Tasks view opened from the Projects urgent-overflow handoff, but the requested hidden blocked/overdue task \"${requestedTaskAnywhere.title}\" is now saved under ${requestedTaskAnywhere.project.trim() ? `the ${requestedTaskAnywhere.project} project label` : "no project label"}. Projects stays read-only for linkage here, so this focused board does not pretend that task still belongs under ${projectFocus}.`
+                  ? `This Tasks view opened from the Projects urgent-overflow handoff, but the requested hidden blocked/overdue task \"${requestedTaskAnywhere.title}\" is now saved under ${requestedTaskAnywhere.project.trim() ? `the ${requestedTaskAnywhere.project} project label` : "no project label"}. Projects stays read-only for linkage here, so Mission Control does not pretend that task still belongs under ${effectiveProjectFocus}; instead, you can jump to the current first hidden urgent task still queued beyond the three-row preview for this project.`
+                  : `This Tasks view opened from the Projects urgent-overflow handoff, but the requested hidden blocked/overdue task \"${requestedTaskAnywhere.title}\" is now saved under ${requestedTaskAnywhere.project.trim() ? `the ${requestedTaskAnywhere.project} project label` : "no project label"}. Projects stays read-only for linkage here, so this focused board does not pretend that task still belongs under ${effectiveProjectFocus}.`
                 : requestedTaskOutsideFocus && requestedTaskAnywhere
-                  ? `This Tasks view opened from Projects for ${projectFocus}, but the requested task \"${requestedTaskAnywhere.title}\" is now saved under ${requestedTaskAnywhere.project.trim() ? `the ${requestedTaskAnywhere.project} project label` : "no project label"}. Projects stays read-only for linkage, so this focused board does not pretend that task still belongs here.`
+                  ? `This Tasks view opened from Projects for ${effectiveProjectFocus}, but the requested task \"${requestedTaskAnywhere.title}\" is now saved under ${requestedTaskAnywhere.project.trim() ? `the ${requestedTaskAnywhere.project} project label` : "no project label"}. Projects stays read-only for linkage, so this focused board does not pretend that task still belongs here.`
                   : isUrgentOverflowHandoff
                     ? replacementUrgentOverflowTask
                       ? `This Tasks view opened from the Projects urgent-overflow handoff, but the requested hidden blocked/overdue task is no longer present on the current Tasks board. Projects stays read-only for linkage here, so Mission Control shows the missing-target state instead of pretending the original urgent-overflow shortcut still has a live row to land on. The current board still has another hidden urgent task beyond the three-row Projects preview, and you can jump straight to it here.`
@@ -717,7 +724,7 @@ export default function TasksPageClient({
               Focused mismatch handoff: {requestedMismatchTask.title}
             </p>
             <p style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
-              This mismatch-only view opened on a specific task from Projects. The requested row briefly highlights after each targeted jump so the <span style={{ color: "#FF9F0A" }}>No exact match</span> badge and row&apos;s <span style={{ color: "#FF9F0A" }}>Fix label</span> action are easier to spot in the existing task-details editor flow.
+              This mismatch-only view opened on a specific task from Projects. The requested row briefly highlights after each targeted jump so the <span style={{ color: "#FF9F0A" }}>Link missing</span> badge and row&apos;s <span style={{ color: "#FF9F0A" }}>Fix project</span> action are easier to spot in the existing task-details editor flow.
             </p>
           </div>
           <button
@@ -799,9 +806,9 @@ export default function TasksPageClient({
                 This first CRUD milestone keeps creation honest: title, board status, priority, due date, project,
                 and initial owner all save here. Reviewer and handoff can still be added from the row-level routing editor after creation.
               </p>
-              {projectFocus && (
+              {effectiveProjectFocus && (
                 <p className="mt-2 text-xs" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
-                  Opened from Projects for <span style={{ color: "var(--text-primary)" }}>{projectFocus}</span>; the project field starts with that label but stays editable here.
+                  Opened from Projects for <span style={{ color: "var(--text-primary)" }}>{effectiveProjectFocus}</span>; the project field starts with that label but stays editable here.
                 </p>
               )}
             </div>
@@ -955,7 +962,7 @@ export default function TasksPageClient({
                   border: "1px solid color-mix(in srgb, #FFD60A 30%, transparent)",
                 }}
               >
-                {projectLabelMismatchCount} project label mismatch{projectLabelMismatchCount === 1 ? "" : "es"}
+                {projectLabelMismatchCount} project link mismatch{projectLabelMismatchCount === 1 ? "" : "es"}
               </span>
               <span style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
                 {projectLabelMismatchPreview} Clean them up from the affected task rows so focused Projects navigation stays honest.
@@ -1071,37 +1078,43 @@ export default function TasksPageClient({
             </div>
 
             {filteredTasks.length > 0 ? (
-              filteredTasks.map((task) => (
-                <TaskRow
-                  key={task.id}
-                  rowId={`task-row-${task.id}`}
-                  task={task}
-                  agentOptions={initialTaskAgents}
-                  allTasks={tasks}
-                  hasProjectTitleMatch={canCheckProjectMatches ? normalizedProjectTitles.has(normalizeProjectLabel(task.project)) : null}
-                  isTemporarilyHighlighted={task.id === highlightedTaskId}
-                  onUpdate={refetch}
-                />
-              ))
+              filteredTasks.map((task) => {
+                const linkedProject = canCheckProjectMatches ? resolveProjectForTask(task, projects) : null;
+
+                return (
+                  <TaskRow
+                    key={task.id}
+                    rowId={`task-row-${task.id}`}
+                    task={task}
+                    agentOptions={initialTaskAgents}
+                    allTasks={tasks}
+                    linkedProjectId={linkedProject?.id}
+                    linkedProjectTitle={linkedProject?.title || null}
+                    hasProjectLink={canCheckProjectMatches ? !taskHasProjectMismatch(task, projects) : null}
+                    isTemporarilyHighlighted={task.id === highlightedTaskId}
+                    onUpdate={refetch}
+                  />
+                );
+              })
             ) : (
               <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
                 <div className="space-y-1">
                   <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                     {showMismatchOnly
-                      ? "No project label mismatches in this view"
-                      : projectFocus && !hasFocusedTasks
-                        ? `No tasks linked to ${projectFocus} yet`
+                      ? "No project link mismatches in this view"
+                      : effectiveProjectFocus && !hasFocusedTasks
+                        ? `No tasks linked to ${effectiveProjectFocus} yet`
                         : `No ${activeFilterLabel.toLowerCase()} tasks right now`}
                   </p>
                   <p className="text-sm" style={{ color: "var(--text-muted)" }}>
                     {showMismatchOnly
-                      ? projectFocus
-                        ? `Every visible task in the ${projectFocus} focus currently matches an exact Projects title, so there is no label drift to clean up here.`
-                        : "Every visible task currently matches an exact Projects title, so the mismatch-only filter has nothing left to show."
-                      : projectFocus
+                      ? effectiveProjectFocus
+                        ? `Every visible task in the ${effectiveProjectFocus} focus currently resolves to a live Projects record, so there is no linkage cleanup to do here.`
+                        : "Every visible task currently resolves to a live Projects record, so the mismatch-only filter has nothing left to show."
+                      : effectiveProjectFocus
                         ? hasFocusedTasks
-                          ? `The ${projectFocus} focus is active, and the current status filter is not showing any matching tasks.`
-                          : `This project focus is active, but no task currently carries the ${projectFocus} project label from the Tasks board yet.`
+                          ? `The ${effectiveProjectFocus} focus is active, and the current status filter is not showing any matching tasks.`
+                          : `This project focus is active, but no task currently links back to ${effectiveProjectFocus} from the Tasks board yet.`
                         : `The board still has ${tasks.length} tracked task${tasks.length === 1 ? "" : "s"}; this filter just is not showing any of them.`}
                   </p>
                 </div>
@@ -1131,7 +1144,7 @@ export default function TasksPageClient({
                       Show all visible tasks
                     </button>
                   )}
-                  {projectFocus && (
+                  {effectiveProjectFocus && (
                     <button
                       onClick={() => {
                         resetCreateForm();
@@ -1147,7 +1160,7 @@ export default function TasksPageClient({
                       Create task for this project
                     </button>
                   )}
-                  {projectFocus && (
+                  {effectiveProjectFocus && (
                     <a
                       href="/agents/tasks"
                       className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
@@ -1161,9 +1174,9 @@ export default function TasksPageClient({
                     </a>
                   )}
                 </div>
-                {projectFocus && (
+                {effectiveProjectFocus && (
                   <p className="max-w-md text-xs" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
-                    The intake form opens with <span style={{ color: "var(--text-primary)" }}>{projectFocus}</span> prefilled as the project label, but you can still change it before saving.
+                    The intake form opens with <span style={{ color: "var(--text-primary)" }}>{effectiveProjectFocus}</span> prefilled as the project label, but you can still change it before saving.
                   </p>
                 )}
               </div>

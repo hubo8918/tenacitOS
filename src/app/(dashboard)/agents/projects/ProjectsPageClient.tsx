@@ -7,6 +7,7 @@ import { ProjectCard } from "@/components/ProjectCard";
 import { priorityConfig, statusConfig, type Project } from "@/data/mockProjectsData";
 import type { Task } from "@/data/mockTasksData";
 import type { TeamAgent } from "@/data/mockTeamData";
+import { normalizeProjectLabel, resolveProjectForTask, taskHasProjectMismatch, taskLinksToProject } from "@/lib/project-task-linkage";
 import { useFetch } from "@/lib/useFetch";
 
 interface ProjectsPageClientProps {
@@ -14,10 +15,6 @@ interface ProjectsPageClientProps {
   initialTeam: TeamAgent[];
   initialTasks: Task[];
   initialTasksAvailable: boolean;
-}
-
-function normalizeProjectLabel(value: string) {
-  return value.trim().toLowerCase();
 }
 
 export default function ProjectsPageClient({
@@ -28,6 +25,7 @@ export default function ProjectsPageClient({
 }: ProjectsPageClientProps) {
   const searchParams = useSearchParams();
   const projectFocus = searchParams.get("project")?.trim() || "";
+  const projectIdFocus = searchParams.get("projectId")?.trim() || "";
   const requestedTaskId = searchParams.get("task")?.trim() || "";
   const normalizedProjectFocus = normalizeProjectLabel(projectFocus);
   const hasInitialProjects = initialProjects.length > 0;
@@ -47,25 +45,28 @@ export default function ProjectsPageClient({
   const tasks = tasksData?.tasks || [];
   const linkedTasksLoading = tasksLoading && !tasksData && !tasksError;
   const linkedTasksUnavailable = Boolean(tasksError) && !tasksData && !tasksLoading;
+  const focusedProject = projectIdFocus ? projects.find((project) => project.id === projectIdFocus) || null : null;
+  const effectiveProjectFocus = focusedProject?.title || projectFocus;
   const requestedTask = requestedTaskId ? tasks.find((task) => task.id === requestedTaskId) || null : null;
   const requestedTaskStillMatchesFocus = Boolean(
-    requestedTask && projectFocus && normalizeProjectLabel(requestedTask.project) === normalizedProjectFocus
+    requestedTask && (focusedProject ? taskLinksToProject(requestedTask, focusedProject) : effectiveProjectFocus && normalizeProjectLabel(requestedTask.project) === normalizedProjectFocus)
   );
+  const requestedTaskCurrentProject = requestedTask ? resolveProjectForTask(requestedTask, projects) : null;
   const requestedTaskTasksHref = requestedTask
     ? requestedTaskStillMatchesFocus
       ? `/agents/tasks?mismatch=1&task=${encodeURIComponent(requestedTask.id)}`
-      : requestedTask.project.trim()
-        ? `/agents/tasks?project=${encodeURIComponent(requestedTask.project.trim())}&task=${encodeURIComponent(requestedTask.id)}`
-        : `/agents/tasks?task=${encodeURIComponent(requestedTask.id)}`
+      : requestedTaskCurrentProject
+        ? `/agents/tasks?project=${encodeURIComponent(requestedTaskCurrentProject.title)}&projectId=${encodeURIComponent(requestedTaskCurrentProject.id)}&task=${encodeURIComponent(requestedTask.id)}`
+        : requestedTask.project.trim()
+          ? `/agents/tasks?project=${encodeURIComponent(requestedTask.project.trim())}&task=${encodeURIComponent(requestedTask.id)}`
+          : `/agents/tasks?task=${encodeURIComponent(requestedTask.id)}`
     : "/agents/tasks";
-  const visibleProjects = normalizedProjectFocus
-    ? projects.filter((project) => normalizeProjectLabel(project.title) === normalizedProjectFocus)
-    : projects;
-  const normalizedProjectTitles = new Set(projects.map((project) => normalizeProjectLabel(project.title)));
-  const taskProjectLabelMismatchTasks = tasks.filter((task) => {
-    const trimmedProject = task.project.trim();
-    return Boolean(trimmedProject) && !normalizedProjectTitles.has(normalizeProjectLabel(trimmedProject));
-  });
+  const visibleProjects = focusedProject
+    ? [focusedProject]
+    : normalizedProjectFocus
+      ? projects.filter((project) => normalizeProjectLabel(project.title) === normalizedProjectFocus)
+      : projects;
+  const taskProjectLabelMismatchTasks = tasks.filter((task) => taskHasProjectMismatch(task, projects));
   const taskProjectLabelMismatchPreview = (() => {
     if (taskProjectLabelMismatchTasks.length === 0) {
       return "";
@@ -89,7 +90,7 @@ export default function ProjectsPageClient({
   const mismatchTasksHref = firstMismatchTaskId
     ? `/agents/tasks?mismatch=1&task=${encodeURIComponent(firstMismatchTaskId)}`
     : "/agents/tasks?mismatch=1";
-  const showTaskProjectMismatchSummary = !projectFocus && !linkedTasksLoading && !linkedTasksUnavailable && taskProjectLabelMismatchTasks.length > 0;
+  const showTaskProjectMismatchSummary = !effectiveProjectFocus && !linkedTasksLoading && !linkedTasksUnavailable && taskProjectLabelMismatchTasks.length > 0;
 
   const activeCount = visibleProjects.filter((p) => p.status === "active").length;
   const planningCount = visibleProjects.filter((p) => p.status === "planning").length;
@@ -228,7 +229,7 @@ export default function ProjectsPageClient({
             Projects
           </h1>
           <p style={{ color: "var(--text-secondary)", fontSize: "14px" }}>
-            {visibleProjects.length} {projectFocus ? "in focus" : "total"} &bull; {activeCount} active &bull; {planningCount} planning
+            {visibleProjects.length} {effectiveProjectFocus ? "in focus" : "total"} &bull; {activeCount} active &bull; {planningCount} planning
           </p>
         </div>
 
@@ -358,7 +359,7 @@ export default function ProjectsPageClient({
         </div>
       )}
 
-      {projectFocus && (
+      {effectiveProjectFocus && (
         <div
           className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2 text-xs"
           style={{
@@ -368,7 +369,7 @@ export default function ProjectsPageClient({
         >
           <div className="space-y-1">
             <p className="font-semibold" style={{ color: "var(--text-primary)" }}>
-              Project focus: {projectFocus}
+              Project focus: {effectiveProjectFocus}
             </p>
             <p style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
               Opened from Tasks. Showing {visibleProjects.length} matching project{visibleProjects.length === 1 ? "" : "s"} with this exact title.
@@ -397,10 +398,10 @@ export default function ProjectsPageClient({
         >
           <div className="space-y-1">
             <p className="font-semibold" style={{ color: "#FFD60A" }}>
-              Task ↔ Project label drift needs cleanup
+              Task ↔ Project linkage cleanup needed
             </p>
             <p style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
-              {taskProjectLabelMismatchTasks.length} task project label mismatch{taskProjectLabelMismatchTasks.length === 1 ? "" : "es"} currently do not map to an exact Projects title ({taskProjectLabelMismatchPreview}). Projects stays read-only here instead of pretending those tasks are linked, so this handoff lands on the first affected Tasks row for cleanup.
+              {taskProjectLabelMismatchTasks.length} task project link mismatch{taskProjectLabelMismatchTasks.length === 1 ? "" : "es"} currently do not resolve to a live Projects record ({taskProjectLabelMismatchPreview}). Projects stays read-only here instead of pretending those tasks are linked, so this handoff lands on the first affected Tasks row for cleanup.
             </p>
           </div>
           <a
@@ -416,7 +417,7 @@ export default function ProjectsPageClient({
         </div>
       )}
 
-      {projectFocus && visibleProjects.length === 0 ? (
+      {effectiveProjectFocus && visibleProjects.length === 0 ? (
         <div
           className="rounded-2xl p-6 text-center"
           style={{
@@ -426,10 +427,10 @@ export default function ProjectsPageClient({
         >
           <div className="mx-auto max-w-lg space-y-3">
             <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-              No project titled {projectFocus} is tracked right now
+              No live project for {effectiveProjectFocus} is tracked right now
             </p>
             <p className="text-sm" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
-              This focus came from a task&apos;s saved project label. Projects stays honest here: if no current project title matches that label exactly, it shows the mismatch instead of pretending it found the right card.
+              This focus came from a task handoff. Projects stays honest here: if no current project record resolves that focus, it shows the mismatch instead of pretending it found the right card.
             </p>
             {requestedTask && (
               <p className="text-sm" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
@@ -469,9 +470,7 @@ export default function ProjectsPageClient({
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
         {visibleProjects.map((project) => {
-          const linkedTasks = tasks.filter(
-            (task) => normalizeProjectLabel(task.project) === normalizeProjectLabel(project.title)
-          );
+          const linkedTasks = tasks.filter((task) => taskLinksToProject(task, project));
 
           return (
             <ProjectCard

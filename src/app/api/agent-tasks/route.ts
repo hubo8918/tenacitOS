@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import { getAgentTasks, normalizeAgentTask, type AgentTask } from "@/lib/agent-tasks-data";
+import { getProjects } from "@/lib/projects-data";
+import { resolveProjectIdFromTaskProjectLabel } from "@/lib/project-task-linkage";
 
 const DATA_PATH = path.join(process.cwd(), "data", "agent-tasks.json");
 
@@ -90,6 +92,28 @@ function getTaskDependencyValidationError(body: Record<string, unknown>, tasks: 
   return null;
 }
 
+async function getResolvedTaskProjectFields(body: Record<string, unknown>, currentTask?: AgentTask) {
+  if (body.project === undefined && body.projectId === undefined) {
+    return {};
+  }
+
+  if (body.projectId === null) {
+    return { projectId: undefined };
+  }
+
+  const explicitProjectId = asOptionalString(body.projectId);
+  if (explicitProjectId) {
+    return { projectId: explicitProjectId };
+  }
+
+  const nextProjectValue = typeof body.project === "string" ? body.project : currentTask?.project || "";
+  const projects = await getProjects().catch(() => []);
+
+  return {
+    projectId: resolveProjectIdFromTaskProjectLabel(nextProjectValue, projects),
+  };
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -135,6 +159,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: dependencyValidationError }, { status: 400 });
     }
 
+    const projectFields = await getResolvedTaskProjectFields(body);
     const newTask = normalizeAgentTask({
       id: generateId(tasks),
       title: body.title,
@@ -142,6 +167,7 @@ export async function POST(request: NextRequest) {
       priority: body.priority || "medium",
       agent: body.agent || { emoji: "👤", name: "Unassigned", color: "#8E8E93" },
       project: body.project || "",
+      ...projectFields,
       dueDate: body.dueDate || "",
       assigneeAgentId: body.assigneeAgentId,
       reviewerAgentId: body.reviewerAgentId,
@@ -187,9 +213,11 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
 
+    const projectFields = await getResolvedTaskProjectFields(body, tasks[index]);
     const updatedTask = normalizeAgentTask({
       ...tasks[index],
       ...body,
+      ...projectFields,
       agent: body.agent !== undefined ? body.agent : tasks[index].agent,
       blockedByTaskIds: body.blockedByTaskIds !== undefined ? body.blockedByTaskIds : tasks[index].blockedByTaskIds,
     });

@@ -1,5 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
+import { getProjects } from "@/lib/projects-data";
+import { resolveProjectIdFromTaskProjectLabel } from "@/lib/project-task-linkage";
 
 export type AgentTaskStatus = "pending" | "in_progress" | "completed" | "blocked";
 export type AgentTaskPriority = "high" | "medium" | "low";
@@ -20,6 +22,7 @@ export interface AgentTask {
   priority: AgentTaskPriority;
   agent: TaskAgentRef;
   project: string;
+  projectId?: string;
   dueDate: string;
   assigneeAgentId?: string;
   reviewerAgentId?: string;
@@ -84,6 +87,7 @@ export function normalizeAgentTask(taskLike: unknown): AgentTask {
     priority: normalizePriority(task.priority),
     agent,
     project: asString(task.project) || "",
+    projectId: asString(task.projectId),
     dueDate: asString(task.dueDate) || "",
     assigneeAgentId: asString(task.assigneeAgentId) || agent.id,
     reviewerAgentId: asString(task.reviewerAgentId),
@@ -99,7 +103,32 @@ export async function getAgentTasks(): Promise<AgentTask[]> {
   try {
     const data = await fs.readFile(DATA_PATH, "utf-8");
     const parsed = JSON.parse(data) as unknown;
-    return Array.isArray(parsed) ? parsed.map((task) => normalizeAgentTask(task)) : [];
+    const tasks = Array.isArray(parsed) ? parsed.map((task) => normalizeAgentTask(task)) : [];
+
+    const projects = await getProjects().catch(() => []);
+    let didBackfillProjectIds = false;
+    const nextTasks = tasks.map((task) => {
+      if (task.projectId) {
+        return task;
+      }
+
+      const resolvedProjectId = resolveProjectIdFromTaskProjectLabel(task.project, projects);
+      if (!resolvedProjectId) {
+        return task;
+      }
+
+      didBackfillProjectIds = true;
+      return {
+        ...task,
+        projectId: resolvedProjectId,
+      };
+    });
+
+    if (didBackfillProjectIds) {
+      await fs.writeFile(DATA_PATH, JSON.stringify(nextTasks, null, 2));
+    }
+
+    return nextTasks;
   } catch {
     return [];
   }

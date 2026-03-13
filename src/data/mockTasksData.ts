@@ -5,6 +5,7 @@ export interface Task {
   priority: "high" | "medium" | "low";
   agent: { id?: string; emoji: string; name: string; color: string };
   project: string;
+  projectId?: string;
   dueDate: string;
   assigneeAgentId?: string;
   reviewerAgentId?: string;
