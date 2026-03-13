@@ -750,8 +750,8 @@ export default function TasksPageClient({
               {isUrgentOverflowHandoff
                 ? "This Tasks view opened from the Projects card's urgent-overflow handoff. That CTA only exists when blocked or overdue linked work still sits beyond the three-row preview, so the handoff lands on the first hidden urgent task here and briefly highlights it instead of pretending the Project card preview already showed every urgent item."
                 : isLinkedPreviewHandoff
-                  ? "This Tasks view opened from a specific linked task in the Projects card preview. Projects can now add or remove a task link, but deeper task editing still happens here, so the handoff lands on the requested row and briefly highlights it instead of pretending the project card edits the whole task inline."
-                  : "This Tasks view opened from a specific linked task on Projects. Projects can now add or remove a task link, but deeper task editing still happens here, so the handoff lands on the requested row and briefly highlights it instead of pretending the project card edits the whole task inline."}
+                  ? "This Tasks view opened from a specific linked task in the Projects card preview. Projects can now create, attach, or remove a task link, but deeper task editing still happens here, so the handoff lands on the requested row and briefly highlights it instead of pretending the project card edits the whole task inline."
+                  : "This Tasks view opened from a specific linked task on Projects. Projects can now create, attach, or remove a task link, but deeper task editing still happens here, so the handoff lands on the requested row and briefly highlights it instead of pretending the project card edits the whole task inline."}
             </p>
           </div>
           <button

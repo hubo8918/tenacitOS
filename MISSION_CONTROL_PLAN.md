@@ -133,9 +133,10 @@ To avoid fake progress or silent drift:
 - current-phase dependency visibility now reads directly on each project card
 - project ↔ task linkage now reads directly on each project card as a Tasks summary, and each card can now create a new linked task with the stable project id already attached
 - the project planning editor can now also remove an existing linked task from the current project without pretending Projects owns the rest of that task's fields
+- the project planning editor can now also attach an existing unlinked or unresolved task to the current project by saving the stable project id, without silently stealing tasks from another live project
 - linked task summaries now call out blocked/overdue attention without pretending Projects owns task editing
 - zero-linked projects now include a focused Tasks-board handoff instead of reading like a dead-end empty state
-- **Still missing broader core project editing/management flows, richer phase/dependency editing, and broader linked-task reassignment/cleanup beyond the new remove-link path on Projects.**
+- **Still missing richer phase/dependency editing, broader linked-task reassignment across already-live projects, and any wider project-management step that needs a schema/product decision.**
 
 #### Calendar
 - SSR initial task-backed calendar data
@@ -1398,9 +1399,26 @@ Suggested template:
 - Next:
   - take the next narrow dependency-management or linked-task reassignment step, unless deeper phase/dependency editing first needs an explicit schema/product decision.
 
+### 2026-03-12 23:50
+- Step: Projects existing-task attach flow
+- Files:
+  - `src/components/ProjectCard.tsx`
+  - `src/app/(dashboard)/agents/projects/ProjectsPageClient.tsx`
+  - `src/app/(dashboard)/agents/tasks/TasksPageClient.tsx`
+- Validation:
+  - `npx eslint src/components/ProjectCard.tsx "src/app/(dashboard)/agents/projects/ProjectsPageClient.tsx" "src/app/(dashboard)/agents/tasks/TasksPageClient.tsx"`
+  - `npm run build`
+- Commit: current checkpoint commit (`feat(projects): attach existing unlinked tasks`)
+- Result:
+  - The Projects planning editor can now attach an existing task when that task currently has no live Projects record, covering both no-project rows and unresolved/custom-label rows.
+  - Attaching saves the current project title plus stable `projectId`, so the Project ↔ Task model widens into a real editable attach flow instead of staying limited to new-task intake and remove-link cleanup.
+  - Tasks already linked to another live project still stay out of scope here, so broader cross-project reassignment remains an explicit follow-on step instead of a hidden side effect.
+- Next:
+  - take the next narrow dependency-management or linked-task reassignment step, unless deeper phase/dependency editing first needs a schema/product decision.
+
 ## Current Focus
 
-**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + direct inline visibility for task/project link mismatches + a scoped board-level mismatch attention summary + a mismatch-only board filter + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, task-row jumps into a focused Projects view, project-focused task intake defaults plus an empty-state intake CTA, a first Projects create flow, a Projects planning editor that now covers title/description/status/priority/owner/participants/current phase, current-phase dependency visibility, a linked-task attention summary, a zero-linked Tasks handoff, a first Projects-side linked-task intake anchored by stable `projectId`, a Projects-side remove-link flow for existing linked tasks, a Projects-board mismatch cleanup handoff that now lands on and briefly highlights the first affected Tasks row, an urgent-overflow handoff that now jumps straight to the first hidden blocked or overdue linked task, a first honest Projects delete flow, a stable `projectId` foundation so Task ↔ Project linkage no longer depends only on exact title strings, a tracked-project selector in the task details editor, and that same stable tracked-project/custom-label model now applied to the New task intake flow.
+**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + direct inline visibility for task/project link mismatches + a scoped board-level mismatch attention summary + a mismatch-only board filter + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, task-row jumps into a focused Projects view, project-focused task intake defaults plus an empty-state intake CTA, a first Projects create flow, a Projects planning editor that now covers title/description/status/priority/owner/participants/current phase, current-phase dependency visibility, a linked-task attention summary, a zero-linked Tasks handoff, a first Projects-side linked-task intake anchored by stable `projectId`, a Projects-side attach flow for unresolved/no-project tasks, a Projects-side remove-link flow for existing linked tasks, a Projects-board mismatch cleanup handoff that now lands on and briefly highlights the first affected Tasks row, an urgent-overflow handoff that now jumps straight to the first hidden blocked or overdue linked task, a first honest Projects delete flow, a stable `projectId` foundation so Task ↔ Project linkage no longer depends only on exact title strings, a tracked-project selector in the task details editor, and that same stable tracked-project/custom-label model now applied to the New task intake flow.
 
 **Do next:**
 1. take the next narrow dependency-management or linked-task reassignment step so the Projects board keeps closing its remaining honest Phase 3 gaps

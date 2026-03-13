@@ -472,6 +472,13 @@ export default function ProjectsPageClient({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
         {visibleProjects.map((project) => {
           const linkedTasks = tasks.filter((task) => taskLinksToProject(task, project));
+          const availableLinkableTasks = tasks.filter((task) => {
+            if (taskLinksToProject(task, project)) {
+              return false;
+            }
+
+            return !resolveProjectForTask(task, projects);
+          });
 
           return (
             <ProjectCard
@@ -479,6 +486,7 @@ export default function ProjectsPageClient({
               project={project}
               teamAgents={initialTeam}
               linkedTasks={linkedTasks}
+              availableLinkableTasks={availableLinkableTasks}
               linkedTasksLoading={linkedTasksLoading}
               linkedTasksUnavailable={linkedTasksUnavailable}
               onUpdate={() => {
