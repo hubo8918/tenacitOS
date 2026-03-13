@@ -111,6 +111,27 @@ interface ConflictAgentDetail {
   tasks: Task[];
 }
 
+type WorkloadSliceKey = "blocked" | "overdue" | "upcoming";
+
+interface WorkloadSliceSummary {
+  key: WorkloadSliceKey;
+  label: string;
+  value: number;
+  tone: string;
+  detail: string;
+  emptyState: string;
+  tasks: Task[];
+}
+
+interface WorkloadSliceDateGroup {
+  dateKey: string;
+  taskCount: number;
+  blockedCount: number;
+  overdueCount: number;
+  agentCount: number;
+  tasks: Task[];
+}
+
 export default function CalendarPageClient({ initialTasks }: CalendarPageClientProps) {
   const hasInitialTasks = initialTasks.length > 0;
   const { data, loading, error, refetch } = useFetch<{ tasks: Task[] }>("/api/agent-tasks", {
@@ -127,6 +148,7 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
   const [month, setMonth] = useState(today.getMonth());
   const [selectedConflictDate, setSelectedConflictDate] = useState<string | null>(null);
   const [selectedConflictAgentKey, setSelectedConflictAgentKey] = useState<string | null>(null);
+  const [selectedWorkloadSliceKey, setSelectedWorkloadSliceKey] = useState<WorkloadSliceKey | null>(null);
 
   const daysInMonth = getDaysInMonth(year, month);
   const firstDay = getFirstDay(year, month);
@@ -172,10 +194,75 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
     () => visibleMonthOpenTasks.filter((task) => isTaskOverdue(task, startOfTodayTime)).length,
     [startOfTodayTime, visibleMonthOpenTasks]
   );
-  const upcomingCount = useMemo(
-    () => tasks.filter((task) => isTaskUpcoming(task, startOfTodayTime, upcomingHorizonTime)).length,
+  const upcomingTasks = useMemo(
+    () => tasks.filter((task) => isTaskUpcoming(task, startOfTodayTime, upcomingHorizonTime)),
     [startOfTodayTime, tasks, upcomingHorizonTime]
   );
+  const upcomingCount = upcomingTasks.length;
+
+  const workloadSlices = useMemo<WorkloadSliceSummary[]>(
+    () => [
+      {
+        key: "blocked",
+        label: "Blocked in view",
+        value: visibleBlockedCount,
+        tone: "var(--status-blocked)",
+        detail: "Open tasks already marked blocked in this month",
+        emptyState: `No open blocked tasks are due in ${fmtMonth(year, month)} right now.`,
+        tasks: visibleMonthOpenTasks.filter((task) => task.status === "blocked"),
+      },
+      {
+        key: "overdue",
+        label: "Overdue in view",
+        value: visibleOverdueCount,
+        tone: "#FF9F0A",
+        detail: "Open tasks whose due date is already behind today",
+        emptyState: `No open overdue tasks are due in ${fmtMonth(year, month)} right now.`,
+        tasks: visibleMonthOpenTasks.filter((task) => isTaskOverdue(task, startOfTodayTime)),
+      },
+      {
+        key: "upcoming",
+        label: "Upcoming next 7 days",
+        value: upcomingCount,
+        tone: "#30D158",
+        detail: "Open due dates landing between today and the next 7 days across all tasks",
+        emptyState: "No open task due dates land in the next 7 days yet.",
+        tasks: upcomingTasks,
+      },
+    ],
+    [month, startOfTodayTime, upcomingCount, upcomingTasks, visibleBlockedCount, visibleMonthOpenTasks, visibleOverdueCount, year]
+  );
+
+  const activeWorkloadSlice = useMemo(
+    () => workloadSlices.find((slice) => slice.key === selectedWorkloadSliceKey) ?? null,
+    [selectedWorkloadSliceKey, workloadSlices]
+  );
+
+  const activeWorkloadSliceDates = useMemo<WorkloadSliceDateGroup[]>(() => {
+    if (!activeWorkloadSlice) return [];
+
+    const byDate = new Map<string, Task[]>();
+    activeWorkloadSlice.tasks.forEach((task) => {
+      if (!task.dueDate) return;
+      if (!byDate.has(task.dueDate)) byDate.set(task.dueDate, []);
+      byDate.get(task.dueDate)!.push(task);
+    });
+
+    return Array.from(byDate.entries())
+      .map(([dateKey, sliceTasks]) => ({
+        dateKey,
+        taskCount: sliceTasks.length,
+        blockedCount: sliceTasks.filter((task) => task.status === "blocked").length,
+        overdueCount: sliceTasks.filter((task) => isTaskOverdue(task, startOfTodayTime)).length,
+        agentCount: new Set(sliceTasks.map((task) => getTaskAgentKey(task))).size,
+        tasks: [...sliceTasks].sort((a, b) => {
+          const scoreDiff = getTaskSortScore(a, startOfTodayTime) - getTaskSortScore(b, startOfTodayTime);
+          if (scoreDiff !== 0) return scoreDiff;
+          return a.title.localeCompare(b.title);
+        }),
+      }))
+      .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+  }, [activeWorkloadSlice, startOfTodayTime]);
 
   const { workloadAgents, sameDayPileupCount } = useMemo(() => {
     const agentMap = new Map<
@@ -420,6 +507,10 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
     setMonth(today.getMonth());
   }
 
+  function toggleWorkloadSlice(sliceKey: WorkloadSliceKey) {
+    setSelectedWorkloadSliceKey((current) => (current === sliceKey ? null : sliceKey));
+  }
+
   function focusAgentConflicts(agent: WorkloadAgentSummary) {
     if (agent.conflictDays === 0 || !agent.firstConflictDate) return;
     setSelectedConflictAgentKey(agent.key);
@@ -488,7 +579,7 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
         </p>
       </div>
 
-      <div className="grid gap-3 mb-6 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 mb-6 md:grid-cols-2 xl:grid-cols-5">
         {[
           {
             label: `Open due in ${fmtMonth(year, month)}`,
@@ -496,42 +587,178 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
             tone: "var(--accent)",
             detail: `${workloadAgents.length} agent${workloadAgents.length === 1 ? "" : "s"} carrying due work`,
           },
-          {
-            label: "Blocked in view",
-            value: String(visibleBlockedCount),
-            tone: "var(--status-blocked)",
-            detail: "Open tasks already marked blocked in this month",
-          },
-          {
-            label: "Overdue in view",
-            value: String(visibleOverdueCount),
-            tone: "#FF9F0A",
-            detail: "Open tasks whose due date is already behind today",
-          },
+          ...workloadSlices.map((slice) => ({
+            label: slice.label,
+            value: String(slice.value),
+            tone: slice.tone,
+            detail:
+              selectedWorkloadSliceKey === slice.key
+                ? "Showing the task-backed date slice below"
+                : slice.value > 0
+                  ? `${slice.detail}. Click to review dates and tasks below.`
+                  : slice.detail,
+            sliceKey: slice.key,
+          })),
           {
             label: "Same-day pileups",
             value: String(sameDayPileupCount),
             tone: "#BF5AF2",
             detail: "Agent/date pairs with more than one open task due together",
           },
-        ].map((card) => (
-          <div
-            key={card.label}
-            className="rounded-xl p-4"
-            style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}
-          >
-            <p className="text-[11px] uppercase tracking-[0.16em] mb-2" style={{ color: "var(--text-muted)" }}>
-              {card.label}
-            </p>
-            <div className="text-3xl font-semibold mb-1" style={{ color: card.tone }}>
-              {card.value}
+        ].map((card) => {
+          const isSliceCard = "sliceKey" in card;
+          const isActiveSlice = isSliceCard && card.sliceKey === selectedWorkloadSliceKey;
+          const cardBody = (
+            <>
+              <p className="text-[11px] uppercase tracking-[0.16em] mb-2" style={{ color: "var(--text-muted)" }}>
+                {card.label}
+              </p>
+              <div className="text-3xl font-semibold mb-1" style={{ color: card.tone }}>
+                {card.value}
+              </div>
+              <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                {card.detail}
+              </p>
+            </>
+          );
+
+          if (isSliceCard) {
+            return (
+              <button
+                key={card.label}
+                type="button"
+                onClick={() => toggleWorkloadSlice(card.sliceKey)}
+                className="rounded-xl p-4 text-left transition-colors"
+                style={{
+                  backgroundColor: isActiveSlice ? `color-mix(in srgb, ${card.tone} 10%, var(--card))` : "var(--card)",
+                  border: isActiveSlice ? `1px solid color-mix(in srgb, ${card.tone} 35%, transparent)` : "1px solid var(--border)",
+                }}
+                aria-pressed={isActiveSlice}
+              >
+                {cardBody}
+              </button>
+            );
+          }
+
+          return (
+            <div
+              key={card.label}
+              className="rounded-xl p-4"
+              style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}
+            >
+              {cardBody}
             </div>
-            <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-              {card.detail}
-            </p>
-          </div>
-        ))}
+          );
+        })}
       </div>
+
+      {activeWorkloadSlice && (
+        <div className="rounded-xl p-4 mb-6" style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}>
+          <div className="flex flex-col gap-2 mb-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold" style={{ color: activeWorkloadSlice.tone, fontFamily: "var(--font-heading)" }}>
+                {activeWorkloadSlice.label} drill-down
+              </h2>
+              <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                {activeWorkloadSlice.detail}. Grouped by due date so Calendar can hand off from the summary into concrete scheduling follow-up even when there is no same-day pileup.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 text-xs">
+              <span style={{ color: "var(--text-muted)" }}>
+                {activeWorkloadSlice.value} matching task{activeWorkloadSlice.value === 1 ? "" : "s"}
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedWorkloadSliceKey(null)}
+                className="px-2.5 py-1 rounded-full"
+                style={{
+                  color: activeWorkloadSlice.tone,
+                  backgroundColor: `color-mix(in srgb, ${activeWorkloadSlice.tone} 14%, transparent)`,
+                  border: `1px solid color-mix(in srgb, ${activeWorkloadSlice.tone} 24%, transparent)`,
+                }}
+              >
+                Hide slice
+              </button>
+            </div>
+          </div>
+
+          {activeWorkloadSliceDates.length > 0 ? (
+            <div className="grid gap-3 xl:grid-cols-2">
+              {activeWorkloadSliceDates.map((group) => (
+                <div
+                  key={group.dateKey}
+                  className="rounded-xl p-4"
+                  style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}
+                >
+                  <div className="flex flex-col gap-2 mb-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <h3 className="text-base font-semibold" style={{ color: "var(--text-primary)", fontFamily: "var(--font-heading)" }}>
+                        {fmtCalendarDate(group.dateKey)}
+                      </h3>
+                      <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                        {group.taskCount} matching task{group.taskCount === 1 ? "" : "s"} across {group.agentCount} agent{group.agentCount === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-[11px]">
+                      <span className="px-2 py-1 rounded-full" style={{ color: "var(--text-primary)", backgroundColor: "var(--card)" }}>
+                        {group.taskCount} tasks
+                      </span>
+                      {group.blockedCount > 0 && (
+                        <span className="px-2 py-1 rounded-full" style={{ color: "var(--status-blocked)", backgroundColor: "rgba(255, 69, 58, 0.12)" }}>
+                          {group.blockedCount} blocked
+                        </span>
+                      )}
+                      {group.overdueCount > 0 && (
+                        <span className="px-2 py-1 rounded-full" style={{ color: "#FF9F0A", backgroundColor: "rgba(255, 159, 10, 0.12)" }}>
+                          {group.overdueCount} overdue
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    {group.tasks.map((task) => {
+                      const statusTone = taskStatusConfig[task.status].color;
+                      const agentMeta = getTaskAgentMeta(task);
+
+                      return (
+                        <div
+                          key={task.id}
+                          className="rounded-lg px-3 py-2"
+                          style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium leading-tight" style={{ color: "var(--text-primary)" }}>
+                                {task.title}
+                              </p>
+                              <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
+                                {agentMeta.emoji} {agentMeta.name} &bull; {task.project || "No project"}
+                              </p>
+                            </div>
+                            <span
+                              className="text-[10px] px-2 py-1 rounded-full whitespace-nowrap"
+                              style={{ color: statusTone, backgroundColor: `color-mix(in srgb, ${statusTone} 15%, transparent)` }}
+                            >
+                              {taskStatusConfig[task.status].label}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl px-4 py-6" style={{ backgroundColor: "var(--surface-elevated)", border: "1px dashed var(--border)" }}>
+              <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                {activeWorkloadSlice.emptyState}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="rounded-xl p-4 mb-6" style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}>
         <div className="flex flex-col gap-1 mb-4 md:flex-row md:items-end md:justify-between">
@@ -544,7 +771,7 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
             </p>
           </div>
           <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-            Due in next 7 days across all tasks: <span style={{ color: "var(--text-primary)" }}>{upcomingCount}</span>
+            Use the blocked / overdue / upcoming summary cards above to open task-backed date slices.
           </p>
         </div>
 
