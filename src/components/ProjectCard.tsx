@@ -179,9 +179,11 @@ export function ProjectCard({
   const [editOwnerAgentId, setEditOwnerAgentId] = useState(project.ownerAgentId || "");
   const [editParticipatingAgentIds, setEditParticipatingAgentIds] = useState<string[]>([...project.participatingAgentIds]);
   const currentPhase = useMemo(() => getCurrentPhase(project), [project]);
-  const [editPhaseTitle, setEditPhaseTitle] = useState(currentPhase?.title || "");
-  const [editPhaseStatus, setEditPhaseStatus] = useState<ProjectPhase["status"]>(currentPhase?.status || "pending");
-  const [editPhaseDependencyIds, setEditPhaseDependencyIds] = useState<string[]>(currentPhase?.dependsOnPhaseIds || []);
+  const initialEditablePhase = currentPhase || project.phases[0] || null;
+  const [selectedPhaseId, setSelectedPhaseId] = useState(initialEditablePhase?.id || "");
+  const [editPhaseTitle, setEditPhaseTitle] = useState(initialEditablePhase?.title || "");
+  const [editPhaseStatus, setEditPhaseStatus] = useState<ProjectPhase["status"]>(initialEditablePhase?.status || "pending");
+  const [editPhaseDependencyIds, setEditPhaseDependencyIds] = useState<string[]>(initialEditablePhase?.dependsOnPhaseIds || []);
   const [newPhaseTitle, setNewPhaseTitle] = useState("");
   const [newPhaseStatus, setNewPhaseStatus] = useState<ProjectPhase["status"]>("pending");
   const [newLinkedTaskTitle, setNewLinkedTaskTitle] = useState("");
@@ -207,6 +209,10 @@ export function ProjectCard({
   );
   const participatingCount = project.participatingAgentIds.length;
   const trackedPhaseCount = project.phases.length;
+  const editablePhase = useMemo(
+    () => project.phases.find((phase) => phase.id === selectedPhaseId) || currentPhase || project.phases[0] || null,
+    [project.phases, selectedPhaseId, currentPhase]
+  );
   const currentPhaseDependencies = useMemo(() => {
     if (!currentPhase) {
       return { resolved: [] as ProjectPhase[], unresolvedIds: [] as string[] };
@@ -228,13 +234,13 @@ export function ProjectCard({
     return { resolved, unresolvedIds };
   }, [currentPhase, project.phases]);
   const editablePhaseDependencyOptions = useMemo(
-    () => project.phases.filter((phase) => phase.id && phase.id !== currentPhase?.id),
-    [project.phases, currentPhase?.id]
+    () => project.phases.filter((phase) => phase.id && phase.id !== editablePhase?.id),
+    [project.phases, editablePhase?.id]
   );
   const unresolvedEditedPhaseDependencyIds = useMemo(() => {
     const editablePhaseIds = new Set(editablePhaseDependencyOptions.map((phase) => phase.id));
-    return editPhaseDependencyIds.filter((phaseId) => phaseId !== currentPhase?.id && !editablePhaseIds.has(phaseId));
-  }, [editPhaseDependencyIds, editablePhaseDependencyOptions, currentPhase?.id]);
+    return editPhaseDependencyIds.filter((phaseId) => phaseId !== editablePhase?.id && !editablePhaseIds.has(phaseId));
+  }, [editPhaseDependencyIds, editablePhaseDependencyOptions, editablePhase?.id]);
   const sortedLinkedTasks = useMemo(() => [...linkedTasks].sort(compareLinkedTaskPreviewPriority), [linkedTasks]);
   const availableLinkableTasksSorted = useMemo(
     () => [...availableLinkableTasks].sort(compareLinkedTaskPreviewPriority),
@@ -266,7 +272,7 @@ export function ProjectCard({
   const urgentOverflowTasksHref = getProjectTasksHref(project.title, project.id, firstHiddenUrgentLinkedTask?.id, "urgent-overflow");
 
   const resetDraft = () => {
-    const nextPhase = getCurrentPhase(project);
+    const nextPhase = getCurrentPhase(project) || project.phases[0] || null;
     setEditTitle(project.title);
     setEditDescription(project.description);
     setEditStatus(project.status);
@@ -274,6 +280,7 @@ export function ProjectCard({
     setEditProgress(project.progress);
     setEditOwnerAgentId(project.ownerAgentId || "");
     setEditParticipatingAgentIds([...project.participatingAgentIds]);
+    setSelectedPhaseId(nextPhase?.id || "");
     setEditPhaseTitle(nextPhase?.title || "");
     setEditPhaseStatus(nextPhase?.status || "pending");
     setEditPhaseDependencyIds(nextPhase?.dependsOnPhaseIds || []);
@@ -326,6 +333,15 @@ export function ProjectCard({
         ? current.filter((value) => value !== phaseId)
         : [...current, phaseId]
     );
+  };
+
+  const handleSelectPhase = (phaseId: string) => {
+    const nextPhase = project.phases.find((phase) => phase.id === phaseId) || null;
+    setSelectedPhaseId(phaseId);
+    setEditPhaseTitle(nextPhase?.title || "");
+    setEditPhaseStatus(nextPhase?.status || "pending");
+    setEditPhaseDependencyIds(nextPhase?.dependsOnPhaseIds || []);
+    setSaveError(null);
   };
 
   const handleToggleLinkedTaskCreate = () => {
@@ -575,21 +591,21 @@ export function ProjectCard({
 
     const selectedOwner = teamAgents.find((agent) => agent.id === editOwnerAgentId);
     const nextPhaseDependencyIds = Array.from(
-      new Set(editPhaseDependencyIds.filter((phaseId) => phaseId && phaseId !== currentPhase?.id))
+      new Set(editPhaseDependencyIds.filter((phaseId) => phaseId && phaseId !== editablePhase?.id))
     );
 
     let nextPhases = project.phases;
     if (trimmedPhaseTitle) {
       const nextPhase: ProjectPhase = {
-        id: currentPhase?.id || getUniquePhaseId(project.id, trimmedPhaseTitle, project.phases),
+        id: editablePhase?.id || getUniquePhaseId(project.id, trimmedPhaseTitle, project.phases),
         title: trimmedPhaseTitle,
         status: editPhaseStatus,
         ownerAgentId: editOwnerAgentId || undefined,
         dependsOnPhaseIds: nextPhaseDependencyIds,
       };
 
-      nextPhases = currentPhase
-        ? project.phases.map((phase) => (phase.id === currentPhase.id ? { ...phase, ...nextPhase } : phase))
+      nextPhases = editablePhase
+        ? project.phases.map((phase) => (phase.id === editablePhase.id ? { ...phase, ...nextPhase } : phase))
         : [nextPhase, ...project.phases];
     }
 
@@ -701,7 +717,7 @@ export function ProjectCard({
                 Project planning metadata
               </p>
               <p className="text-[11px] mt-1" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
-                This now edits title, description, owner, participating agents, current phase, status, priority, and progress in one honest planning surface. Tracked task links stay anchored by stable project id; unresolved/custom task labels still need cleanup from Tasks instead of pretending this editor rewrites every task automatically.
+                This now edits title, description, owner, participating agents, one selected tracked phase, status, priority, and progress in one honest planning surface. Tracked task links stay anchored by stable project id; unresolved/custom task labels still need cleanup from Tasks instead of pretending this editor rewrites every task automatically.
               </p>
             </div>
 
@@ -805,7 +821,43 @@ export function ProjectCard({
 
             <div className="mb-3">
               <label className="text-[10px] font-bold uppercase tracking-wider block mb-1" style={{ color: "var(--text-muted)" }}>
-                Current phase
+                Tracked phase to edit
+              </label>
+              {project.phases.length > 0 ? (
+                <>
+                  <select
+                    value={editablePhase?.id || ""}
+                    onChange={(event) => handleSelectPhase(event.target.value)}
+                    className="w-full rounded-lg px-3 py-2 text-sm"
+                    style={{
+                      backgroundColor: "var(--card)",
+                      color: "var(--text-primary)",
+                      border: "1px solid var(--border)",
+                    }}
+                  >
+                    {project.phases.map((phase) => {
+                      const config = phaseStatusConfig[phase.status];
+                      return (
+                        <option key={phase.id} value={phase.id}>
+                          {phase.title} · {config.label}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                    Title, status, and dependencies below edit this saved phase only. The card&apos;s current-phase summary still follows live phase status ordering.
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                  No tracked phases yet. Use the fields below to save the first one.
+                </p>
+              )}
+            </div>
+
+            <div className="mb-3">
+              <label className="text-[10px] font-bold uppercase tracking-wider block mb-1" style={{ color: "var(--text-muted)" }}>
+                {editablePhase ? "Tracked phase title" : "First phase title"}
               </label>
               <input
                 value={editPhaseTitle}
@@ -819,13 +871,15 @@ export function ProjectCard({
                 }}
               />
               <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>
-                Leave blank to keep the current phase list unchanged.
+                {editablePhase
+                  ? "Leave blank to keep this saved phase unchanged."
+                  : "Save a title here to create the first tracked phase for this project."}
               </p>
             </div>
 
             <div className="mb-3">
               <label className="text-[10px] font-bold uppercase tracking-wider block mb-1" style={{ color: "var(--text-muted)" }}>
-                Phase status
+                {editablePhase ? "Tracked phase status" : "First phase status"}
               </label>
               <div className="flex gap-1.5 flex-wrap">
                 {phaseStatusOptions.map((phaseStatus) => {
@@ -852,7 +906,7 @@ export function ProjectCard({
 
             <div className="mb-3">
               <label className="text-[10px] font-bold uppercase tracking-wider block mb-1" style={{ color: "var(--text-muted)" }}>
-                Phase dependencies
+                {editablePhase ? "Tracked phase dependencies" : "First phase dependencies"}
               </label>
               <div
                 className="rounded-lg p-2 space-y-2"
@@ -887,12 +941,14 @@ export function ProjectCard({
                   })
                 ) : (
                   <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    Add another tracked phase before this project can depend on one.
+                    Add another tracked phase before this phase can depend on one.
                   </p>
                 )}
               </div>
               <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
-                This only rewrites the current phase&apos;s saved dependency ids. Missing dependency ids stay explicit below until you remove them.
+                {editablePhase
+                  ? "This rewrites only the selected phase's saved dependency ids. Missing dependency ids stay explicit below until you remove them."
+                  : "The first saved phase starts with no dependencies. Add another tracked phase first if this project needs sequencing."}
               </p>
               {unresolvedEditedPhaseDependencyIds.length > 0 && (
                 <div
@@ -993,12 +1049,12 @@ export function ProjectCard({
                     </div>
 
                     <p className="text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
-                      On Save, this appends one more tracked phase to the project&apos;s saved phase list with no dependencies yet. Reordering, deleting, or editing non-current phase dependencies stays out of scope for this micro-step.
+                      On Save, this appends one more tracked phase to the project&apos;s saved phase list with no dependencies yet. Reordering and deletion still stay out of scope for this micro-step.
                     </p>
                   </>
                 ) : (
                   <p className="text-xs" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
-                    Save a first current phase above, then use this slot to append another tracked phase so dependency selection has a real target.
+                    Save a first tracked phase above, then use this slot to append another tracked phase so dependency selection has a real target.
                   </p>
                 )}
               </div>
@@ -1715,7 +1771,7 @@ export function ProjectCard({
 
             {currentPhaseDependencies.unresolvedIds.length > 0 && (
               <p className="mt-2 text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
-                Some dependency IDs are still stored without a matching phase on this project, so this stays read-only until Projects has a narrower dependency editor.
+                Some dependency IDs are still stored without a matching phase on this project. Use the project plan editor to clean them up or retarget them explicitly.
               </p>
             )}
           </div>
