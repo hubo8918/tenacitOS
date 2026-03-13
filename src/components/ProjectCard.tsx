@@ -124,6 +124,7 @@ export function ProjectCard({
   const [editStatus, setEditStatus] = useState(project.status);
   const [editProgress, setEditProgress] = useState(project.progress);
   const [editOwnerAgentId, setEditOwnerAgentId] = useState(project.ownerAgentId || "");
+  const [editParticipatingAgentIds, setEditParticipatingAgentIds] = useState<string[]>([...project.participatingAgentIds]);
   const currentPhase = useMemo(() => getCurrentPhase(project), [project]);
   const [editPhaseTitle, setEditPhaseTitle] = useState(currentPhase?.title || "");
   const [editPhaseStatus, setEditPhaseStatus] = useState<ProjectPhase["status"]>(currentPhase?.status || "pending");
@@ -183,11 +184,20 @@ export function ProjectCard({
     setEditStatus(project.status);
     setEditProgress(project.progress);
     setEditOwnerAgentId(project.ownerAgentId || "");
+    setEditParticipatingAgentIds([...project.participatingAgentIds]);
     setEditPhaseTitle(nextPhase?.title || "");
     setEditPhaseStatus(nextPhase?.status || "pending");
     setSaveError(null);
     setDeleteError(null);
     setConfirmDelete(false);
+  };
+
+  const toggleParticipatingAgent = (agentId: string) => {
+    setEditParticipatingAgentIds((current) =>
+      current.includes(agentId)
+        ? current.filter((value) => value !== agentId)
+        : [...current, agentId]
+    );
   };
 
   async function handleSave() {
@@ -224,6 +234,7 @@ export function ProjectCard({
           status: editStatus,
           progress: editProgress,
           ownerAgentId: editOwnerAgentId || null,
+          participatingAgentIds: editParticipatingAgentIds,
           agent: selectedOwner
             ? { emoji: selectedOwner.emoji, name: selectedOwner.name, color: selectedOwner.color }
             : unassignedAgent,
@@ -297,10 +308,10 @@ export function ProjectCard({
           <div className="mb-4 p-3 rounded-lg" style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
             <div className="mb-3">
               <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
-                Project owner and current phase
+                Project planning metadata
               </p>
               <p className="text-[11px] mt-1" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
-                This currently edits planning metadata and now handles project deletion honestly. Current phase dependency visibility stays read-only here, and linked-task cleanup still lives on Tasks.
+                This now edits owner, participating agents, current phase, status, and progress in one honest planning surface. Current phase dependency visibility stays read-only here, and linked-task cleanup still lives on Tasks.
               </p>
             </div>
 
@@ -325,6 +336,45 @@ export function ProjectCard({
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="mb-3">
+              <label className="text-[10px] font-bold uppercase tracking-wider block mb-1" style={{ color: "var(--text-muted)" }}>
+                Participating agents
+              </label>
+              <div
+                className="rounded-lg p-2 space-y-1.5"
+                style={{
+                  backgroundColor: "var(--card)",
+                  border: "1px solid var(--border)",
+                }}
+              >
+                {teamAgents.length > 0 ? (
+                  teamAgents.map((agent) => (
+                    <label
+                      key={agent.id}
+                      className="flex items-center gap-2 text-xs"
+                      style={{ color: "var(--text-primary)" }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={editParticipatingAgentIds.includes(agent.id)}
+                        onChange={() => toggleParticipatingAgent(agent.id)}
+                      />
+                      <span>
+                        {agent.emoji} {agent.name}
+                      </span>
+                    </label>
+                  ))
+                ) : (
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    No team agents available.
+                  </p>
+                )}
+              </div>
+              <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                Planning metadata only. Owner stays separate, so include them here only when they should count as an active participant too.
+              </p>
             </div>
 
             <div className="mb-3">
@@ -904,7 +954,7 @@ export function ProjectCard({
               e.currentTarget.style.backgroundColor = "transparent";
             }}
           >
-            Edit owner / phase
+            Edit project plan
           </button>
         )}
       </div>

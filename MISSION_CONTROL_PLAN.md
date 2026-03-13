@@ -129,12 +129,12 @@ To avoid fake progress or silent drift:
   - priority
   - initial owner
 - first owner/current-phase planning editor is now live
-- participating-agent visibility now reads directly on each project card
+- participating-agent visibility now reads directly on each project card, and the planning editor can now update participating-agent assignments
 - current-phase dependency visibility now reads directly on each project card
 - project ↔ task linkage now reads directly on each project card as a read-only Tasks summary
 - linked task summaries now call out blocked/overdue attention without pretending Projects owns task editing
 - zero-linked projects now include a focused Tasks-board handoff instead of reading like a dead-end empty state
-- **Still missing delete coverage, broader project editing/management flows, dependency editing, and stable linked-task editing.**
+- **Still missing broader core project editing/management flows, richer phase/dependency editing, and stable linked-task editing.**
 
 #### Calendar
 - SSR initial task-backed calendar data
@@ -1280,9 +1280,24 @@ Suggested template:
 - Next:
   - either add the next honest Projects CRUD/edit-management step, or stop and explicitly call out that stable Project ↔ Task editing needs a real schema decision before widening.
 
+### 2026-03-12 19:55
+- Step: Projects participating-agent editor
+- Files:
+  - `src/components/ProjectCard.tsx`
+- Validation:
+  - `npx eslint src/components/ProjectCard.tsx`
+  - `npm run build`
+- Commit: current checkpoint commit (`feat(projects): add participating-agent editor`)
+- Result:
+  - The existing Projects planning editor now saves participating-agent assignments instead of treating staffing as read-only card metadata.
+  - Owner, participating agents, current phase, status, and progress now live in one honest project-planning surface, while linked-task cleanup still stays on Tasks.
+  - This advances real Projects management without pretending project-title/linkage edits are already safe.
+- Next:
+  - either add the next narrow Projects management step, or explicitly call out that project-title linkage edits need a schema decision before widening.
+
 ## Current Focus
 
-**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + direct inline visibility for task-label/project-title mismatches + a scoped board-level mismatch attention summary + a mismatch-only board filter + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, task-row jumps into a focused Projects view, project-focused create-form defaults plus an empty-state intake CTA, a first Projects create flow, a first Projects owner/phase editor, participating-agent visibility, current-phase dependency visibility, read-only Project ↔ Task linkage visibility, a linked-task attention summary, a zero-linked Tasks handoff, a Projects-board mismatch cleanup handoff that now lands on and briefly highlights the first affected Tasks row, an urgent-overflow handoff that now jumps straight to the first hidden blocked or overdue linked task, and a first honest Projects delete flow
+**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + direct inline visibility for task-label/project-title mismatches + a scoped board-level mismatch attention summary + a mismatch-only board filter + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, task-row jumps into a focused Projects view, project-focused create-form defaults plus an empty-state intake CTA, a first Projects create flow, a first Projects owner/phase editor, a first Projects participating-agent editor, current-phase dependency visibility, read-only Project ↔ Task linkage visibility, a linked-task attention summary, a zero-linked Tasks handoff, a Projects-board mismatch cleanup handoff that now lands on and briefly highlights the first affected Tasks row, an urgent-overflow handoff that now jumps straight to the first hidden blocked or overdue linked task, and a first honest Projects delete flow
 
 **Do next:**
 1. take the next honest Projects CRUD step instead of pretending the board is already fully operational
