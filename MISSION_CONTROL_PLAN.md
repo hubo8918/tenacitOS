@@ -1274,3 +1274,18 @@ Suggested template:
 2. keep Project ↔ Task linkage honest; only widen beyond read-only visibility when the linkage model is stable enough for real editing
 3. if stable Project ↔ Task editing requires a schema/product decision, say that explicitly before widening
 4. keep pushing coordination surfaces forward without pretending execution automation already exists
+
+### 2026-03-12 19:09
+- Step: Projects delete coverage
+- Files:
+  - `src/components/ProjectCard.tsx`
+- Validation:
+  - `npx eslint src/components/ProjectCard.tsx`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(projects): add honest delete flow`)
+- Result:
+  - The Projects planning editor now includes a real delete flow with explicit confirmation instead of leaving project removal to stored JSON edits.
+  - The delete copy stays honest about the trust boundary: deleting a project removes the project record only, while linked task labels still need cleanup from Tasks instead of pretending cross-page linkage updates automatically.
+  - Save and delete actions now disable each other while in flight, and backend delete errors stay visible in the editor instead of failing silently.
+- Next:
+  - either add the next honest Projects CRUD/edit-management step, or stop and explicitly call out that stable Project ? Task editing needs a real schema decision before widening.

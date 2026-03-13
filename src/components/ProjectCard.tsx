@@ -117,7 +117,10 @@ export function ProjectCard({
 }: ProjectCardProps) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [editStatus, setEditStatus] = useState(project.status);
   const [editProgress, setEditProgress] = useState(project.progress);
   const [editOwnerAgentId, setEditOwnerAgentId] = useState(project.ownerAgentId || "");
@@ -183,13 +186,16 @@ export function ProjectCard({
     setEditPhaseTitle(nextPhase?.title || "");
     setEditPhaseStatus(nextPhase?.status || "pending");
     setSaveError(null);
+    setDeleteError(null);
+    setConfirmDelete(false);
   };
 
   async function handleSave() {
-    if (saving) return;
+    if (saving || deleting) return;
 
     setSaving(true);
     setSaveError(null);
+    setDeleteError(null);
 
     const trimmedPhaseTitle = editPhaseTitle.trim();
     const selectedOwner = teamAgents.find((agent) => agent.id === editOwnerAgentId);
@@ -242,6 +248,34 @@ export function ProjectCard({
     }
   }
 
+  async function handleDelete() {
+    if (saving || deleting) return;
+
+    setDeleting(true);
+    setDeleteError(null);
+    setSaveError(null);
+
+    try {
+      const response = await fetch(`/api/projects?id=${encodeURIComponent(project.id)}`, {
+        method: "DELETE",
+      });
+
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to delete project");
+      }
+
+      setConfirmDelete(false);
+      setEditing(false);
+      onUpdate?.();
+    } catch (error) {
+      console.error("Failed to delete project:", error);
+      setDeleteError(error instanceof Error ? error.message : "Failed to delete project");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <div
       className="rounded-xl overflow-hidden transition-all duration-200 hover:scale-[1.02]"
@@ -266,7 +300,7 @@ export function ProjectCard({
                 Project owner and current phase
               </p>
               <p className="text-[11px] mt-1" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
-                This edits planning metadata only. Current phase dependency visibility is read-only here, and Projects still does not have full operational CRUD.
+                This currently edits planning metadata and now handles project deletion honestly. Current phase dependency visibility stays read-only here, and linked-task cleanup still lives on Tasks.
               </p>
             </div>
 
@@ -388,6 +422,79 @@ export function ProjectCard({
               </p>
             )}
 
+            <div
+              className="mb-3 rounded-lg px-3 py-2"
+              style={{
+                backgroundColor: "color-mix(in srgb, var(--status-blocked, #FF453A) 10%, transparent)",
+                border: "1px solid color-mix(in srgb, var(--status-blocked, #FF453A) 24%, transparent)",
+              }}
+            >
+              <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--status-blocked, #FF453A)" }}>
+                Delete project
+              </p>
+              <p className="mt-1 text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                Deleting this project removes the Projects card and saved project record only. {linkedTasks.length > 0
+                  ? `${linkedTasks.length} linked task${linkedTasks.length === 1 ? " still uses" : "s still use"} this title on the Tasks board and ${linkedTasks.length === 1 ? "will" : "will all"} need cleanup there afterward instead of pretending deletion updates task labels automatically.`
+                  : "No current Tasks labels point here, so deletion only removes the project record."}
+              </p>
+
+              {deleteError && (
+                <p className="mt-2 text-xs" style={{ color: "var(--text-error, #ef4444)" }}>
+                  {deleteError}
+                </p>
+              )}
+
+              {confirmDelete ? (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-[10px]" style={{ color: "var(--text-secondary)", lineHeight: 1.4 }}>
+                    Confirm deletion of <span style={{ color: "var(--text-primary)" }}>{project.title}</span>.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setConfirmDelete(false);
+                        setDeleteError(null);
+                      }}
+                      disabled={deleting}
+                      className="text-xs px-3 py-1 rounded-lg"
+                      style={{ color: "var(--text-muted)", border: "1px solid var(--border)", opacity: deleting ? 0.6 : 1 }}
+                    >
+                      Keep project
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDelete}
+                      disabled={deleting}
+                      className="text-xs px-3 py-1 rounded-lg font-medium"
+                      style={{ backgroundColor: "var(--status-blocked, #FF453A)", color: "#fff", opacity: deleting ? 0.7 : 1 }}
+                    >
+                      {deleting ? "Deleting..." : "Delete project"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setConfirmDelete(true);
+                      setDeleteError(null);
+                    }}
+                    disabled={saving || deleting}
+                    className="text-xs px-3 py-1 rounded-lg font-medium"
+                    style={{
+                      color: "var(--status-blocked, #FF453A)",
+                      border: "1px solid color-mix(in srgb, var(--status-blocked, #FF453A) 32%, transparent)",
+                      opacity: saving || deleting ? 0.6 : 1,
+                    }}
+                  >
+                    Delete…
+                  </button>
+                </div>
+              )}
+            </div>
+
             <div className="flex gap-2 justify-end">
               <button
                 type="button"
@@ -403,9 +510,9 @@ export function ProjectCard({
               <button
                 type="button"
                 onClick={handleSave}
-                disabled={saving}
+                disabled={saving || deleting}
                 className="text-xs px-3 py-1 rounded-lg font-medium"
-                style={{ backgroundColor: "#0A84FF", color: "#fff", opacity: saving ? 0.6 : 1 }}
+                style={{ backgroundColor: "#0A84FF", color: "#fff", opacity: saving || deleting ? 0.6 : 1 }}
               >
                 {saving ? "Saving..." : "Save"}
               </button>
