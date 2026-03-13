@@ -40,12 +40,19 @@ interface TaskAgentOption {
   color: string;
 }
 
+interface TaskProjectOption {
+  id: string;
+  title: string;
+}
+
 const unassignedAgent: TaskAgentOption = {
   id: "",
   name: "Unassigned",
   emoji: "👤",
   color: "#8E8E93",
 };
+
+const customProjectSentinel = "__custom__";
 
 interface DependencyOption {
   id: string;
@@ -62,6 +69,7 @@ interface TaskRowProps {
   rowId?: string;
   task: Task;
   agentOptions: TaskAgentOption[];
+  projectOptions: TaskProjectOption[];
   allTasks: Task[];
   linkedProjectId?: string;
   linkedProjectTitle?: string | null;
@@ -74,6 +82,7 @@ export function TaskRow({
   rowId,
   task,
   agentOptions,
+  projectOptions,
   allTasks,
   linkedProjectId,
   linkedProjectTitle = null,
@@ -96,6 +105,7 @@ export function TaskRow({
   const resolvedProjectLabel = linkedProjectTitle || task.project;
   const [title, setTitle] = useState(task.title);
   const [project, setProject] = useState(resolvedProjectLabel);
+  const [selectedProjectLinkMode, setSelectedProjectLinkMode] = useState("");
   const [dueDate, setDueDate] = useState(task.dueDate);
   const [statusValue, setStatusValue] = useState<Task["status"]>(task.status);
   const [priorityValue, setPriorityValue] = useState<Task["priority"]>(task.priority);
@@ -105,6 +115,15 @@ export function TaskRow({
   const [blockedByDraft, setBlockedByDraft] = useState<string[]>(task.blockedByTaskIds || []);
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+
+  const resolvedProjectOption = useMemo(
+    () => (linkedProjectId ? projectOptions.find((option) => option.id === linkedProjectId) || null : null),
+    [linkedProjectId, projectOptions]
+  );
+  const selectedTrackedProject = useMemo(
+    () => projectOptions.find((option) => option.id === selectedProjectLinkMode) || null,
+    [projectOptions, selectedProjectLinkMode]
+  );
 
   const status = taskStatusConfig[task.status];
   const priority = taskPriorityConfig[task.priority];
@@ -303,12 +322,19 @@ export function TaskRow({
 
   useEffect(() => {
     setTitle(task.title);
-    setProject(resolvedProjectLabel);
+    setProject(resolvedProjectOption?.title || task.project);
+    setSelectedProjectLinkMode(
+      resolvedProjectOption
+        ? resolvedProjectOption.id
+        : task.project.trim()
+          ? customProjectSentinel
+          : ""
+    );
     setDueDate(task.dueDate);
     setStatusValue(task.status);
     setPriorityValue(task.priority);
     setDetailsError(null);
-  }, [resolvedProjectLabel, task.dueDate, task.priority, task.status, task.title]);
+  }, [resolvedProjectOption, task.dueDate, task.priority, task.project, task.status, task.title]);
 
   useEffect(() => {
     setAssigneeAgentId(inferredAssigneeAgentId);
@@ -328,7 +354,14 @@ export function TaskRow({
 
   const resetDetailsDraft = () => {
     setTitle(task.title);
-    setProject(resolvedProjectLabel);
+    setProject(resolvedProjectOption?.title || task.project);
+    setSelectedProjectLinkMode(
+      resolvedProjectOption
+        ? resolvedProjectOption.id
+        : task.project.trim()
+          ? customProjectSentinel
+          : ""
+    );
     setDueDate(task.dueDate);
     setStatusValue(task.status);
     setPriorityValue(task.priority);
@@ -420,9 +453,21 @@ export function TaskRow({
   const handleSaveDetails = async () => {
     const trimmedTitle = title.trim();
     const trimmedProject = project.trim();
+    const nextTrackedProject = selectedTrackedProject;
+    const nextProjectLabel = nextTrackedProject
+      ? nextTrackedProject.title
+      : selectedProjectLinkMode === customProjectSentinel
+        ? trimmedProject
+        : "";
+    const nextProjectId = nextTrackedProject ? nextTrackedProject.id : null;
 
     if (!trimmedTitle) {
       setDetailsError("Title is required.");
+      return;
+    }
+
+    if (selectedProjectLinkMode === customProjectSentinel && !trimmedProject) {
+      setDetailsError("Custom project label is required, or switch this task to No project.");
       return;
     }
 
@@ -441,7 +486,8 @@ export function TaskRow({
         body: JSON.stringify({
           id: task.id,
           title: trimmedTitle,
-          project: trimmedProject,
+          project: nextProjectLabel,
+          projectId: nextProjectId,
           dueDate,
           status: statusValue,
           priority: priorityValue,
@@ -1035,11 +1081,11 @@ export function TaskRow({
                   Task details
                 </p>
                 <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-                  Edit the core board fields here: title, project, due date, status, and priority. Reviewer and handoff stay in the routing editor so this row does not pretend to be a giant everything form.
+                  Edit the core board fields here: title, project linkage, due date, status, and priority. Reviewer and handoff stay in the routing editor so this row does not pretend to be a giant everything form.
                 </p>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <label className="flex flex-col gap-1.5 text-xs font-semibold xl:col-span-2" style={{ color: "var(--text-secondary)" }}>
                   Title
                   <input
@@ -1050,15 +1096,62 @@ export function TaskRow({
                   />
                 </label>
 
-                <label className="flex flex-col gap-1.5 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
-                  Project
-                  <input
-                    value={project}
-                    onChange={(e) => setProject(e.target.value)}
-                    style={inputStyle}
-                    aria-label={`Project for ${task.title}`}
-                  />
-                </label>
+                <div className="flex flex-col gap-1.5 text-xs font-semibold xl:col-span-2" style={{ color: "var(--text-secondary)" }}>
+                  <label className="flex flex-col gap-1.5">
+                    Project linkage
+                    <select
+                      value={selectedProjectLinkMode}
+                      onChange={(e) => {
+                        const nextValue = e.target.value;
+                        setSelectedProjectLinkMode(nextValue);
+                        setDetailsError(null);
+
+                        if (nextValue === customProjectSentinel) {
+                          setProject((current) => current || task.project || linkedProjectTitle || "");
+                          return;
+                        }
+
+                        const nextProject = projectOptions.find((option) => option.id === nextValue);
+                        setProject(nextProject?.title || "");
+                      }}
+                      style={inputStyle}
+                      aria-label={`Project linkage for ${task.title}`}
+                    >
+                      <option value="">No project</option>
+                      <option value={customProjectSentinel}>Custom label / unresolved link</option>
+                      {projectOptions.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.title}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  {selectedProjectLinkMode === customProjectSentinel ? (
+                    <>
+                      <label className="flex flex-col gap-1.5">
+                        Project label
+                        <input
+                          value={project}
+                          onChange={(e) => setProject(e.target.value)}
+                          style={inputStyle}
+                          aria-label={`Custom project label for ${task.title}`}
+                        />
+                      </label>
+                      <p style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                        This keeps the saved label editable, but it will stay outside the live Projects linkage model until it matches or you relink it to a tracked project here.
+                      </p>
+                    </>
+                  ) : selectedTrackedProject ? (
+                    <p style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                      This task will stay linked to <span style={{ color: "var(--text-primary)" }}>{selectedTrackedProject.title}</span> through its stable project id instead of relying only on a free-typed title.
+                    </p>
+                  ) : (
+                    <p style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                      No project link will be saved for this task.
+                    </p>
+                  )}
+                </div>
 
                 <label className="flex flex-col gap-1.5 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
                   Due date

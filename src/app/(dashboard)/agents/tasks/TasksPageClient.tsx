@@ -106,6 +106,10 @@ export default function TasksPageClient({
   });
   const tasks = useMemo(() => data?.tasks || [], [data]);
   const projects = useMemo(() => projectsData?.projects || initialProjects, [initialProjects, projectsData]);
+  const projectOptions = useMemo(
+    () => [...projects].map((project) => ({ id: project.id, title: project.title })).sort((a, b) => a.title.localeCompare(b.title)),
+    [projects]
+  );
   const focusedProject = useMemo(
     () => (projectIdFocus ? projects.find((project) => project.id === projectIdFocus) || null : null),
     [projectIdFocus, projects]
@@ -1087,6 +1091,7 @@ export default function TasksPageClient({
                     rowId={`task-row-${task.id}`}
                     task={task}
                     agentOptions={initialTaskAgents}
+                    projectOptions={projectOptions}
                     allTasks={tasks}
                     linkedProjectId={linkedProject?.id}
                     linkedProjectTitle={linkedProject?.title || null}
