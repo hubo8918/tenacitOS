@@ -167,6 +167,7 @@ export function ProjectCard({
   const currentPhase = useMemo(() => getCurrentPhase(project), [project]);
   const [editPhaseTitle, setEditPhaseTitle] = useState(currentPhase?.title || "");
   const [editPhaseStatus, setEditPhaseStatus] = useState<ProjectPhase["status"]>(currentPhase?.status || "pending");
+  const [editPhaseDependencyIds, setEditPhaseDependencyIds] = useState<string[]>(currentPhase?.dependsOnPhaseIds || []);
   const [newLinkedTaskTitle, setNewLinkedTaskTitle] = useState("");
   const [newLinkedTaskDueDate, setNewLinkedTaskDueDate] = useState(() => getLocalDateInputValue(7));
   const [newLinkedTaskStatus, setNewLinkedTaskStatus] = useState<Task["status"]>("pending");
@@ -209,6 +210,14 @@ export function ProjectCard({
 
     return { resolved, unresolvedIds };
   }, [currentPhase, project.phases]);
+  const editablePhaseDependencyOptions = useMemo(
+    () => project.phases.filter((phase) => phase.id && phase.id !== currentPhase?.id),
+    [project.phases, currentPhase?.id]
+  );
+  const unresolvedEditedPhaseDependencyIds = useMemo(() => {
+    const editablePhaseIds = new Set(editablePhaseDependencyOptions.map((phase) => phase.id));
+    return editPhaseDependencyIds.filter((phaseId) => phaseId !== currentPhase?.id && !editablePhaseIds.has(phaseId));
+  }, [editPhaseDependencyIds, editablePhaseDependencyOptions, currentPhase?.id]);
   const sortedLinkedTasks = useMemo(() => [...linkedTasks].sort(compareLinkedTaskPreviewPriority), [linkedTasks]);
   const availableLinkableTasksSorted = useMemo(
     () => [...availableLinkableTasks].sort(compareLinkedTaskPreviewPriority),
@@ -250,6 +259,7 @@ export function ProjectCard({
     setEditParticipatingAgentIds([...project.participatingAgentIds]);
     setEditPhaseTitle(nextPhase?.title || "");
     setEditPhaseStatus(nextPhase?.status || "pending");
+    setEditPhaseDependencyIds(nextPhase?.dependsOnPhaseIds || []);
     setSaveError(null);
     setDeleteError(null);
     setLinkedTaskManageError(null);
@@ -288,6 +298,14 @@ export function ProjectCard({
       current.includes(agentId)
         ? current.filter((value) => value !== agentId)
         : [...current, agentId]
+    );
+  };
+
+  const togglePhaseDependency = (phaseId: string) => {
+    setEditPhaseDependencyIds((current) =>
+      current.includes(phaseId)
+        ? current.filter((value) => value !== phaseId)
+        : [...current, phaseId]
     );
   };
 
@@ -531,6 +549,9 @@ export function ProjectCard({
     setDeleteError(null);
 
     const selectedOwner = teamAgents.find((agent) => agent.id === editOwnerAgentId);
+    const nextPhaseDependencyIds = Array.from(
+      new Set(editPhaseDependencyIds.filter((phaseId) => phaseId && phaseId !== currentPhase?.id))
+    );
 
     let nextPhases = project.phases;
     if (trimmedPhaseTitle) {
@@ -539,7 +560,7 @@ export function ProjectCard({
         title: trimmedPhaseTitle,
         status: editPhaseStatus,
         ownerAgentId: editOwnerAgentId || undefined,
-        dependsOnPhaseIds: currentPhase?.dependsOnPhaseIds || [],
+        dependsOnPhaseIds: nextPhaseDependencyIds,
       };
 
       nextPhases = currentPhase
@@ -789,6 +810,86 @@ export function ProjectCard({
                   );
                 })}
               </div>
+            </div>
+
+            <div className="mb-3">
+              <label className="text-[10px] font-bold uppercase tracking-wider block mb-1" style={{ color: "var(--text-muted)" }}>
+                Phase dependencies
+              </label>
+              <div
+                className="rounded-lg p-2 space-y-2"
+                style={{
+                  backgroundColor: "var(--card)",
+                  border: "1px solid var(--border)",
+                }}
+              >
+                {editablePhaseDependencyOptions.length > 0 ? (
+                  editablePhaseDependencyOptions.map((phase) => {
+                    const isSelected = editPhaseDependencyIds.includes(phase.id);
+                    const config = phaseStatusConfig[phase.status];
+                    return (
+                      <label
+                        key={phase.id}
+                        className="flex items-start gap-2 text-xs"
+                        style={{ color: "var(--text-primary)" }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => togglePhaseDependency(phase.id)}
+                        />
+                        <span className="min-w-0">
+                          <span className="block font-medium">{phase.title}</span>
+                          <span className="text-[10px]" style={{ color: config.color }}>
+                            {config.label}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })
+                ) : (
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    Add another tracked phase before this project can depend on one.
+                  </p>
+                )}
+              </div>
+              <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                This only rewrites the current phase&apos;s saved dependency ids. Missing dependency ids stay explicit below until you remove them.
+              </p>
+              {unresolvedEditedPhaseDependencyIds.length > 0 && (
+                <div
+                  className="mt-2 rounded-lg px-3 py-2"
+                  style={{
+                    backgroundColor: "color-mix(in srgb, var(--warning, #ffd60a) 10%, transparent)",
+                    border: "1px solid color-mix(in srgb, var(--warning, #ffd60a) 25%, transparent)",
+                  }}
+                >
+                  <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-primary)" }}>
+                    Missing tracked phases
+                  </p>
+                  <p className="mt-1 text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                    These saved dependency ids no longer resolve to a tracked phase on this project. Remove them here if they are stale.
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {unresolvedEditedPhaseDependencyIds.map((phaseId) => (
+                      <button
+                        key={phaseId}
+                        type="button"
+                        onClick={() => setEditPhaseDependencyIds((current) => current.filter((value) => value !== phaseId))}
+                        className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-medium"
+                        style={{
+                          color: "#FFD60A",
+                          border: "1px solid color-mix(in srgb, #FFD60A 35%, transparent)",
+                          backgroundColor: "color-mix(in srgb, #FFD60A 12%, transparent)",
+                        }}
+                      >
+                        <span>{phaseId}</span>
+                        <span aria-hidden="true">×</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="mb-3">
