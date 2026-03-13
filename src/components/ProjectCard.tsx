@@ -684,12 +684,15 @@ export function ProjectCard({
                       {hiddenUrgentLinkedTaskCount === 1 ? "" : "s"} sit beyond this three-row preview.
                     </p>
                     <p className="text-[10px] truncate" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
-                      First hidden urgent task: {firstHiddenUrgentLinkedTask.title}
+                      Current hidden urgent target: {firstHiddenUrgentLinkedTask.title}
                       {firstHiddenUrgentLinkedTask.status === "blocked"
                         ? " · blocked"
                         : isTaskOverdue(firstHiddenUrgentLinkedTask.dueDate, firstHiddenUrgentLinkedTask.status)
                           ? ` · overdue since ${firstHiddenUrgentLinkedTask.dueDate}`
                           : ""}
+                    </p>
+                    <p className="text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
+                      If the earlier urgent-overflow target already moved or disappeared, this shortcut retargets to the current first hidden urgent task instead of dead-ending.
                     </p>
                   </div>
                   <a
@@ -700,7 +703,7 @@ export function ProjectCard({
                     style={{ color: "#0A84FF" }}
                     title={`Open ${firstHiddenUrgentLinkedTask.title} in the focused Tasks view`}
                   >
-                    Review urgent ↗
+                    Open current urgent task ↗
                   </a>
                 </div>
               )}

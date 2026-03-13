@@ -1202,6 +1202,21 @@ Connect to real OpenClaw execution:
 - Next:
   - keep Project ↔ Task linkage read-only, and if the next trust pass stays narrow, surface the same recovery option from the Projects-side urgent-overflow summary when the original target is already gone.
 
+### 2026-03-12 17:20
+- Step: Projects urgent-overflow recovery copy
+- Files:
+  - `src/components/ProjectCard.tsx`
+- Validation:
+  - `npx eslint src/components/ProjectCard.tsx`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(projects): clarify urgent-overflow recovery handoff`)
+- Result:
+  - The Projects-side urgent-overflow summary now names the current hidden urgent target and explicitly says the shortcut retargets if an earlier hidden urgent task already moved or disappeared.
+  - The CTA copy now points at the current urgent handoff instead of reading like a generic review link, so the recovery path visible on Tasks is also legible before leaving Projects.
+  - This keeps Project ↔ Task linkage read-only while making urgent-overflow follow-up more honest from the Projects card itself.
+- Next:
+  - keep Project ↔ Task linkage read-only, then reassess the next tight Tasks/Projects trust issue instead of widening into fake cross-page editing.
+
 ---
 
 ## How to Update This File
