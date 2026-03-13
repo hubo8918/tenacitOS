@@ -128,7 +128,7 @@ To avoid fake progress or silent drift:
   - status
   - priority
   - initial owner
-- first owner/current-phase planning editor is now live
+- the project planning editor now supports title, description, status, priority, owner, participating agents, and current phase edits in one surface
 - participating-agent visibility now reads directly on each project card, and the planning editor can now update participating-agent assignments
 - current-phase dependency visibility now reads directly on each project card
 - project ↔ task linkage now reads directly on each project card as a read-only Tasks summary
@@ -1349,12 +1349,28 @@ Suggested template:
 - Next:
   - take the next narrow Projects CRUD/project-management step, unless a deeper Project ↔ Task or dependency flow clearly requires a schema/product decision first.
 
+### 2026-03-12 22:xx
+- Step: Projects planning editor broadens core edit coverage
+- Files:
+  - `src/components/ProjectCard.tsx`
+  - `src/app/api/projects/route.ts`
+- Validation:
+  - `npx eslint src/components/ProjectCard.tsx src/app/api/projects/route.ts`
+  - `npm run build`
+- Commit: current checkpoint commit (`feat(projects): edit core project fields`)
+- Result:
+  - The existing Projects planning editor now supports title, description, and priority edits instead of leaving those core project-management fields trapped in create-only flow.
+  - Project updates now validate non-empty title/description plus duplicate-title conflicts on save, so broadened editing stays honest instead of silently creating ambiguous project records.
+  - Tracked task links still ride the stable project-id model, while unresolved/custom task labels remain an explicit Tasks-side cleanup boundary instead of pretending every saved task label is rewritten automatically.
+- Next:
+  - take the next narrow Projects or dependency-management step, unless deeper phase/dependency editing first needs an explicit schema/product decision.
+
 ## Current Focus
 
-**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + direct inline visibility for task/project link mismatches + a scoped board-level mismatch attention summary + a mismatch-only board filter + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, task-row jumps into a focused Projects view, project-focused task intake defaults plus an empty-state intake CTA, a first Projects create flow, a first Projects owner/phase editor, a first Projects participating-agent editor, current-phase dependency visibility, a linked-task attention summary, a zero-linked Tasks handoff, a Projects-board mismatch cleanup handoff that now lands on and briefly highlights the first affected Tasks row, an urgent-overflow handoff that now jumps straight to the first hidden blocked or overdue linked task, a first honest Projects delete flow, a stable `projectId` foundation so Task ↔ Project linkage no longer depends only on exact title strings, a tracked-project selector in the task details editor, and that same stable tracked-project/custom-label model now applied to the New task intake flow.
+**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + direct inline visibility for task/project link mismatches + a scoped board-level mismatch attention summary + a mismatch-only board filter + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, task-row jumps into a focused Projects view, project-focused task intake defaults plus an empty-state intake CTA, a first Projects create flow, a Projects planning editor that now covers title/description/status/priority/owner/participants/current phase, current-phase dependency visibility, a linked-task attention summary, a zero-linked Tasks handoff, a Projects-board mismatch cleanup handoff that now lands on and briefly highlights the first affected Tasks row, an urgent-overflow handoff that now jumps straight to the first hidden blocked or overdue linked task, a first honest Projects delete flow, a stable `projectId` foundation so Task ↔ Project linkage no longer depends only on exact title strings, a tracked-project selector in the task details editor, and that same stable tracked-project/custom-label model now applied to the New task intake flow.
 
 **Do next:**
-1. take the next narrow Projects CRUD/project-management step so the Projects board keeps closing its remaining honest Phase 3 gaps
+1. take the next narrow Projects CRUD/project-management or dependency-management step so the Projects board keeps closing its remaining honest Phase 3 gaps
 2. keep using the stable `projectId` linkage model for Project ↔ Task flows instead of title-only matching
-3. if project-title editing or deeper dependency UX needs a schema/product decision, say that explicitly before widening
+3. if deeper phase/dependency editing needs a schema/product decision, say that explicitly before widening
 4. keep pushing coordination surfaces forward without pretending execution automation already exists

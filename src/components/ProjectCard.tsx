@@ -125,7 +125,10 @@ export function ProjectCard({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [editTitle, setEditTitle] = useState(project.title);
+  const [editDescription, setEditDescription] = useState(project.description);
   const [editStatus, setEditStatus] = useState(project.status);
+  const [editPriority, setEditPriority] = useState<Project["priority"]>(project.priority);
   const [editProgress, setEditProgress] = useState(project.progress);
   const [editOwnerAgentId, setEditOwnerAgentId] = useState(project.ownerAgentId || "");
   const [editParticipatingAgentIds, setEditParticipatingAgentIds] = useState<string[]>([...project.participatingAgentIds]);
@@ -185,7 +188,10 @@ export function ProjectCard({
 
   const resetDraft = () => {
     const nextPhase = getCurrentPhase(project);
+    setEditTitle(project.title);
+    setEditDescription(project.description);
     setEditStatus(project.status);
+    setEditPriority(project.priority);
     setEditProgress(project.progress);
     setEditOwnerAgentId(project.ownerAgentId || "");
     setEditParticipatingAgentIds([...project.participatingAgentIds]);
@@ -207,11 +213,24 @@ export function ProjectCard({
   async function handleSave() {
     if (saving || deleting) return;
 
+    const trimmedTitle = editTitle.trim();
+    const trimmedDescription = editDescription.trim();
+    const trimmedPhaseTitle = editPhaseTitle.trim();
+
+    if (!trimmedTitle) {
+      setSaveError("Project title is required.");
+      return;
+    }
+
+    if (!trimmedDescription) {
+      setSaveError("Project description is required.");
+      return;
+    }
+
     setSaving(true);
     setSaveError(null);
     setDeleteError(null);
 
-    const trimmedPhaseTitle = editPhaseTitle.trim();
     const selectedOwner = teamAgents.find((agent) => agent.id === editOwnerAgentId);
 
     let nextPhases = project.phases;
@@ -235,7 +254,10 @@ export function ProjectCard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: project.id,
+          title: trimmedTitle,
+          description: trimmedDescription,
           status: editStatus,
+          priority: editPriority,
           progress: editProgress,
           ownerAgentId: editOwnerAgentId || null,
           participatingAgentIds: editParticipatingAgentIds,
@@ -315,8 +337,44 @@ export function ProjectCard({
                 Project planning metadata
               </p>
               <p className="text-[11px] mt-1" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
-                This now edits owner, participating agents, current phase, status, and progress in one honest planning surface. Current phase dependency visibility stays read-only here, and linked-task cleanup still lives on Tasks.
+                This now edits title, description, owner, participating agents, current phase, status, priority, and progress in one honest planning surface. Tracked task links stay anchored by stable project id; unresolved/custom task labels still need cleanup from Tasks instead of pretending this editor rewrites every task automatically.
               </p>
+            </div>
+
+            <div className="mb-3">
+              <label className="text-[10px] font-bold uppercase tracking-wider block mb-1" style={{ color: "var(--text-muted)" }}>
+                Title
+              </label>
+              <input
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                placeholder="Mission-critical rollout"
+                className="w-full rounded-lg px-3 py-2 text-sm"
+                style={{
+                  backgroundColor: "var(--card)",
+                  color: "var(--text-primary)",
+                  border: "1px solid var(--border)",
+                }}
+              />
+            </div>
+
+            <div className="mb-3">
+              <label className="text-[10px] font-bold uppercase tracking-wider block mb-1" style={{ color: "var(--text-muted)" }}>
+                Description
+              </label>
+              <textarea
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                rows={3}
+                placeholder="What this project is for"
+                className="w-full rounded-lg px-3 py-2 text-sm"
+                style={{
+                  backgroundColor: "var(--card)",
+                  color: "var(--text-primary)",
+                  border: "1px solid var(--border)",
+                  resize: "vertical",
+                }}
+              />
             </div>
 
             <div className="mb-3">
@@ -453,6 +511,28 @@ export function ProjectCard({
                   );
                 })}
               </div>
+            </div>
+
+            <div className="mb-3">
+              <label className="text-[10px] font-bold uppercase tracking-wider block mb-1" style={{ color: "var(--text-muted)" }}>
+                Priority
+              </label>
+              <select
+                value={editPriority}
+                onChange={(e) => setEditPriority(e.target.value as Project["priority"])}
+                className="w-full rounded-lg px-3 py-2 text-sm"
+                style={{
+                  backgroundColor: "var(--card)",
+                  color: "var(--text-primary)",
+                  border: "1px solid var(--border)",
+                }}
+              >
+                {Object.entries(priorityConfig).map(([value, config]) => (
+                  <option key={value} value={value}>
+                    {config.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="mb-3">

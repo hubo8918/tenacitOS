@@ -91,13 +91,38 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
+    const currentProject = projects[index];
+    const nextTitle = body.title !== undefined ? asTrimmedString(body.title) : currentProject.title;
+    const nextDescription = body.description !== undefined ? asTrimmedString(body.description) : currentProject.description;
+
+    if (!nextTitle) {
+      return NextResponse.json({ error: "Project title is required." }, { status: 400 });
+    }
+
+    if (!generateId(nextTitle)) {
+      return NextResponse.json({ error: "Project title must include letters or numbers." }, { status: 400 });
+    }
+
+    if (!nextDescription) {
+      return NextResponse.json({ error: "Project description is required." }, { status: 400 });
+    }
+
+    const duplicateTitle = projects.find(
+      (project, projectIndex) => projectIndex !== index && project.title.trim().toLowerCase() === nextTitle.toLowerCase()
+    );
+    if (duplicateTitle) {
+      return NextResponse.json({ error: `A project with the title "${nextTitle}" already exists.` }, { status: 409 });
+    }
+
     const updatedProject: Project = normalizeProject({
-      ...projects[index],
+      ...currentProject,
       ...body,
-      agent: body.agent !== undefined ? body.agent : projects[index].agent,
+      title: nextTitle,
+      description: nextDescription,
+      agent: body.agent !== undefined ? body.agent : currentProject.agent,
       participatingAgentIds:
-        body.participatingAgentIds !== undefined ? body.participatingAgentIds : projects[index].participatingAgentIds,
-      phases: body.phases !== undefined ? body.phases : projects[index].phases,
+        body.participatingAgentIds !== undefined ? body.participatingAgentIds : currentProject.participatingAgentIds,
+      phases: body.phases !== undefined ? body.phases : currentProject.phases,
     });
 
     projects[index] = updatedProject;
