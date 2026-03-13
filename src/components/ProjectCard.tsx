@@ -111,11 +111,18 @@ function getProjectTasksHref(
   return `/agents/tasks?${params.toString()}`;
 }
 
+interface ReassignableProjectTask {
+  task: Task;
+  sourceProjectTitle: string;
+  sourceLinkMode: "stable" | "label";
+}
+
 interface ProjectCardProps {
   project: Project;
   teamAgents: TeamAgent[];
   linkedTasks: Task[];
   availableLinkableTasks: Task[];
+  reassignableTasks: ReassignableProjectTask[];
   linkedTasksLoading?: boolean;
   linkedTasksUnavailable?: boolean;
   onUpdate?: () => void;
@@ -126,6 +133,7 @@ export function ProjectCard({
   teamAgents,
   linkedTasks,
   availableLinkableTasks,
+  reassignableTasks,
   linkedTasksLoading = false,
   linkedTasksUnavailable = false,
   onUpdate,
@@ -135,13 +143,16 @@ export function ProjectCard({
   const [deleting, setDeleting] = useState(false);
   const [showLinkedTaskCreate, setShowLinkedTaskCreate] = useState(false);
   const [showExistingTaskLinker, setShowExistingTaskLinker] = useState(false);
+  const [showTaskReassignment, setShowTaskReassignment] = useState(false);
   const [creatingLinkedTask, setCreatingLinkedTask] = useState(false);
   const [linkingExistingTask, setLinkingExistingTask] = useState(false);
+  const [reassigningTaskId, setReassigningTaskId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [linkedTaskCreateError, setLinkedTaskCreateError] = useState<string | null>(null);
   const [linkedTaskManageError, setLinkedTaskManageError] = useState<string | null>(null);
   const [selectedExistingTaskId, setSelectedExistingTaskId] = useState("");
+  const [selectedReassignTaskId, setSelectedReassignTaskId] = useState("");
   const [pendingLinkedTaskRemovalId, setPendingLinkedTaskRemovalId] = useState<string | null>(null);
   const [removingLinkedTaskId, setRemovingLinkedTaskId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -202,9 +213,17 @@ export function ProjectCard({
     () => [...availableLinkableTasks].sort(compareLinkedTaskPreviewPriority),
     [availableLinkableTasks]
   );
+  const reassignableTasksSorted = useMemo(
+    () => [...reassignableTasks].sort((a, b) => compareLinkedTaskPreviewPriority(a.task, b.task)),
+    [reassignableTasks]
+  );
   const selectedExistingTask = useMemo(
     () => availableLinkableTasksSorted.find((task) => task.id === selectedExistingTaskId) || null,
     [availableLinkableTasksSorted, selectedExistingTaskId]
+  );
+  const selectedReassignTask = useMemo(
+    () => reassignableTasksSorted.find((option) => option.task.id === selectedReassignTaskId) || null,
+    [reassignableTasksSorted, selectedReassignTaskId]
   );
   const visibleLinkedTasks = useMemo(() => sortedLinkedTasks.slice(0, 3), [sortedLinkedTasks]);
   const firstHiddenUrgentLinkedTask = useMemo(
@@ -234,9 +253,12 @@ export function ProjectCard({
     setDeleteError(null);
     setLinkedTaskManageError(null);
     setSelectedExistingTaskId("");
+    setSelectedReassignTaskId("");
     setShowExistingTaskLinker(false);
+    setShowTaskReassignment(false);
     setPendingLinkedTaskRemovalId(null);
     setRemovingLinkedTaskId(null);
+    setReassigningTaskId(null);
     setConfirmDelete(false);
   };
 
@@ -251,6 +273,11 @@ export function ProjectCard({
 
   const resetExistingTaskLinkDraft = () => {
     setSelectedExistingTaskId(availableLinkableTasksSorted[0]?.id || "");
+    setLinkedTaskManageError(null);
+  };
+
+  const resetTaskReassignmentDraft = () => {
+    setSelectedReassignTaskId(reassignableTasksSorted[0]?.task.id || "");
     setLinkedTaskManageError(null);
   };
 
@@ -283,6 +310,18 @@ export function ProjectCard({
 
     resetExistingTaskLinkDraft();
     setShowExistingTaskLinker(true);
+  };
+
+  const handleToggleTaskReassignment = () => {
+    if (showTaskReassignment) {
+      setShowTaskReassignment(false);
+      setSelectedReassignTaskId("");
+      setLinkedTaskManageError(null);
+      return;
+    }
+
+    resetTaskReassignmentDraft();
+    setShowTaskReassignment(true);
   };
 
   async function handleCreateLinkedTask() {
@@ -355,7 +394,7 @@ export function ProjectCard({
   };
 
   async function handleRemoveLinkedTask(task: Task) {
-    if (saving || deleting || creatingLinkedTask || removingLinkedTaskId) {
+    if (saving || deleting || creatingLinkedTask || removingLinkedTaskId || linkingExistingTask || reassigningTaskId) {
       return;
     }
 
@@ -389,7 +428,7 @@ export function ProjectCard({
   }
 
   async function handleAttachExistingTask() {
-    if (saving || deleting || creatingLinkedTask || removingLinkedTaskId || linkingExistingTask) {
+    if (saving || deleting || creatingLinkedTask || removingLinkedTaskId || linkingExistingTask || reassigningTaskId) {
       return;
     }
 
@@ -425,6 +464,46 @@ export function ProjectCard({
       setLinkedTaskManageError(error instanceof Error ? error.message : "Failed to attach existing task");
     } finally {
       setLinkingExistingTask(false);
+    }
+  }
+
+  async function handleReassignTask() {
+    if (saving || deleting || creatingLinkedTask || removingLinkedTaskId || linkingExistingTask || reassigningTaskId) {
+      return;
+    }
+
+    if (!selectedReassignTask) {
+      setLinkedTaskManageError("Pick a tracked task to move here.");
+      return;
+    }
+
+    setReassigningTaskId(selectedReassignTask.task.id);
+    setLinkedTaskManageError(null);
+
+    try {
+      const response = await fetch("/api/agent-tasks", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: selectedReassignTask.task.id,
+          project: project.title,
+          projectId: project.id,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to move tracked task");
+      }
+
+      setShowTaskReassignment(false);
+      setSelectedReassignTaskId("");
+      onUpdate?.();
+    } catch (error) {
+      console.error("Failed to move tracked task:", error);
+      setLinkedTaskManageError(error instanceof Error ? error.message : "Failed to move tracked task");
+    } finally {
+      setReassigningTaskId(null);
     }
   }
 
@@ -785,7 +864,7 @@ export function ProjectCard({
                 Linked task links
               </p>
               <p className="mt-1 text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
-                This project editor can now remove an existing task link here and attach an unlinked or unresolved task to <span style={{ color: "var(--text-primary)" }}>{project.title}</span> by saving its stable project id. Tasks already linked to another live project, and deeper task edits, still stay on Tasks.
+                This project editor can now remove an existing task link here, attach an unlinked or unresolved task to <span style={{ color: "var(--text-primary)" }}>{project.title}</span>, and explicitly move a tracked task here from another live project by rewriting only that task&apos;s saved project link. Deeper task edits still stay on Tasks.
               </p>
 
               {linkedTasksLoading ? (
@@ -844,9 +923,9 @@ export function ProjectCard({
                               <button
                                 type="button"
                                 onClick={() => handleRemoveLinkedTask(task)}
-                                disabled={isRemovingTask || linkingExistingTask}
+                                disabled={isRemovingTask || linkingExistingTask || Boolean(reassigningTaskId)}
                                 className="text-[10px] px-3 py-1 rounded-lg font-medium"
-                                style={{ backgroundColor: "var(--status-blocked, #FF453A)", color: "#fff", opacity: isRemovingTask || linkingExistingTask ? 0.7 : 1 }}
+                                style={{ backgroundColor: "var(--status-blocked, #FF453A)", color: "#fff", opacity: isRemovingTask || linkingExistingTask || reassigningTaskId ? 0.7 : 1 }}
                               >
                                 {isRemovingTask ? "Removing..." : "Remove link"}
                               </button>
@@ -855,12 +934,12 @@ export function ProjectCard({
                             <button
                               type="button"
                               onClick={() => handleToggleLinkedTaskRemoval(task.id)}
-                              disabled={Boolean(removingLinkedTaskId) || linkingExistingTask}
+                              disabled={Boolean(removingLinkedTaskId) || linkingExistingTask || Boolean(reassigningTaskId)}
                               className="text-[10px] px-3 py-1 rounded-lg font-medium"
                               style={{
                                 color: "#FF9F0A",
                                 border: "1px solid color-mix(in srgb, #FF9F0A 32%, transparent)",
-                                opacity: removingLinkedTaskId || linkingExistingTask ? 0.6 : 1,
+                                opacity: removingLinkedTaskId || linkingExistingTask || reassigningTaskId ? 0.6 : 1,
                               }}
                             >
                               Remove link…
@@ -924,13 +1003,13 @@ export function ProjectCard({
                   <button
                     type="button"
                     onClick={handleToggleExistingTaskLinker}
-                    disabled={availableLinkableTasksSorted.length === 0 || Boolean(removingLinkedTaskId) || linkingExistingTask}
+                    disabled={availableLinkableTasksSorted.length === 0 || Boolean(removingLinkedTaskId) || linkingExistingTask || Boolean(reassigningTaskId)}
                     className="text-[10px] font-medium rounded-full px-3 py-1"
                     style={{
                       color: showExistingTaskLinker ? "var(--text-primary)" : availableLinkableTasksSorted.length > 0 ? "#0A84FF" : "var(--text-muted)",
                       border: `1px solid ${showExistingTaskLinker ? "var(--border)" : availableLinkableTasksSorted.length > 0 ? "color-mix(in srgb, #0A84FF 30%, transparent)" : "var(--border)"}`,
                       backgroundColor: showExistingTaskLinker ? "var(--surface-elevated)" : "transparent",
-                      opacity: availableLinkableTasksSorted.length === 0 || removingLinkedTaskId || linkingExistingTask ? 0.6 : 1,
+                      opacity: availableLinkableTasksSorted.length === 0 || removingLinkedTaskId || linkingExistingTask || reassigningTaskId ? 0.6 : 1,
                     }}
                   >
                     {showExistingTaskLinker ? "Close attach flow" : availableLinkableTasksSorted.length > 0 ? "Attach existing task" : "No attachable tasks"}
@@ -988,9 +1067,9 @@ export function ProjectCard({
                       <button
                         type="button"
                         onClick={handleAttachExistingTask}
-                        disabled={linkingExistingTask}
+                        disabled={linkingExistingTask || Boolean(reassigningTaskId)}
                         className="text-[10px] px-3 py-1 rounded-lg font-medium"
-                        style={{ backgroundColor: "#0A84FF", color: "#fff", opacity: linkingExistingTask ? 0.7 : 1 }}
+                        style={{ backgroundColor: "#0A84FF", color: "#fff", opacity: linkingExistingTask || reassigningTaskId ? 0.7 : 1 }}
                       >
                         {linkingExistingTask ? "Attaching..." : "Attach task"}
                       </button>
@@ -1002,7 +1081,103 @@ export function ProjectCard({
                   </p>
                 ) : (
                   <p className="mt-3 text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
-                    No current Tasks rows are waiting in unresolved or no-project state, so broader cross-project reassignment still stays on Tasks.
+                    No current Tasks rows are waiting in unresolved or no-project state. If tracked work already belongs to another live project, use the reassignment flow below instead of pretending this attach step can steal it silently.
+                  </p>
+                )}
+              </div>
+
+              <div
+                className="mt-3 rounded-lg px-3 py-3"
+                style={{
+                  backgroundColor: "var(--card)",
+                  border: "1px solid var(--border)",
+                }}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-primary)" }}>
+                      Move tracked task here
+                    </p>
+                    <p className="mt-1 text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                      Explicitly move a task into <span style={{ color: "var(--text-primary)" }}>{project.title}</span> only when it already resolves to another live project. This rewrites that task&apos;s saved project label plus stable project id for the new home, but it does not edit the rest of the task inline.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleToggleTaskReassignment}
+                    disabled={reassignableTasksSorted.length === 0 || Boolean(removingLinkedTaskId) || linkingExistingTask || Boolean(reassigningTaskId)}
+                    className="text-[10px] font-medium rounded-full px-3 py-1"
+                    style={{
+                      color: showTaskReassignment ? "var(--text-primary)" : reassignableTasksSorted.length > 0 ? "#FF9F0A" : "var(--text-muted)",
+                      border: `1px solid ${showTaskReassignment ? "var(--border)" : reassignableTasksSorted.length > 0 ? "color-mix(in srgb, #FF9F0A 32%, transparent)" : "var(--border)"}`,
+                      backgroundColor: showTaskReassignment ? "var(--surface-elevated)" : "transparent",
+                      opacity: reassignableTasksSorted.length === 0 || removingLinkedTaskId || linkingExistingTask || reassigningTaskId ? 0.6 : 1,
+                    }}
+                  >
+                    {showTaskReassignment ? "Close move flow" : reassignableTasksSorted.length > 0 ? "Move tracked task" : "No tracked tasks to move"}
+                  </button>
+                </div>
+
+                {showTaskReassignment ? (
+                  <div className="mt-3 space-y-3">
+                    <label className="flex flex-col gap-1 text-[10px] font-semibold" style={{ color: "var(--text-secondary)" }}>
+                      Task from another live project
+                      <select
+                        value={selectedReassignTaskId}
+                        onChange={(event) => setSelectedReassignTaskId(event.target.value)}
+                        className="w-full rounded-lg px-3 py-2 text-sm"
+                        style={{
+                          backgroundColor: "var(--surface-elevated)",
+                          color: "var(--text-primary)",
+                          border: "1px solid var(--border)",
+                        }}
+                      >
+                        <option value="">Select a task</option>
+                        {reassignableTasksSorted.map((option) => (
+                          <option key={option.task.id} value={option.task.id}>
+                            {option.task.title} — from {option.sourceProjectTitle} ({option.sourceLinkMode === "stable" ? "stable link" : "saved label"})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    {selectedReassignTask && (
+                      <p className="text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                        This will move <span style={{ color: "var(--text-primary)" }}>{selectedReassignTask.task.title}</span> out of <span style={{ color: "var(--text-primary)" }}>{selectedReassignTask.sourceProjectTitle}</span> and into <span style={{ color: "var(--text-primary)" }}>{project.title}</span> by rewriting only its saved project linkage. The source project card will stop showing that task after refresh, and deeper task edits still stay on Tasks.
+                      </p>
+                    )}
+
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowTaskReassignment(false);
+                          setSelectedReassignTaskId("");
+                          setLinkedTaskManageError(null);
+                        }}
+                        className="text-[10px] px-3 py-1 rounded-lg"
+                        style={{ color: "var(--text-muted)", border: "1px solid var(--border)" }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleReassignTask}
+                        disabled={Boolean(reassigningTaskId)}
+                        className="text-[10px] px-3 py-1 rounded-lg font-medium"
+                        style={{ backgroundColor: "#FF9F0A", color: "#111", opacity: reassigningTaskId ? 0.7 : 1 }}
+                      >
+                        {reassigningTaskId ? "Moving..." : "Move task here"}
+                      </button>
+                    </div>
+                  </div>
+                ) : reassignableTasksSorted.length > 0 ? (
+                  <p className="mt-3 text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                    {reassignableTasksSorted.length} tracked task{reassignableTasksSorted.length === 1 ? " currently resolves" : "s currently resolve"} to another live project and can be moved here with explicit source/target copy.
+                  </p>
+                ) : (
+                  <p className="mt-3 text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                    No current Tasks rows resolve to another live project, so there is nothing to reassign into {project.title} right now.
                   </p>
                 )}
               </div>
@@ -1403,7 +1578,7 @@ export function ProjectCard({
 
               <div className="flex items-center justify-between gap-2 pt-1">
                 <p className="text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
-                  This card can now create new linked tasks, attach an unresolved/no-project task, and remove an existing saved link from the project editor. Reassigning a task that already belongs to another live project or editing the rest of the task still lives on Tasks.
+                  This card can now create new linked tasks, attach an unresolved/no-project task, move a tracked task here from another live project with explicit source/target copy, and remove an existing saved link from the project editor. Editing the rest of the task still lives on Tasks.
                 </p>
                 <a
                   href={projectTasksHref}
@@ -1423,7 +1598,7 @@ export function ProjectCard({
               </p>
               <div className="flex items-center justify-between gap-2 pt-1">
                 <p className="text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
-                  This card can now create the first linked task directly with the stable project id already attached, or attach an existing unresolved/no-project task from the project editor. Broader relinking or task-field cleanup still lives on Tasks.
+                  This card can now create the first linked task directly with the stable project id already attached, attach an existing unresolved/no-project task, or move a tracked task here from another live project. Broader task-field cleanup still lives on Tasks.
                 </p>
                 <a
                   href={projectTasksHref}
@@ -1446,7 +1621,7 @@ export function ProjectCard({
                     {linkedTasks.length > 0 ? "Create another linked task" : "Create the first linked task"}
                   </p>
                   <p className="text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
-                    This is a narrow Projects-side linkage flow: it saves a new task already linked to <span style={{ color: "var(--text-primary)" }}>{project.title}</span> by stable project id. Existing links can now be removed here, and unresolved/no-project tasks can be attached from the editor above, but reassigning or editing the rest of a task still stays on the Tasks board.
+                    This is a narrow Projects-side linkage flow: it saves a new task already linked to <span style={{ color: "var(--text-primary)" }}>{project.title}</span> by stable project id. Existing links can now be removed here, unresolved/no-project tasks can be attached above, and tracked tasks can be moved here from another live project with explicit source/target copy. Editing the rest of a task still stays on the Tasks board.
                   </p>
                 </div>
                 <button

@@ -10,6 +10,12 @@ import type { TeamAgent } from "@/data/mockTeamData";
 import { normalizeProjectLabel, resolveProjectForTask, taskHasProjectMismatch, taskLinksToProject } from "@/lib/project-task-linkage";
 import { useFetch } from "@/lib/useFetch";
 
+interface ReassignableProjectTask {
+  task: Task;
+  sourceProjectTitle: string;
+  sourceLinkMode: "stable" | "label";
+}
+
 interface ProjectsPageClientProps {
   initialProjects: Project[];
   initialTeam: TeamAgent[];
@@ -479,6 +485,18 @@ export default function ProjectsPageClient({
 
             return !resolveProjectForTask(task, projects);
           });
+          const reassignableTasks: ReassignableProjectTask[] = tasks.flatMap((task) => {
+            const resolvedProject = resolveProjectForTask(task, projects);
+            if (!resolvedProject || resolvedProject.id === project.id) {
+              return [];
+            }
+
+            return [{
+              task,
+              sourceProjectTitle: resolvedProject.title,
+              sourceLinkMode: task.projectId === resolvedProject.id ? "stable" : "label",
+            }];
+          });
 
           return (
             <ProjectCard
@@ -487,6 +505,7 @@ export default function ProjectsPageClient({
               teamAgents={initialTeam}
               linkedTasks={linkedTasks}
               availableLinkableTasks={availableLinkableTasks}
+              reassignableTasks={reassignableTasks}
               linkedTasksLoading={linkedTasksLoading}
               linkedTasksUnavailable={linkedTasksUnavailable}
               onUpdate={() => {
