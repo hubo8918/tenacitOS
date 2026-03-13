@@ -58,6 +58,15 @@ function getTaskAgentMeta(task: Task) {
     color: task.agent.color || "#8E8E93",
   };
 }
+function getTaskProjectLabel(task: Task) {
+  return task.project.trim() || "No project";
+}
+function getTaskProjectKey(task: Task) {
+  const label = task.project.trim().toLowerCase();
+  if (task.projectId) return `project:${task.projectId}`;
+  if (label) return `label:${label}`;
+  return "label:no-project";
+}
 function getTaskSortScore(task: Task, startOfTodayTime: number) {
   if (task.status === "blocked") return 0;
   if (isTaskOverdue(task, startOfTodayTime)) return 1;
@@ -109,6 +118,23 @@ interface ConflictAgentDetail {
   overdueCount: number;
   hasPileup: boolean;
   tasks: Task[];
+}
+
+interface DayProjectDetail {
+  key: string;
+  label: string;
+  taskCount: number;
+  blockedCount: number;
+  overdueCount: number;
+  agentCount: number;
+  pileupAgentCount: number;
+  agents: Array<{
+    key: string;
+    name: string;
+    emoji: string;
+    color: string;
+    taskCount: number;
+  }>;
 }
 
 type WorkloadSliceKey = "blocked" | "overdue" | "upcoming";
@@ -437,13 +463,15 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
     [activeSelectedDate, filteredConflictDays]
   );
 
-  const activeDayAgentDetails = useMemo(() => {
-    if (!activeSelectedDate) return [];
+  const activeDayOpenTasks = useMemo(
+    () => (activeSelectedDate ? (tasksByDate.get(activeSelectedDate) || []).filter((task) => isOpenTask(task)) : []),
+    [activeSelectedDate, tasksByDate]
+  );
 
-    const dayOpenTasks = (tasksByDate.get(activeSelectedDate) || []).filter((task) => isOpenTask(task));
+  const activeDayAgentDetails = useMemo(() => {
     const agentMap = new Map<string, ConflictAgentDetail>();
 
-    dayOpenTasks.forEach((task) => {
+    activeDayOpenTasks.forEach((task) => {
       const agentMeta = getTaskAgentMeta(task);
       const existing = agentMap.get(agentMeta.key);
       const detail =
@@ -484,7 +512,75 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
         if (b.openCount !== a.openCount) return b.openCount - a.openCount;
         return a.name.localeCompare(b.name);
       });
-  }, [activeSelectedDate, selectedConflictAgentKey, startOfTodayTime, tasksByDate]);
+  }, [activeDayOpenTasks, selectedConflictAgentKey, startOfTodayTime]);
+
+  const activeDayProjectDetails = useMemo<DayProjectDetail[]>(() => {
+    const projectMap = new Map<
+      string,
+      {
+        key: string;
+        label: string;
+        taskCount: number;
+        blockedCount: number;
+        overdueCount: number;
+        agentMap: Map<string, { key: string; name: string; emoji: string; color: string; taskCount: number }>;
+      }
+    >();
+
+    activeDayOpenTasks.forEach((task) => {
+      const projectKey = getTaskProjectKey(task);
+      const existing = projectMap.get(projectKey);
+      const projectDetail =
+        existing ||
+        {
+          key: projectKey,
+          label: getTaskProjectLabel(task),
+          taskCount: 0,
+          blockedCount: 0,
+          overdueCount: 0,
+          agentMap: new Map<string, { key: string; name: string; emoji: string; color: string; taskCount: number }>(),
+        };
+
+      projectDetail.taskCount += 1;
+      if (task.status === "blocked") projectDetail.blockedCount += 1;
+      if (isTaskOverdue(task, startOfTodayTime)) projectDetail.overdueCount += 1;
+
+      const agentMeta = getTaskAgentMeta(task);
+      const existingAgent = projectDetail.agentMap.get(agentMeta.key);
+      projectDetail.agentMap.set(agentMeta.key, {
+        ...agentMeta,
+        taskCount: (existingAgent?.taskCount || 0) + 1,
+      });
+
+      projectMap.set(projectKey, projectDetail);
+    });
+
+    return Array.from(projectMap.values())
+      .map((project) => {
+        const agents = Array.from(project.agentMap.values()).sort((a, b) => {
+          if (b.taskCount !== a.taskCount) return b.taskCount - a.taskCount;
+          return a.name.localeCompare(b.name);
+        });
+
+        return {
+          key: project.key,
+          label: project.label,
+          taskCount: project.taskCount,
+          blockedCount: project.blockedCount,
+          overdueCount: project.overdueCount,
+          agentCount: agents.length,
+          pileupAgentCount: agents.filter((agent) => agent.taskCount > 1).length,
+          agents,
+        };
+      })
+      .sort((a, b) => {
+        if (b.overdueCount !== a.overdueCount) return b.overdueCount - a.overdueCount;
+        if (b.blockedCount !== a.blockedCount) return b.blockedCount - a.blockedCount;
+        if (b.agentCount !== a.agentCount) return b.agentCount - a.agentCount;
+        if (b.taskCount !== a.taskCount) return b.taskCount - a.taskCount;
+        return a.label.localeCompare(b.label);
+      });
+  }, [activeDayOpenTasks, startOfTodayTime]);
 
   const activeDaySummary = useMemo(() => {
     if (!activeSelectedDate) return null;
@@ -931,7 +1027,7 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
               Day workload drill-down
             </h2>
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-              Same-day pileups still anchor the conflict workflow, but workload-slice dates can now pin any due day here so blocked, overdue, and upcoming follow-up stays tied to the calendar surface without inventing project phase dates.
+              Same-day pileups still anchor the conflict workflow, but workload-slice dates can now pin any due day here and the selected date now groups that load by project as well, so blocked, overdue, and upcoming follow-up stays tied to real project/task scheduling without inventing project phase dates.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -1025,6 +1121,91 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
                 </span>
               </div>
             </div>
+
+            {activeDayProjectDetails.length > 0 && (
+              <div className="mb-4">
+                <div className="flex flex-col gap-1 mb-3 md:flex-row md:items-end md:justify-between">
+                  <div>
+                    <h4 className="text-sm font-semibold" style={{ color: "var(--text-primary)", fontFamily: "var(--font-heading)" }}>
+                      Project pressure on this date
+                    </h4>
+                    <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                      Grouped by task project so the day drill-down shows which project work is stacking up on this due date without faking project phase timing.
+                    </p>
+                  </div>
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    {activeDayProjectDetails.length} project{activeDayProjectDetails.length === 1 ? "" : "s"} carrying open due work
+                  </p>
+                </div>
+
+                <div className="grid gap-3 xl:grid-cols-2">
+                  {activeDayProjectDetails.map((project) => (
+                    <div
+                      key={project.key}
+                      className="rounded-xl p-4"
+                      style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}
+                    >
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <div className="min-w-0">
+                          <p className="font-medium truncate" style={{ color: "var(--text-primary)" }}>
+                            {project.label}
+                          </p>
+                          <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                            {project.taskCount} open task{project.taskCount === 1 ? "" : "s"} across {project.agentCount} agent{project.agentCount === 1 ? "" : "s"}
+                          </p>
+                        </div>
+                        <span
+                          className="text-[10px] px-2 py-1 rounded-full whitespace-nowrap"
+                          style={{
+                            color: project.agentCount > 1 ? "#BF5AF2" : "var(--text-muted)",
+                            backgroundColor: project.agentCount > 1 ? "rgba(191, 90, 242, 0.12)" : "var(--surface-elevated)",
+                          }}
+                        >
+                          {project.agentCount > 1 ? `${project.agentCount} agents due` : "single-agent day"}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 text-xs mb-3">
+                        <span className="px-2 py-1 rounded-full" style={{ color: "var(--text-primary)", backgroundColor: "rgba(10, 132, 255, 0.12)" }}>
+                          {project.taskCount} due
+                        </span>
+                        {project.blockedCount > 0 && (
+                          <span className="px-2 py-1 rounded-full" style={{ color: "var(--status-blocked)", backgroundColor: "rgba(255, 69, 58, 0.12)" }}>
+                            {project.blockedCount} blocked
+                          </span>
+                        )}
+                        {project.overdueCount > 0 && (
+                          <span className="px-2 py-1 rounded-full" style={{ color: "#FF9F0A", backgroundColor: "rgba(255, 159, 10, 0.12)" }}>
+                            {project.overdueCount} overdue
+                          </span>
+                        )}
+                        {project.pileupAgentCount > 0 && (
+                          <span className="px-2 py-1 rounded-full" style={{ color: "#BF5AF2", backgroundColor: "rgba(191, 90, 242, 0.12)" }}>
+                            {project.pileupAgentCount} assignee pileup{project.pileupAgentCount === 1 ? "" : "s"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 text-xs">
+                        {project.agents.map((agent) => (
+                          <span
+                            key={`${project.key}-${agent.key}`}
+                            className="px-2 py-1 rounded-full"
+                            style={{
+                              color: agent.color,
+                              backgroundColor: `color-mix(in srgb, ${agent.color} 14%, transparent)`,
+                              border: `1px solid color-mix(in srgb, ${agent.color} 24%, transparent)`,
+                            }}
+                          >
+                            {agent.emoji} {agent.name} · {agent.taskCount}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="grid gap-3 xl:grid-cols-2">
               {activeDayAgentDetails.map((agent) => {
