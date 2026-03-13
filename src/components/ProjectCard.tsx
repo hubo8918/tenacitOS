@@ -92,6 +92,20 @@ function slugify(value: string) {
     .replace(/^-|-$/g, "");
 }
 
+function getUniquePhaseId(projectId: string, title: string, phases: ProjectPhase[]) {
+  const baseId = `${projectId}-${slugify(title || "phase")}`;
+  let candidateId = baseId;
+  let suffix = 2;
+  const existingIds = new Set(phases.map((phase) => phase.id));
+
+  while (existingIds.has(candidateId)) {
+    candidateId = `${baseId}-${suffix}`;
+    suffix += 1;
+  }
+
+  return candidateId;
+}
+
 function getProjectTasksHref(
   projectTitle: string,
   projectId?: string,
@@ -168,6 +182,8 @@ export function ProjectCard({
   const [editPhaseTitle, setEditPhaseTitle] = useState(currentPhase?.title || "");
   const [editPhaseStatus, setEditPhaseStatus] = useState<ProjectPhase["status"]>(currentPhase?.status || "pending");
   const [editPhaseDependencyIds, setEditPhaseDependencyIds] = useState<string[]>(currentPhase?.dependsOnPhaseIds || []);
+  const [newPhaseTitle, setNewPhaseTitle] = useState("");
+  const [newPhaseStatus, setNewPhaseStatus] = useState<ProjectPhase["status"]>("pending");
   const [newLinkedTaskTitle, setNewLinkedTaskTitle] = useState("");
   const [newLinkedTaskDueDate, setNewLinkedTaskDueDate] = useState(() => getLocalDateInputValue(7));
   const [newLinkedTaskStatus, setNewLinkedTaskStatus] = useState<Task["status"]>("pending");
@@ -190,6 +206,7 @@ export function ProjectCard({
     [teamAgents, project.participatingAgentIds]
   );
   const participatingCount = project.participatingAgentIds.length;
+  const trackedPhaseCount = project.phases.length;
   const currentPhaseDependencies = useMemo(() => {
     if (!currentPhase) {
       return { resolved: [] as ProjectPhase[], unresolvedIds: [] as string[] };
@@ -260,6 +277,8 @@ export function ProjectCard({
     setEditPhaseTitle(nextPhase?.title || "");
     setEditPhaseStatus(nextPhase?.status || "pending");
     setEditPhaseDependencyIds(nextPhase?.dependsOnPhaseIds || []);
+    setNewPhaseTitle("");
+    setNewPhaseStatus("pending");
     setSaveError(null);
     setDeleteError(null);
     setLinkedTaskManageError(null);
@@ -533,6 +552,7 @@ export function ProjectCard({
     const trimmedTitle = editTitle.trim();
     const trimmedDescription = editDescription.trim();
     const trimmedPhaseTitle = editPhaseTitle.trim();
+    const trimmedNewPhaseTitle = newPhaseTitle.trim();
 
     if (!trimmedTitle) {
       setSaveError("Project title is required.");
@@ -541,6 +561,11 @@ export function ProjectCard({
 
     if (!trimmedDescription) {
       setSaveError("Project description is required.");
+      return;
+    }
+
+    if (trimmedNewPhaseTitle && !slugify(trimmedNewPhaseTitle)) {
+      setSaveError("New phase title must include letters or numbers.");
       return;
     }
 
@@ -556,7 +581,7 @@ export function ProjectCard({
     let nextPhases = project.phases;
     if (trimmedPhaseTitle) {
       const nextPhase: ProjectPhase = {
-        id: currentPhase?.id || `${project.id}-${slugify(trimmedPhaseTitle || "phase")}`,
+        id: currentPhase?.id || getUniquePhaseId(project.id, trimmedPhaseTitle, project.phases),
         title: trimmedPhaseTitle,
         status: editPhaseStatus,
         ownerAgentId: editOwnerAgentId || undefined,
@@ -566,6 +591,19 @@ export function ProjectCard({
       nextPhases = currentPhase
         ? project.phases.map((phase) => (phase.id === currentPhase.id ? { ...phase, ...nextPhase } : phase))
         : [nextPhase, ...project.phases];
+    }
+
+    if (trimmedNewPhaseTitle) {
+      nextPhases = [
+        ...nextPhases,
+        {
+          id: getUniquePhaseId(project.id, trimmedNewPhaseTitle, nextPhases),
+          title: trimmedNewPhaseTitle,
+          status: newPhaseStatus,
+          ownerAgentId: editOwnerAgentId || undefined,
+          dependsOnPhaseIds: [],
+        },
+      ];
     }
 
     try {
@@ -890,6 +928,80 @@ export function ProjectCard({
                   </div>
                 </div>
               )}
+            </div>
+
+            <div className="mb-3">
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <label className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                  Add tracked phase
+                </label>
+                {trackedPhaseCount > 0 && (
+                  <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                    {trackedPhaseCount} saved
+                  </span>
+                )}
+              </div>
+              <div
+                className="rounded-lg p-3 space-y-3"
+                style={{
+                  backgroundColor: "var(--card)",
+                  border: "1px solid var(--border)",
+                }}
+              >
+                {currentPhase ? (
+                  <>
+                    <label className="flex flex-col gap-1 text-[10px] font-semibold" style={{ color: "var(--text-secondary)" }}>
+                      Additional phase title
+                      <input
+                        value={newPhaseTitle}
+                        onChange={(event) => setNewPhaseTitle(event.target.value)}
+                        placeholder="e.g. Rollout validation"
+                        className="w-full rounded-lg px-3 py-2 text-sm"
+                        style={{
+                          backgroundColor: "var(--surface-elevated)",
+                          color: "var(--text-primary)",
+                          border: "1px solid var(--border)",
+                        }}
+                      />
+                    </label>
+
+                    <div>
+                      <p className="text-[10px] font-semibold mb-1" style={{ color: "var(--text-secondary)" }}>
+                        Additional phase status
+                      </p>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {phaseStatusOptions.map((phaseStatus) => {
+                          const config = phaseStatusConfig[phaseStatus];
+                          const isActive = newPhaseStatus === phaseStatus;
+                          return (
+                            <button
+                              key={`new-phase-${phaseStatus}`}
+                              type="button"
+                              onClick={() => setNewPhaseStatus(phaseStatus)}
+                              className="text-[10px] font-bold px-2 py-1 rounded-full transition-all"
+                              style={{
+                                backgroundColor: isActive ? `color-mix(in srgb, ${config.color} 25%, transparent)` : "transparent",
+                                color: isActive ? config.color : "var(--text-muted)",
+                                border: `1px solid ${isActive ? config.color : "var(--border)"}`,
+                              }}
+                            >
+                              {config.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <p className="text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                      On Save, this appends one more tracked phase to the project&apos;s saved phase list with no dependencies yet. Reordering, deleting, or editing non-current phase dependencies stays out of scope for this micro-step.
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-xs" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                    Save a first current phase above, then use this slot to append another tracked phase so dependency selection has a real target.
+                  </p>
+                )}
+              </div>
             </div>
 
             <div className="mb-3">
@@ -1496,6 +1608,9 @@ export function ProjectCard({
                 >
                   {currentPhaseStatus?.label || "Unknown"}
                 </span>
+                <p className="mt-1 text-[10px]" style={{ color: "var(--text-muted)" }}>
+                  {trackedPhaseCount} tracked phase{trackedPhaseCount === 1 ? "" : "s"}
+                </p>
               </div>
             ) : (
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>

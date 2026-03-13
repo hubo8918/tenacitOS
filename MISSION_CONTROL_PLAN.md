@@ -132,6 +132,7 @@ To avoid fake progress or silent drift:
 - participating-agent visibility now reads directly on each project card, and the planning editor can now update participating-agent assignments
 - current-phase dependency visibility now reads directly on each project card
 - the project planning editor can now edit the current phase's dependency links against other tracked phases, while keeping missing/stale dependency ids explicit until an operator removes them
+- the project planning editor can now append one additional tracked phase per save, so dependency selection no longer dead-ends once a project already has a first saved phase
 - project ↔ task linkage now reads directly on each project card as a Tasks summary, and each card can now create a new linked task with the stable project id already attached
 - the project planning editor can now also remove an existing linked task from the current project without pretending Projects owns the rest of that task's fields
 - the project planning editor can now also attach an existing unlinked or unresolved task to the current project by saving the stable project id, without silently stealing tasks from another live project
@@ -139,7 +140,7 @@ To avoid fake progress or silent drift:
 - the project delete flow can now optionally detach currently linked tasks by clearing their saved `project` / `projectId` fields in the same explicit confirmation step
 - linked task summaries now call out blocked/overdue attention without pretending Projects owns task editing
 - zero-linked projects now include a focused Tasks-board handoff instead of reading like a dead-end empty state
-- **Still missing broader phase-list editing / dependency management and any wider project-management step that needs a schema/product decision.**
+- **Still missing broader non-current-phase editing / dependency management (for example reordering, deleting, or editing older phase dependencies) and any wider project-management step that needs a schema/product decision.**
 
 #### Calendar
 - SSR initial task-backed calendar data
@@ -1467,12 +1468,27 @@ Suggested template:
 - Next:
   - decide whether the next honest Phase 3 step is a narrow phase-structure control, or explicitly stop and call out that broader phase-list management needs a schema/product decision before widening.
 
+### 2026-03-13 03:xx
+- Step: Projects add-phase append flow
+- Files:
+  - `src/components/ProjectCard.tsx`
+- Validation:
+  - `npx eslint src/components/ProjectCard.tsx`
+  - `npm run build`
+- Commit: current checkpoint commit (`feat(projects): append tracked phases from editor`)
+- Result:
+  - The Projects planning editor can now append one additional tracked phase per save instead of dead-ending once a project already has a first current phase.
+  - The current-phase card now surfaces the saved tracked-phase count, so the new phase-structure step is visible without pretending Projects already has full multi-phase CRUD.
+  - This advances the broader dependency / linked-task UX bucket honestly: dependency picks now have a real path to gain additional tracked phases, while reordering, deletion, and non-current dependency editing remain explicit follow-on work.
+- Next:
+  - decide whether the next honest Phase 3 step is a narrow non-current-phase editing control, or explicitly stop and call out that broader phase-list management still needs a schema/product decision before widening.
+
 ## Current Focus
 
-**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + direct inline visibility for task/project link mismatches + a scoped board-level mismatch attention summary + a mismatch-only board filter + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, task-row jumps into a focused Projects view, project-focused task intake defaults plus an empty-state intake CTA, a first Projects create flow, a Projects planning editor that now covers title/description/status/priority/owner/participants/current phase plus current-phase dependency editing/visibility, a linked-task attention summary, a zero-linked Tasks handoff, a first Projects-side linked-task intake anchored by stable `projectId`, a Projects-side attach flow for unresolved/no-project tasks, a Projects-side move flow for tasks currently linked to another live project, a Projects-side remove-link flow for existing linked tasks, a Projects delete flow that can now optionally detach currently linked tasks in the same explicit confirmation step, a Projects-board mismatch cleanup handoff that now lands on and briefly highlights the first affected Tasks row, an urgent-overflow handoff that now jumps straight to the first hidden blocked or overdue linked task, a stable `projectId` foundation so Task ↔ Project linkage no longer depends only on exact title strings, a tracked-project selector in the task details editor, and that same stable tracked-project/custom-label model now applied to the New task intake flow.
+**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + direct inline visibility for task/project link mismatches + a scoped board-level mismatch attention summary + a mismatch-only board filter + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, task-row jumps into a focused Projects view, project-focused task intake defaults plus an empty-state intake CTA, a first Projects create flow, a Projects planning editor that now covers title/description/status/priority/owner/participants/current phase plus current-phase dependency editing/visibility and one-additional-phase append flow, a linked-task attention summary, a zero-linked Tasks handoff, a first Projects-side linked-task intake anchored by stable `projectId`, a Projects-side attach flow for unresolved/no-project tasks, a Projects-side move flow for tasks currently linked to another live project, a Projects-side remove-link flow for existing linked tasks, a Projects delete flow that can now optionally detach currently linked tasks in the same explicit confirmation step, a Projects-board mismatch cleanup handoff that now lands on and briefly highlights the first affected Tasks row, an urgent-overflow handoff that now jumps straight to the first hidden blocked or overdue linked task, a stable `projectId` foundation so Task ↔ Project linkage no longer depends only on exact title strings, a tracked-project selector in the task details editor, and that same stable tracked-project/custom-label model now applied to the New task intake flow.
 
 **Do next:**
-1. take the next narrow dependency-management or phase-structure step so the Projects board keeps closing its remaining honest Phase 3 gaps
+1. take the next narrow non-current-phase editing or dependency-management step so the Projects board keeps closing its remaining honest Phase 3 gaps
 2. keep using the stable `projectId` linkage model for Project ↔ Task flows instead of title-only matching
 3. if deeper phase/dependency editing needs a schema/product decision, say that explicitly before widening
 4. keep pushing coordination surfaces forward without pretending execution automation already exists
