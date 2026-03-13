@@ -146,7 +146,7 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
 
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
-  const [selectedConflictDate, setSelectedConflictDate] = useState<string | null>(null);
+  const [selectedDayDate, setSelectedDayDate] = useState<string | null>(null);
   const [selectedConflictAgentKey, setSelectedConflictAgentKey] = useState<string | null>(null);
   const [selectedWorkloadSliceKey, setSelectedWorkloadSliceKey] = useState<WorkloadSliceKey | null>(null);
 
@@ -423,22 +423,24 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
   const visibleConflictDateKeys = useMemo(() => new Set(visibleConflictDays.map((day) => day.dateKey)), [visibleConflictDays]);
   const filteredConflictDateKeys = useMemo(() => new Set(filteredConflictDays.map((day) => day.dateKey)), [filteredConflictDays]);
 
-  const activeConflictDate = useMemo(() => {
-    if (selectedConflictDate && filteredConflictDateKeys.has(selectedConflictDate)) {
-      return selectedConflictDate;
+  const activeSelectedDate = useMemo(() => {
+    const parsedSelectedDate = parseLocalDate(selectedDayDate || "");
+    if (parsedSelectedDate && parsedSelectedDate.getFullYear() === year && parsedSelectedDate.getMonth() === month) {
+      return selectedDayDate;
     }
+
     return filteredConflictDays[0]?.dateKey ?? null;
-  }, [filteredConflictDateKeys, filteredConflictDays, selectedConflictDate]);
+  }, [filteredConflictDays, month, selectedDayDate, year]);
 
   const activeConflictSummary = useMemo(
-    () => filteredConflictDays.find((day) => day.dateKey === activeConflictDate) ?? null,
-    [activeConflictDate, filteredConflictDays]
+    () => filteredConflictDays.find((day) => day.dateKey === activeSelectedDate) ?? null,
+    [activeSelectedDate, filteredConflictDays]
   );
 
-  const activeConflictAgentDetails = useMemo(() => {
-    if (!activeConflictDate) return [];
+  const activeDayAgentDetails = useMemo(() => {
+    if (!activeSelectedDate) return [];
 
-    const dayOpenTasks = (tasksByDate.get(activeConflictDate) || []).filter((task) => isOpenTask(task));
+    const dayOpenTasks = (tasksByDate.get(activeSelectedDate) || []).filter((task) => isOpenTask(task));
     const agentMap = new Map<string, ConflictAgentDetail>();
 
     dayOpenTasks.forEach((task) => {
@@ -482,9 +484,38 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
         if (b.openCount !== a.openCount) return b.openCount - a.openCount;
         return a.name.localeCompare(b.name);
       });
-  }, [activeConflictDate, selectedConflictAgentKey, startOfTodayTime, tasksByDate]);
+  }, [activeSelectedDate, selectedConflictAgentKey, startOfTodayTime, tasksByDate]);
+
+  const activeDaySummary = useMemo(() => {
+    if (!activeSelectedDate) return null;
+
+    const openCount = activeDayAgentDetails.reduce((count, agent) => count + agent.openCount, 0);
+    const blockedCount = activeDayAgentDetails.reduce((count, agent) => count + agent.blockedCount, 0);
+    const overdueCount = activeDayAgentDetails.reduce((count, agent) => count + agent.overdueCount, 0);
+    const pileupAgents = activeDayAgentDetails.filter((agent) => agent.hasPileup);
+
+    return {
+      dateKey: activeSelectedDate,
+      openCount,
+      blockedCount,
+      overdueCount,
+      agentCount: activeDayAgentDetails.length,
+      pileupAgentCount: pileupAgents.length,
+      pileupTaskCount: pileupAgents.reduce((count, agent) => count + agent.openCount, 0),
+    };
+  }, [activeDayAgentDetails, activeSelectedDate]);
+
+  const activeDayHasConflict = Boolean(activeConflictSummary && activeDaySummary && activeConflictSummary.dateKey === activeDaySummary.dateKey);
+
+  function focusVisibleMonth(dateKey: string) {
+    const date = parseLocalDate(dateKey);
+    if (!date) return;
+    setYear(date.getFullYear());
+    setMonth(date.getMonth());
+  }
 
   function prev() {
+    setSelectedDayDate(null);
     if (month === 0) {
       setMonth(11);
       setYear(year - 1);
@@ -494,6 +525,7 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
   }
 
   function next() {
+    setSelectedDayDate(null);
     if (month === 11) {
       setMonth(0);
       setYear(year + 1);
@@ -503,6 +535,7 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
   }
 
   function goToday() {
+    setSelectedDayDate(null);
     setYear(today.getFullYear());
     setMonth(today.getMonth());
   }
@@ -514,7 +547,7 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
   function focusAgentConflicts(agent: WorkloadAgentSummary) {
     if (agent.conflictDays === 0 || !agent.firstConflictDate) return;
     setSelectedConflictAgentKey(agent.key);
-    setSelectedConflictDate(agent.firstConflictDate);
+    setSelectedDayDate(agent.firstConflictDate);
   }
 
   function clearConflictAgentFocus() {
@@ -522,10 +555,16 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
   }
 
   function selectConflictDateFromCalendar(dateKey: string) {
-    setSelectedConflictDate(dateKey);
+    setSelectedDayDate(dateKey);
     if (selectedConflictAgentKey && !filteredConflictDateKeys.has(dateKey)) {
       setSelectedConflictAgentKey(null);
     }
+  }
+
+  function focusDateFromWorkloadSlice(dateKey: string) {
+    focusVisibleMonth(dateKey);
+    setSelectedConflictAgentKey(null);
+    setSelectedDayDate(dateKey);
   }
 
   const cells: (number | null)[] = [];
@@ -684,11 +723,23 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
 
           {activeWorkloadSliceDates.length > 0 ? (
             <div className="grid gap-3 xl:grid-cols-2">
-              {activeWorkloadSliceDates.map((group) => (
-                <div
+              {activeWorkloadSliceDates.map((group) => {
+                const isActiveGroupDate = group.dateKey === activeSelectedDate;
+
+                return (
+                <button
                   key={group.dateKey}
-                  className="rounded-xl p-4"
-                  style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}
+                  type="button"
+                  onClick={() => focusDateFromWorkloadSlice(group.dateKey)}
+                  className="rounded-xl p-4 text-left transition-colors"
+                  style={{
+                    backgroundColor: isActiveGroupDate ? `color-mix(in srgb, ${activeWorkloadSlice.tone} 10%, var(--surface-elevated))` : "var(--surface-elevated)",
+                    border: isActiveGroupDate
+                      ? `1px solid color-mix(in srgb, ${activeWorkloadSlice.tone} 35%, transparent)`
+                      : "1px solid var(--border)",
+                  }}
+                  aria-pressed={isActiveGroupDate}
+                  title="Pin this due date into the calendar and day drill-down below"
                 >
                   <div className="flex flex-col gap-2 mb-3 lg:flex-row lg:items-start lg:justify-between">
                     <div>
@@ -747,8 +798,9 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
                       );
                     })}
                   </div>
-                </div>
-              ))}
+                </button>
+                );
+              })}
             </div>
           ) : (
             <div className="rounded-xl px-4 py-6" style={{ backgroundColor: "var(--surface-elevated)", border: "1px dashed var(--border)" }}>
@@ -850,8 +902,8 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
                         border: `1px solid color-mix(in srgb, ${agent.color} 24%, transparent)`,
                       }}
                     >
-                      {isFocusedAgent && activeConflictDate
-                        ? `Focused on ${fmtCalendarDate(activeConflictDate)}`
+                      {isFocusedAgent && activeSelectedDate
+                        ? `Focused on ${fmtCalendarDate(activeSelectedDate)}`
                         : `Review ${agent.conflictDays} pileup day${agent.conflictDays === 1 ? "" : "s"}`}
                     </button>
                   ) : (
@@ -876,10 +928,10 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
         <div className="flex flex-col gap-2 mb-4 md:flex-row md:items-end md:justify-between">
           <div>
             <h2 className="text-lg font-semibold" style={{ color: "var(--text-primary)", fontFamily: "var(--font-heading)" }}>
-              Same-day conflict drill-down
+              Day workload drill-down
             </h2>
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-              Days where at least one assignee has multiple open tasks due together. Workload cards and month-grid pileup days now hand off directly into this drill-down without inventing project phase dates.
+              Same-day pileups still anchor the conflict workflow, but workload-slice dates can now pin any due day here so blocked, overdue, and upcoming follow-up stays tied to the calendar surface without inventing project phase dates.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -904,175 +956,186 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
           </div>
         </div>
 
-        {filteredConflictDays.length > 0 ? (
-          <>
-            <div className="flex flex-wrap gap-2 mb-4">
-              {filteredConflictDays.map((day) => {
-                const isActive = day.dateKey === activeConflictDate;
+        {filteredConflictDays.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {filteredConflictDays.map((day) => {
+              const isActive = day.dateKey === activeSelectedDate;
+              return (
+                <button
+                  key={day.dateKey}
+                  onClick={() => setSelectedDayDate(day.dateKey)}
+                  className="rounded-xl px-3 py-2 text-left transition-colors"
+                  style={{
+                    backgroundColor: isActive ? "rgba(191, 90, 242, 0.14)" : "var(--surface-elevated)",
+                    border: isActive ? "1px solid rgba(191, 90, 242, 0.35)" : "1px solid var(--border)",
+                    color: "var(--text-primary)",
+                  }}
+                >
+                  <div className="text-sm font-medium">{fmtCalendarDate(day.dateKey)}</div>
+                  <div className="text-[11px] mt-1" style={{ color: "var(--text-secondary)" }}>
+                    {day.pileupAgentCount} assignee pileup{day.pileupAgentCount === 1 ? "" : "s"} &bull; {day.openCount} open due
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {activeDaySummary ? (
+          <div className="rounded-xl p-4" style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
+            <div className="flex flex-col gap-2 mb-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <h3 className="text-base font-semibold" style={{ color: "var(--text-primary)", fontFamily: "var(--font-heading)" }}>
+                  {fmtCalendarDate(activeDaySummary.dateKey)}
+                </h3>
+                <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                  {activeDayHasConflict
+                    ? `${activeDaySummary.pileupTaskCount} open task${activeDaySummary.pileupTaskCount === 1 ? "" : "s"} sit inside ${activeDaySummary.pileupAgentCount} assignee pileup${activeDaySummary.pileupAgentCount === 1 ? "" : "s"} on this date.`
+                    : `This due date does not have a same-day assignee pileup, but Calendar keeps the full day workload here so summary-slice follow-up stays anchored to the month view.`}
+                  {selectedConflictAgent && activeDayHasConflict && ` Focus is pinned to ${selectedConflictAgent.name}'s conflict days, but the full cross-agent collision on this date still stays visible.`}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs">
+                <span className="px-2 py-1 rounded-full" style={{ color: "var(--text-primary)", backgroundColor: "rgba(10, 132, 255, 0.12)" }}>
+                  {activeDaySummary.openCount} open due
+                </span>
+                <span className="px-2 py-1 rounded-full" style={{ color: "var(--text-muted)", backgroundColor: "var(--card)" }}>
+                  {activeDaySummary.agentCount} agent{activeDaySummary.agentCount === 1 ? "" : "s"}
+                </span>
+                {activeDaySummary.blockedCount > 0 && (
+                  <span className="px-2 py-1 rounded-full" style={{ color: "var(--status-blocked)", backgroundColor: "rgba(255, 69, 58, 0.12)" }}>
+                    {activeDaySummary.blockedCount} blocked
+                  </span>
+                )}
+                {activeDaySummary.overdueCount > 0 && (
+                  <span className="px-2 py-1 rounded-full" style={{ color: "#FF9F0A", backgroundColor: "rgba(255, 159, 10, 0.12)" }}>
+                    {activeDaySummary.overdueCount} overdue
+                  </span>
+                )}
+                <span
+                  className="px-2 py-1 rounded-full"
+                  style={{
+                    color: activeDayHasConflict ? "#BF5AF2" : "var(--text-muted)",
+                    backgroundColor: activeDayHasConflict ? "rgba(191, 90, 242, 0.12)" : "var(--card)",
+                  }}
+                >
+                  {activeDayHasConflict
+                    ? `${activeDaySummary.pileupAgentCount} pileup agent${activeDaySummary.pileupAgentCount === 1 ? "" : "s"}`
+                    : "No same-day pileup"}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid gap-3 xl:grid-cols-2">
+              {activeDayAgentDetails.map((agent) => {
+                const isSelectedAgent = agent.key === selectedConflictAgentKey;
+
                 return (
-                  <button
-                    key={day.dateKey}
-                    onClick={() => setSelectedConflictDate(day.dateKey)}
-                    className="rounded-xl px-3 py-2 text-left transition-colors"
+                  <div
+                    key={agent.key}
+                    className="rounded-xl p-4"
                     style={{
-                      backgroundColor: isActive ? "rgba(191, 90, 242, 0.14)" : "var(--surface-elevated)",
-                      border: isActive ? "1px solid rgba(191, 90, 242, 0.35)" : "1px solid var(--border)",
-                      color: "var(--text-primary)",
+                      backgroundColor: isSelectedAgent ? `color-mix(in srgb, ${agent.color} 10%, var(--card))` : "var(--card)",
+                      border: isSelectedAgent
+                        ? `1px solid color-mix(in srgb, ${agent.color} 45%, transparent)`
+                        : agent.hasPileup
+                          ? `1px solid color-mix(in srgb, ${agent.color} 35%, transparent)`
+                          : "1px solid var(--border)",
                     }}
                   >
-                    <div className="text-sm font-medium">{fmtCalendarDate(day.dateKey)}</div>
-                    <div className="text-[11px] mt-1" style={{ color: "var(--text-secondary)" }}>
-                      {day.pileupAgentCount} assignee pileup{day.pileupAgentCount === 1 ? "" : "s"} &bull; {day.openCount} open due
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className="inline-flex w-8 h-8 items-center justify-center rounded-full text-sm shrink-0"
+                          style={{ backgroundColor: `color-mix(in srgb, ${agent.color} 22%, transparent)` }}
+                        >
+                          {agent.emoji}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="font-medium truncate" style={{ color: "var(--text-primary)" }}>
+                            {agent.name}
+                          </p>
+                          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                            {agent.openCount} open task{agent.openCount === 1 ? "" : "s"} due this day
+                          </p>
+                        </div>
+                      </div>
+                      {agent.hasPileup ? (
+                        <span
+                          className="text-xs px-2 py-1 rounded-full"
+                          style={{
+                            color: agent.color,
+                            backgroundColor: `color-mix(in srgb, ${agent.color} 16%, transparent)`,
+                            border: `1px solid color-mix(in srgb, ${agent.color} 28%, transparent)`,
+                          }}
+                        >
+                          pileup
+                        </span>
+                      ) : (
+                        <span className="text-xs px-2 py-1 rounded-full" style={{ color: "var(--text-muted)", backgroundColor: "var(--surface-elevated)" }}>
+                          single due
+                        </span>
+                      )}
                     </div>
-                  </button>
+
+                    <div className="flex flex-wrap gap-2 text-xs mb-3">
+                      {agent.blockedCount > 0 && (
+                        <span className="px-2 py-1 rounded-full" style={{ color: "var(--status-blocked)", backgroundColor: "rgba(255, 69, 58, 0.12)" }}>
+                          {agent.blockedCount} blocked
+                        </span>
+                      )}
+                      {agent.overdueCount > 0 && (
+                        <span className="px-2 py-1 rounded-full" style={{ color: "#FF9F0A", backgroundColor: "rgba(255, 159, 10, 0.12)" }}>
+                          {agent.overdueCount} overdue
+                        </span>
+                      )}
+                      {agent.blockedCount === 0 && agent.overdueCount === 0 && (
+                        <span className="px-2 py-1 rounded-full" style={{ color: "var(--text-muted)", backgroundColor: "var(--surface-elevated)" }}>
+                          no blocked or overdue spillover
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      {agent.tasks.map((task) => {
+                        const statusTone = taskStatusConfig[task.status].color;
+                        return (
+                          <div
+                            key={task.id}
+                            className="rounded-lg px-3 py-2"
+                            style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium leading-tight" style={{ color: "var(--text-primary)" }}>
+                                  {task.title}
+                                </p>
+                                <p className="text-xs mt-1 truncate" style={{ color: "var(--text-secondary)" }}>
+                                  {task.project || "No project"}
+                                </p>
+                              </div>
+                              <span
+                                className="text-[10px] px-2 py-1 rounded-full whitespace-nowrap"
+                                style={{ color: statusTone, backgroundColor: `color-mix(in srgb, ${statusTone} 15%, transparent)` }}
+                              >
+                                {taskStatusConfig[task.status].label}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 );
               })}
             </div>
-
-            {activeConflictSummary && (
-              <div className="rounded-xl p-4" style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
-                <div className="flex flex-col gap-2 mb-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
-                    <h3 className="text-base font-semibold" style={{ color: "var(--text-primary)", fontFamily: "var(--font-heading)" }}>
-                      {fmtCalendarDate(activeConflictSummary.dateKey)}
-                    </h3>
-                    <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                      {activeConflictSummary.pileupTaskCount} open task{activeConflictSummary.pileupTaskCount === 1 ? "" : "s"} sit inside {activeConflictSummary.pileupAgentCount} assignee pileup{activeConflictSummary.pileupAgentCount === 1 ? "" : "s"} on this date.
-                      {selectedConflictAgent && ` Focus is pinned to ${selectedConflictAgent.name}'s conflict days, but the full cross-agent collision on this date still stays visible.`}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2 text-xs">
-                    <span className="px-2 py-1 rounded-full" style={{ color: "var(--text-primary)", backgroundColor: "rgba(10, 132, 255, 0.12)" }}>
-                      {activeConflictSummary.openCount} open due
-                    </span>
-                    <span className="px-2 py-1 rounded-full" style={{ color: "var(--text-muted)", backgroundColor: "var(--card)" }}>
-                      {activeConflictSummary.agentCount} agent{activeConflictSummary.agentCount === 1 ? "" : "s"}
-                    </span>
-                    {activeConflictSummary.blockedCount > 0 && (
-                      <span className="px-2 py-1 rounded-full" style={{ color: "var(--status-blocked)", backgroundColor: "rgba(255, 69, 58, 0.12)" }}>
-                        {activeConflictSummary.blockedCount} blocked
-                      </span>
-                    )}
-                    {activeConflictSummary.overdueCount > 0 && (
-                      <span className="px-2 py-1 rounded-full" style={{ color: "#FF9F0A", backgroundColor: "rgba(255, 159, 10, 0.12)" }}>
-                        {activeConflictSummary.overdueCount} overdue
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid gap-3 xl:grid-cols-2">
-                  {activeConflictAgentDetails.map((agent) => {
-                    const isSelectedAgent = agent.key === selectedConflictAgentKey;
-
-                    return (
-                    <div
-                      key={agent.key}
-                      className="rounded-xl p-4"
-                      style={{
-                        backgroundColor: isSelectedAgent ? `color-mix(in srgb, ${agent.color} 10%, var(--card))` : "var(--card)",
-                        border: isSelectedAgent
-                          ? `1px solid color-mix(in srgb, ${agent.color} 45%, transparent)`
-                          : agent.hasPileup
-                            ? `1px solid color-mix(in srgb, ${agent.color} 35%, transparent)`
-                            : "1px solid var(--border)",
-                      }}
-                    >
-                      <div className="flex items-center justify-between gap-3 mb-3">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span
-                            className="inline-flex w-8 h-8 items-center justify-center rounded-full text-sm shrink-0"
-                            style={{ backgroundColor: `color-mix(in srgb, ${agent.color} 22%, transparent)` }}
-                          >
-                            {agent.emoji}
-                          </span>
-                          <div className="min-w-0">
-                            <p className="font-medium truncate" style={{ color: "var(--text-primary)" }}>
-                              {agent.name}
-                            </p>
-                            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                              {agent.openCount} open task{agent.openCount === 1 ? "" : "s"} due this day
-                            </p>
-                          </div>
-                        </div>
-                        {agent.hasPileup ? (
-                          <span
-                            className="text-xs px-2 py-1 rounded-full"
-                            style={{
-                              color: agent.color,
-                              backgroundColor: `color-mix(in srgb, ${agent.color} 16%, transparent)`,
-                              border: `1px solid color-mix(in srgb, ${agent.color} 28%, transparent)`,
-                            }}
-                          >
-                            pileup
-                          </span>
-                        ) : (
-                          <span className="text-xs px-2 py-1 rounded-full" style={{ color: "var(--text-muted)", backgroundColor: "var(--surface-elevated)" }}>
-                            single due
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex flex-wrap gap-2 text-xs mb-3">
-                        {agent.blockedCount > 0 && (
-                          <span className="px-2 py-1 rounded-full" style={{ color: "var(--status-blocked)", backgroundColor: "rgba(255, 69, 58, 0.12)" }}>
-                            {agent.blockedCount} blocked
-                          </span>
-                        )}
-                        {agent.overdueCount > 0 && (
-                          <span className="px-2 py-1 rounded-full" style={{ color: "#FF9F0A", backgroundColor: "rgba(255, 159, 10, 0.12)" }}>
-                            {agent.overdueCount} overdue
-                          </span>
-                        )}
-                        {agent.blockedCount === 0 && agent.overdueCount === 0 && (
-                          <span className="px-2 py-1 rounded-full" style={{ color: "var(--text-muted)", backgroundColor: "var(--surface-elevated)" }}>
-                            no blocked or overdue spillover
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="space-y-2">
-                        {agent.tasks.map((task) => {
-                          const statusTone = taskStatusConfig[task.status].color;
-                          return (
-                            <div
-                              key={task.id}
-                              className="rounded-lg px-3 py-2"
-                              style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}
-                            >
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                  <p className="text-sm font-medium leading-tight" style={{ color: "var(--text-primary)" }}>
-                                    {task.title}
-                                  </p>
-                                  <p className="text-xs mt-1 truncate" style={{ color: "var(--text-secondary)" }}>
-                                    {task.project || "No project"}
-                                  </p>
-                                </div>
-                                <span
-                                  className="text-[10px] px-2 py-1 rounded-full whitespace-nowrap"
-                                  style={{ color: statusTone, backgroundColor: `color-mix(in srgb, ${statusTone} 15%, transparent)` }}
-                                >
-                                  {taskStatusConfig[task.status].label}
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </>
+          </div>
         ) : (
           <div className="rounded-xl px-4 py-6" style={{ backgroundColor: "var(--surface-elevated)", border: "1px dashed var(--border)" }}>
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
               {selectedConflictAgent
                 ? `${selectedConflictAgent.name} has no same-day assignee pileups visible in ${fmtMonth(year, month)}. Clear the current focus to review all month conflicts again.`
-                : `No assignee has more than one open task due on the same day in ${fmtMonth(year, month)}. Calendar still shows due-date workload, but there is no same-day conflict to drill into yet.`}
+                : `No assignee has more than one open task due on the same day in ${fmtMonth(year, month)}. Calendar still shows due-date workload, but there is no selected day to drill into yet.`}
             </p>
           </div>
         )}
@@ -1108,7 +1171,7 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
             </div>
           ))}
           <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-            Day cells are ordered with blocked/overdue work first. Purple pileup days now open the drill-down directly.
+            Day cells are ordered with blocked/overdue work first. Any day with open due work can now pin the drill-down below; pileup days stay purple.
           </span>
         </div>
 
@@ -1131,7 +1194,7 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
             const hasDayPileup = Boolean(day && visibleConflictDateKeys.has(dateStr));
             const dayWouldResetAgentFocus = Boolean(selectedConflictAgentKey && hasDayPileup && !filteredConflictDateKeys.has(dateStr));
             const isToday = day ? isSameDay(new Date(year, month, day), today) : false;
-            const isActiveConflictDay = Boolean(day && dateStr === activeConflictDate);
+            const isActiveSelectedDay = Boolean(day && dateStr === activeSelectedDate);
 
             const dayCellContent = day ? (
               <>
@@ -1202,25 +1265,35 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
                   borderRight: "1px solid var(--border)",
                   borderBottom: "1px solid var(--border)",
                   backgroundColor: day
-                    ? isActiveConflictDay
+                    ? isActiveSelectedDay
                       ? "rgba(191, 90, 242, 0.08)"
                       : "transparent"
                     : "var(--surface-elevated)",
                 }}
               >
                 {day ? (
-                  hasDayPileup ? (
+                  dayOpenTasks.length > 0 ? (
                     <button
                       type="button"
                       onClick={() => selectConflictDateFromCalendar(dateStr)}
                       className="h-full w-full rounded-lg text-left transition-colors"
                       style={{
-                        backgroundColor: isActiveConflictDay ? "rgba(191, 90, 242, 0.08)" : "transparent",
-                        border: isActiveConflictDay
-                          ? "1px solid rgba(191, 90, 242, 0.35)"
-                          : "1px solid rgba(191, 90, 242, 0.16)",
+                        backgroundColor: isActiveSelectedDay ? "rgba(191, 90, 242, 0.08)" : "transparent",
+                        border: hasDayPileup
+                          ? isActiveSelectedDay
+                            ? "1px solid rgba(191, 90, 242, 0.35)"
+                            : "1px solid rgba(191, 90, 242, 0.16)"
+                          : isActiveSelectedDay
+                            ? "1px solid rgba(191, 90, 242, 0.28)"
+                            : "1px solid var(--border)",
                       }}
-                      title={dayWouldResetAgentFocus ? "Open this conflict day and clear the current agent focus" : "Open this conflict day in the drill-down below"}
+                      title={
+                        hasDayPileup
+                          ? dayWouldResetAgentFocus
+                            ? "Open this conflict day and clear the current agent focus"
+                            : "Open this conflict day in the drill-down below"
+                          : "Open this due day in the drill-down below"
+                      }
                     >
                       {dayCellContent}
                     </button>

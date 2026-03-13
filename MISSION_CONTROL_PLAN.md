@@ -326,7 +326,7 @@ Calendar should reflect:
 - started
 - task-backed month view now surfaces open/blocked/overdue counts plus per-agent due-date load and same-day pileups
 - same-day pileups now have a focused day-level drill-down so operators can inspect which assignees and tasks conflict on a given date
-- blocked / overdue / upcoming summaries now hand off into task-backed due-date slices, so Calendar stays actionable even when there is no same-day conflict
+- blocked / overdue / upcoming summaries now hand off into task-backed due-date slices, and those slice dates can pin a concrete day back into Calendar's day-level workflow
 - project phase timing is still blocked by missing timing fields in the phase schema, so Calendar must stay explicit about that gap
 
 ### Exit criteria
@@ -1594,11 +1594,26 @@ Suggested template:
 - Next:
   - if the next Phase 4 step stays narrow, connect these slice date groups back into the month-grid/day-level conflict workflow so blocked or overdue follow-up stays tied to the calendar surface instead of becoming a detached list.
 
+### 2026-03-13 12:xx
+- Step: Calendar slice-to-day handoff
+- Files:
+  - `src/app/(dashboard)/agents/calendar/CalendarPageClient.tsx`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/agents/calendar/CalendarPageClient.tsx"`
+  - `npm run build`
+- Commit: current checkpoint commit (`feat(calendar): pin workload slices into day drill-down`)
+- Result:
+  - Workload-slice date groups can now pin a concrete due date back into Calendar's day-level workflow instead of stranding blocked/overdue/upcoming follow-up in a detached list.
+  - The day drill-down now stays useful even when the selected date has no same-day pileup, and month-grid days with open work can pin that same day detail directly.
+  - This keeps Phase 4 honest: Calendar is still task-backed only, while project phase timing remains explicitly unavailable until the phase schema gains real timing fields.
+- Next:
+  - if the next Phase 4 step stays narrow, surface project-linked scheduling context inside the day drill-down (for example grouped project pressure on the selected date) without faking phase timing.
+
 ## Current Focus
 
-**Current focus:** Phase 4 is now active. Calendar now surfaces task-backed workload pressure through visible-month open/blocked/overdue counts, per-agent due-date load, same-day pileups, a day-level conflict drill-down, agent-focused conflict follow-up from the workload cards, direct month-grid handoff into that drill-down, and blocked/overdue/upcoming summary slices that open concrete due-date task groups. Project phase timing still has no honest UI path yet because phases only carry title/status/owner/dependencies, not timing fields.
+**Current focus:** Phase 4 is now active. Calendar now surfaces task-backed workload pressure through visible-month open/blocked/overdue counts, per-agent due-date load, same-day pileups, a day-level workload drill-down, agent-focused conflict follow-up from the workload cards, direct month-grid handoff into that drill-down, and blocked/overdue/upcoming summary slices whose date groups can pin concrete days back into the calendar. Project phase timing still has no honest UI path yet because phases only carry title/status/owner/dependencies, not timing fields.
 
 **Do next:**
 1. keep Phase 4 focused on real task-scheduling/workload visibility until project phases gain an explicit timing model
-2. if the next Calendar step stays narrow, connect workload-slice date groups back into the month-grid/day-level conflict workflow so summary follow-up stays anchored to the calendar itself
+2. if the next Calendar step stays narrow, surface project-linked scheduling context inside the selected-day drill-down without faking phase timing
 3. treat project-phase timing as a schema/product decision first; do not fake dates, bars, or sequencing spans from status-only phase data
