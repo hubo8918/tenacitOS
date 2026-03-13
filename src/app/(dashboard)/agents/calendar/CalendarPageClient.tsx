@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { taskStatusConfig } from "@/data/mockTasksData";
 import type { Task } from "@/data/mockTasksData";
@@ -135,6 +136,7 @@ interface DayProjectDetail {
     color: string;
     taskCount: number;
   }>;
+  projectId?: string;
 }
 
 type WorkloadSliceKey = "blocked" | "overdue" | "upcoming";
@@ -159,6 +161,7 @@ interface WorkloadSliceDateGroup {
 }
 
 export default function CalendarPageClient({ initialTasks }: CalendarPageClientProps) {
+  const router = useRouter();
   const hasInitialTasks = initialTasks.length > 0;
   const { data, loading, error, refetch } = useFetch<{ tasks: Task[] }>("/api/agent-tasks", {
     initialData: hasInitialTasks ? { tasks: initialTasks } : null,
@@ -175,6 +178,7 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
   const [selectedDayDate, setSelectedDayDate] = useState<string | null>(null);
   const [selectedConflictAgentKey, setSelectedConflictAgentKey] = useState<string | null>(null);
   const [selectedWorkloadSliceKey, setSelectedWorkloadSliceKey] = useState<WorkloadSliceKey | null>(null);
+  const [selectedProjectKey, setSelectedProjectKey] = useState<string | null>(null);
 
   const daysInMonth = getDaysInMonth(year, month);
   const firstDay = getFirstDay(year, month);
@@ -523,6 +527,7 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
         taskCount: number;
         blockedCount: number;
         overdueCount: number;
+        projectId?: string;
         agentMap: Map<string, { key: string; name: string; emoji: string; color: string; taskCount: number }>;
       }
     >();
@@ -538,6 +543,7 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
           taskCount: 0,
           blockedCount: 0,
           overdueCount: 0,
+          projectId: task.projectId,
           agentMap: new Map<string, { key: string; name: string; emoji: string; color: string; taskCount: number }>(),
         };
 
@@ -571,6 +577,7 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
           agentCount: agents.length,
           pileupAgentCount: agents.filter((agent) => agent.taskCount > 1).length,
           agents,
+          projectId: project.projectId,
         };
       })
       .sort((a, b) => {
@@ -661,6 +668,15 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
     focusVisibleMonth(dateKey);
     setSelectedConflictAgentKey(null);
     setSelectedDayDate(dateKey);
+  }
+
+  function navigateToProject(project: DayProjectDetail) {
+    setSelectedProjectKey(project.key);
+    router.push("/agents/projects");
+    // We'll use a query parameter to filter by project in the Projects page
+    setTimeout(() => {
+      setSelectedProjectKey(null);
+    }, 100);
   }
 
   const cells: (number | null)[] = [];
@@ -1140,10 +1156,17 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
 
                 <div className="grid gap-3 xl:grid-cols-2">
                   {activeDayProjectDetails.map((project) => (
-                    <div
+                    <button
                       key={project.key}
-                      className="rounded-xl p-4"
-                      style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}
+                      type="button"
+                      onClick={() => navigateToProject(project)}
+                      className="text-left rounded-xl p-4 transition-all hover:scale-[1.02]"
+                      style={{
+                        backgroundColor: selectedProjectKey === project.key ? `color-mix(in srgb, ${project.agentCount > 1 ? "#BF5AF2" : "#30D158"} 10%, var(--card))` : "var(--card)",
+                        border: selectedProjectKey === project.key
+                          ? `1px solid color-mix(in srgb, ${project.agentCount > 1 ? "#BF5AF2" : "#30D158"} 35%, transparent)`
+                          : "1px solid var(--border)",
+                      }}
                     >
                       <div className="flex items-start justify-between gap-3 mb-3">
                         <div className="min-w-0">
@@ -1201,7 +1224,7 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
                           </span>
                         ))}
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>
