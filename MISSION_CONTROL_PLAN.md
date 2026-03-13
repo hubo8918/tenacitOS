@@ -1548,11 +1548,26 @@ Suggested template:
 - Next:
   - if the next Phase 4 step stays narrow, connect the Calendar month grid and workload cards more directly to the new conflict drill-down instead of widening into fake phase scheduling.
 
+### 2026-03-13 10:26
+- Step: Calendar agent-focused conflict drill-down
+- Files:
+  - `src/app/(dashboard)/agents/calendar/CalendarPageClient.tsx`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/agents/calendar/CalendarPageClient.tsx"`
+  - `npm run build`
+- Commit: current checkpoint commit (`feat(calendar): focus conflict drill-down by agent`)
+- Result:
+  - Agent workload cards now drive the same-day conflict drill-down instead of leaving monthly workload summaries and day-level conflict follow-up disconnected.
+  - Operators can focus the drill-down on one assignee's pileup days while the selected date still keeps the full cross-agent collision visible.
+  - Empty and focus states stay explicit, and Calendar still does not invent project phase timing the schema cannot support.
+- Next:
+  - if the next Phase 4 step stays narrow, connect month-grid pileup days into the drill-down with a clearer whole-cell handoff instead of relying on the small pill CTA.
+
 ## Current Focus
 
-**Current focus:** Phase 4 is now active. Calendar now surfaces task-backed workload pressure through visible-month open/blocked/overdue counts, per-agent due-date load, same-day pileups, and a day-level conflict drill-down for overloaded assignees. Project phase timing still has no honest UI path yet because phases only carry title/status/owner/dependencies, not timing fields.
+**Current focus:** Phase 4 is now active. Calendar now surfaces task-backed workload pressure through visible-month open/blocked/overdue counts, per-agent due-date load, same-day pileups, a day-level conflict drill-down, and agent-focused conflict follow-up from the workload cards. Project phase timing still has no honest UI path yet because phases only carry title/status/owner/dependencies, not timing fields.
 
 **Do next:**
 1. keep Phase 4 focused on real task-scheduling/workload visibility until project phases gain an explicit timing model
-2. if the next Calendar step stays narrow, connect the month grid and workload summaries more directly to the new conflict drill-down so conflict follow-up takes fewer clicks
+2. if the next Calendar step stays narrow, make month-grid pileup days hand off more directly into the existing drill-down so conflict follow-up takes fewer clicks
 3. treat project-phase timing as a schema/product decision first; do not fake dates, bars, or sequencing spans from status-only phase data

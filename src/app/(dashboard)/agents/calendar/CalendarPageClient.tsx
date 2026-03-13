@@ -79,6 +79,7 @@ interface WorkloadAgentSummary {
   blockedCount: number;
   overdueCount: number;
   conflictDays: number;
+  firstConflictDate: string | null;
 }
 
 interface ConflictDaySummary {
@@ -125,6 +126,7 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
   const [selectedConflictDate, setSelectedConflictDate] = useState<string | null>(null);
+  const [selectedConflictAgentKey, setSelectedConflictAgentKey] = useState<string | null>(null);
 
   const daysInMonth = getDaysInMonth(year, month);
   const firstDay = getFirstDay(year, month);
@@ -228,16 +230,21 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
     });
 
     const nextWorkloadAgents: WorkloadAgentSummary[] = Array.from(agentMap.values())
-      .map((agent) => ({
-        key: agent.key,
-        name: agent.name,
-        emoji: agent.emoji,
-        color: agent.color,
-        openCount: agent.openCount,
-        blockedCount: agent.blockedCount,
-        overdueCount: agent.overdueCount,
-        conflictDays: agent.conflictDates.size,
-      }))
+      .map((agent) => {
+        const sortedConflictDates = Array.from(agent.conflictDates).sort((a, b) => a.localeCompare(b));
+
+        return {
+          key: agent.key,
+          name: agent.name,
+          emoji: agent.emoji,
+          color: agent.color,
+          openCount: agent.openCount,
+          blockedCount: agent.blockedCount,
+          overdueCount: agent.overdueCount,
+          conflictDays: agent.conflictDates.size,
+          firstConflictDate: sortedConflictDates[0] ?? null,
+        };
+      })
       .sort((a, b) => {
         if (b.overdueCount !== a.overdueCount) return b.overdueCount - a.overdueCount;
         if (b.blockedCount !== a.blockedCount) return b.blockedCount - a.blockedCount;
@@ -315,18 +322,30 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
       });
   }, [startOfTodayTime, visibleMonthOpenTasks]);
 
+  const selectedConflictAgent = useMemo(
+    () => workloadAgents.find((agent) => agent.key === selectedConflictAgentKey) ?? null,
+    [selectedConflictAgentKey, workloadAgents]
+  );
+
+  const filteredConflictDays = useMemo(() => {
+    if (!selectedConflictAgentKey) return visibleConflictDays;
+
+    return visibleConflictDays.filter((day) => day.affectedAgents.some((agent) => agent.key === selectedConflictAgentKey));
+  }, [selectedConflictAgentKey, visibleConflictDays]);
+
   const visibleConflictDateKeys = useMemo(() => new Set(visibleConflictDays.map((day) => day.dateKey)), [visibleConflictDays]);
+  const filteredConflictDateKeys = useMemo(() => new Set(filteredConflictDays.map((day) => day.dateKey)), [filteredConflictDays]);
 
   const activeConflictDate = useMemo(() => {
-    if (selectedConflictDate && visibleConflictDateKeys.has(selectedConflictDate)) {
+    if (selectedConflictDate && filteredConflictDateKeys.has(selectedConflictDate)) {
       return selectedConflictDate;
     }
-    return visibleConflictDays[0]?.dateKey ?? null;
-  }, [selectedConflictDate, visibleConflictDateKeys, visibleConflictDays]);
+    return filteredConflictDays[0]?.dateKey ?? null;
+  }, [filteredConflictDateKeys, filteredConflictDays, selectedConflictDate]);
 
   const activeConflictSummary = useMemo(
-    () => visibleConflictDays.find((day) => day.dateKey === activeConflictDate) ?? null,
-    [activeConflictDate, visibleConflictDays]
+    () => filteredConflictDays.find((day) => day.dateKey === activeConflictDate) ?? null,
+    [activeConflictDate, filteredConflictDays]
   );
 
   const activeConflictAgentDetails = useMemo(() => {
@@ -367,13 +386,16 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
         }),
       }))
       .sort((a, b) => {
+        const aIsSelected = selectedConflictAgentKey ? Number(a.key === selectedConflictAgentKey) : 0;
+        const bIsSelected = selectedConflictAgentKey ? Number(b.key === selectedConflictAgentKey) : 0;
+        if (bIsSelected !== aIsSelected) return bIsSelected - aIsSelected;
         if (Number(b.hasPileup) !== Number(a.hasPileup)) return Number(b.hasPileup) - Number(a.hasPileup);
         if (b.overdueCount !== a.overdueCount) return b.overdueCount - a.overdueCount;
         if (b.blockedCount !== a.blockedCount) return b.blockedCount - a.blockedCount;
         if (b.openCount !== a.openCount) return b.openCount - a.openCount;
         return a.name.localeCompare(b.name);
       });
-  }, [activeConflictDate, startOfTodayTime, tasksByDate]);
+  }, [activeConflictDate, selectedConflictAgentKey, startOfTodayTime, tasksByDate]);
 
   function prev() {
     if (month === 0) {
@@ -396,6 +418,16 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
   function goToday() {
     setYear(today.getFullYear());
     setMonth(today.getMonth());
+  }
+
+  function focusAgentConflicts(agent: WorkloadAgentSummary) {
+    if (agent.conflictDays === 0 || !agent.firstConflictDate) return;
+    setSelectedConflictAgentKey(agent.key);
+    setSelectedConflictDate(agent.firstConflictDate);
+  }
+
+  function clearConflictAgentFocus() {
+    setSelectedConflictAgentKey(null);
   }
 
   const cells: (number | null)[] = [];
@@ -511,63 +543,91 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
 
         {workloadAgents.length > 0 ? (
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {workloadAgents.map((agent) => (
-              <div
-                key={agent.key}
-                className="rounded-xl p-4"
-                style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}
-              >
-                <div className="flex items-center justify-between gap-3 mb-3">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span
-                      className="inline-flex w-8 h-8 items-center justify-center rounded-full text-sm shrink-0"
-                      style={{ backgroundColor: `color-mix(in srgb, ${agent.color} 22%, transparent)` }}
-                    >
-                      {agent.emoji}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="font-medium truncate" style={{ color: "var(--text-primary)" }}>
-                        {agent.name}
-                      </p>
-                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                        {agent.openCount} open task{agent.openCount === 1 ? "" : "s"} due this month
-                      </p>
-                    </div>
-                  </div>
-                  <span
-                    className="text-xs px-2 py-1 rounded-full"
-                    style={{
-                      color: agent.color,
-                      backgroundColor: `color-mix(in srgb, ${agent.color} 16%, transparent)`,
-                      border: `1px solid color-mix(in srgb, ${agent.color} 28%, transparent)`,
-                    }}
-                  >
-                    {agent.conflictDays > 0 ? `${agent.conflictDays} pileup day${agent.conflictDays === 1 ? "" : "s"}` : "No pileups"}
-                  </span>
-                </div>
+            {workloadAgents.map((agent) => {
+              const isFocusedAgent = agent.key === selectedConflictAgentKey;
 
-                <div className="flex flex-wrap gap-2 text-xs">
-                  <span
-                    className="px-2 py-1 rounded-full"
-                    style={{ color: "var(--text-primary)", backgroundColor: "rgba(10, 132, 255, 0.12)" }}
-                  >
-                    {agent.openCount} due
-                  </span>
-                  <span
-                    className="px-2 py-1 rounded-full"
-                    style={{ color: visibleBlockedCount > 0 ? "var(--status-blocked)" : "var(--text-muted)", backgroundColor: "rgba(255, 69, 58, 0.12)" }}
-                  >
-                    {agent.blockedCount} blocked
-                  </span>
-                  <span
-                    className="px-2 py-1 rounded-full"
-                    style={{ color: agent.overdueCount > 0 ? "#FF9F0A" : "var(--text-muted)", backgroundColor: "rgba(255, 159, 10, 0.12)" }}
-                  >
-                    {agent.overdueCount} overdue
-                  </span>
+              return (
+                <div
+                  key={agent.key}
+                  className="rounded-xl p-4"
+                  style={{
+                    backgroundColor: isFocusedAgent ? `color-mix(in srgb, ${agent.color} 10%, var(--surface-elevated))` : "var(--surface-elevated)",
+                    border: isFocusedAgent ? `1px solid color-mix(in srgb, ${agent.color} 35%, transparent)` : "1px solid var(--border)",
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        className="inline-flex w-8 h-8 items-center justify-center rounded-full text-sm shrink-0"
+                        style={{ backgroundColor: `color-mix(in srgb, ${agent.color} 22%, transparent)` }}
+                      >
+                        {agent.emoji}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="font-medium truncate" style={{ color: "var(--text-primary)" }}>
+                          {agent.name}
+                        </p>
+                        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                          {agent.openCount} open task{agent.openCount === 1 ? "" : "s"} due this month
+                        </p>
+                      </div>
+                    </div>
+                    <span
+                      className="text-xs px-2 py-1 rounded-full"
+                      style={{
+                        color: agent.color,
+                        backgroundColor: `color-mix(in srgb, ${agent.color} 16%, transparent)`,
+                        border: `1px solid color-mix(in srgb, ${agent.color} 28%, transparent)`,
+                      }}
+                    >
+                      {agent.conflictDays > 0 ? `${agent.conflictDays} pileup day${agent.conflictDays === 1 ? "" : "s"}` : "No pileups"}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 text-xs mb-3">
+                    <span
+                      className="px-2 py-1 rounded-full"
+                      style={{ color: "var(--text-primary)", backgroundColor: "rgba(10, 132, 255, 0.12)" }}
+                    >
+                      {agent.openCount} due
+                    </span>
+                    <span
+                      className="px-2 py-1 rounded-full"
+                      style={{ color: visibleBlockedCount > 0 ? "var(--status-blocked)" : "var(--text-muted)", backgroundColor: "rgba(255, 69, 58, 0.12)" }}
+                    >
+                      {agent.blockedCount} blocked
+                    </span>
+                    <span
+                      className="px-2 py-1 rounded-full"
+                      style={{ color: agent.overdueCount > 0 ? "#FF9F0A" : "var(--text-muted)", backgroundColor: "rgba(255, 159, 10, 0.12)" }}
+                    >
+                      {agent.overdueCount} overdue
+                    </span>
+                  </div>
+
+                  {agent.conflictDays > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => focusAgentConflicts(agent)}
+                      className="text-xs font-medium px-3 py-2 rounded-lg transition-colors"
+                      style={{
+                        color: agent.color,
+                        backgroundColor: `color-mix(in srgb, ${agent.color} 14%, transparent)`,
+                        border: `1px solid color-mix(in srgb, ${agent.color} 24%, transparent)`,
+                      }}
+                    >
+                      {isFocusedAgent && activeConflictDate
+                        ? `Focused on ${fmtCalendarDate(activeConflictDate)}`
+                        : `Review ${agent.conflictDays} pileup day${agent.conflictDays === 1 ? "" : "s"}`}
+                    </button>
+                  ) : (
+                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      No same-day assignee conflict is visible for this month.
+                    </p>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="rounded-xl px-4 py-6" style={{ backgroundColor: "var(--surface-elevated)", border: "1px dashed var(--border)" }}>
@@ -579,24 +639,41 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
       </div>
 
       <div className="rounded-xl p-4 mb-6" style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}>
-        <div className="flex flex-col gap-1 mb-4 md:flex-row md:items-end md:justify-between">
+        <div className="flex flex-col gap-2 mb-4 md:flex-row md:items-end md:justify-between">
           <div>
             <h2 className="text-lg font-semibold" style={{ color: "var(--text-primary)", fontFamily: "var(--font-heading)" }}>
               Same-day conflict drill-down
             </h2>
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-              Days where at least one assignee has multiple open tasks due together. Drill-down stays task-backed and does not invent project phase dates.
+              Days where at least one assignee has multiple open tasks due together. Workload cards can now focus this drill-down on one agent without inventing project phase dates.
             </p>
           </div>
-          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-            Conflict days in view: <span style={{ color: "var(--text-primary)" }}>{visibleConflictDays.length}</span>
-          </p>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span style={{ color: "var(--text-muted)" }}>
+              Conflict days in view: <span style={{ color: "var(--text-primary)" }}>{filteredConflictDays.length}</span>
+              {selectedConflictAgent ? ` of ${visibleConflictDays.length}` : ""}
+            </span>
+            {selectedConflictAgent && (
+              <button
+                type="button"
+                onClick={clearConflictAgentFocus}
+                className="px-2.5 py-1 rounded-full"
+                style={{
+                  color: selectedConflictAgent.color,
+                  backgroundColor: `color-mix(in srgb, ${selectedConflictAgent.color} 14%, transparent)`,
+                  border: `1px solid color-mix(in srgb, ${selectedConflictAgent.color} 24%, transparent)`,
+                }}
+              >
+                Focused on {selectedConflictAgent.emoji} {selectedConflictAgent.name} · show all
+              </button>
+            )}
+          </div>
         </div>
 
-        {visibleConflictDays.length > 0 ? (
+        {filteredConflictDays.length > 0 ? (
           <>
             <div className="flex flex-wrap gap-2 mb-4">
-              {visibleConflictDays.map((day) => {
+              {filteredConflictDays.map((day) => {
                 const isActive = day.dateKey === activeConflictDate;
                 return (
                   <button
@@ -627,6 +704,7 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
                     </h3>
                     <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
                       {activeConflictSummary.pileupTaskCount} open task{activeConflictSummary.pileupTaskCount === 1 ? "" : "s"} sit inside {activeConflictSummary.pileupAgentCount} assignee pileup{activeConflictSummary.pileupAgentCount === 1 ? "" : "s"} on this date.
+                      {selectedConflictAgent && ` Focus is pinned to ${selectedConflictAgent.name}'s conflict days, but the full cross-agent collision on this date still stays visible.`}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2 text-xs">
@@ -650,13 +728,20 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
                 </div>
 
                 <div className="grid gap-3 xl:grid-cols-2">
-                  {activeConflictAgentDetails.map((agent) => (
+                  {activeConflictAgentDetails.map((agent) => {
+                    const isSelectedAgent = agent.key === selectedConflictAgentKey;
+
+                    return (
                     <div
                       key={agent.key}
                       className="rounded-xl p-4"
                       style={{
-                        backgroundColor: "var(--card)",
-                        border: agent.hasPileup ? `1px solid color-mix(in srgb, ${agent.color} 35%, transparent)` : "1px solid var(--border)",
+                        backgroundColor: isSelectedAgent ? `color-mix(in srgb, ${agent.color} 10%, var(--card))` : "var(--card)",
+                        border: isSelectedAgent
+                          ? `1px solid color-mix(in srgb, ${agent.color} 45%, transparent)`
+                          : agent.hasPileup
+                            ? `1px solid color-mix(in srgb, ${agent.color} 35%, transparent)`
+                            : "1px solid var(--border)",
                       }}
                     >
                       <div className="flex items-center justify-between gap-3 mb-3">
@@ -742,7 +827,8 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
                         })}
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -750,7 +836,9 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
         ) : (
           <div className="rounded-xl px-4 py-6" style={{ backgroundColor: "var(--surface-elevated)", border: "1px dashed var(--border)" }}>
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-              No assignee has more than one open task due on the same day in {fmtMonth(year, month)}. Calendar still shows due-date workload, but there is no same-day conflict to drill into yet.
+              {selectedConflictAgent
+                ? `${selectedConflictAgent.name} has no same-day assignee pileups visible in ${fmtMonth(year, month)}. Clear the current focus to review all month conflicts again.`
+                : `No assignee has more than one open task due on the same day in ${fmtMonth(year, month)}. Calendar still shows due-date workload, but there is no same-day conflict to drill into yet.`}
             </p>
           </div>
         )}
