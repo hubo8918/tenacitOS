@@ -323,7 +323,9 @@ Calendar should reflect:
 - blocked / overdue / upcoming work
 
 ### Status
-- read-oriented
+- started
+- task-backed month view now surfaces open/blocked/overdue counts plus per-agent due-date load and same-day pileups
+- project phase timing is still blocked by missing timing fields in the phase schema, so Calendar must stay explicit about that gap
 
 ### Exit criteria
 - Calendar is clearly tied to project/task scheduling
@@ -1515,11 +1517,26 @@ Suggested template:
 - Next:
   - honest Phase 3 work now looks complete; stop widening here and only revisit manual phase ordering if Bo wants a product decision beyond Phase 3.
 
+### 2026-03-13 09:20
+- Step: Calendar workload summary v1
+- Files:
+  - `src/app/(dashboard)/agents/calendar/CalendarPageClient.tsx`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/agents/calendar/CalendarPageClient.tsx"`
+  - `npm run build`
+- Commit: current checkpoint commit (`feat(calendar): surface workload summary`)
+- Result:
+  - The Calendar page now stays explicitly task-backed while surfacing visible-month open/blocked/overdue counts, per-agent due-date load, and same-day assignee pileups instead of reading like a plain list of due-date chips.
+  - Day cells now prioritize blocked/overdue tasks and add honest open/agent/pileup badges, so workload pressure is visible on the calendar itself instead of only in the Tasks board.
+  - Project phase timing is still called out as unavailable because the current phase model has no timing fields; this step advances Phase 4 without faking schedule bars or dates that do not exist.
+- Next:
+  - if the next Phase 4 step stays narrow, surface same-day workload conflicts through a focused day-detail workflow or tighter conflict navigation instead of widening into fake phase scheduling.
+
 ## Current Focus
 
-**Current focus:** Phase 3 honest exit criteria now look complete. Mission Control has real Tasks create/edit/delete/assign/dependency/project-linkage flows, real Projects create/edit/delete/owner/participant/phase/link-management flows, stable `projectId`-backed Project ↔ Task editing, and a tracked-phase planner that now supports dependency editing, append, selection, and guarded deletion without faking cross-surface automation.
+**Current focus:** Phase 4 is now active. Calendar is no longer just a plain due-date grid: it now starts surfacing task-backed workload pressure through visible-month open/blocked/overdue counts, per-agent due-date load, and same-day pileups. Project phase timing still has no honest UI path yet because phases only carry title/status/owner/dependencies, not timing fields.
 
 **Do next:**
-1. stop widening Phase 3 here; this cron can disable itself after checkpointing because the remaining manual phase-order question now looks like a separate product decision
-2. if Bo later wants manual tracked-phase ordering, treat it as a new schema/product call because current-phase summaries are status-driven rather than ordered by drag position
-3. only move on to Phase 4 / Calendar or later execution work if Bo explicitly wants the next product phase
+1. keep Phase 4 focused on real task-scheduling/workload visibility until project phases gain an explicit timing model
+2. if the next Calendar step stays narrow, surface same-day workload conflicts even more directly from the day grid or day detail state instead of hiding them in month summary cards alone
+3. treat project-phase timing as a schema/product decision first; do not fake dates, bars, or sequencing spans from status-only phase data
