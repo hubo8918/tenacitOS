@@ -9,6 +9,10 @@ function generateId(title: string): string {
     .replace(/^-|-$/g, "");
 }
 
+function asTrimmedString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -30,17 +34,27 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
+    const title = asTrimmedString(body.title);
+    const description = asTrimmedString(body.description);
 
-    if (!body.title || !body.description) {
+    if (!title || !description) {
       return NextResponse.json({ error: "Missing required fields: title, description" }, { status: 400 });
     }
 
+    const id = generateId(title);
+    if (!id) {
+      return NextResponse.json({ error: "Project title must include letters or numbers." }, { status: 400 });
+    }
+
     const projects = await getProjects();
+    if (projects.some((project) => project.id === id)) {
+      return NextResponse.json({ error: `A project with the title "${title}" already exists.` }, { status: 409 });
+    }
 
     const newProject = normalizeProject({
-      id: generateId(String(body.title)),
-      title: body.title,
-      description: body.description,
+      id,
+      title,
+      description,
       status: body.status || "planning",
       progress: body.progress || 0,
       priority: body.priority || "medium",

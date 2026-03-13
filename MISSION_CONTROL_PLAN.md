@@ -122,13 +122,19 @@ To avoid fake progress or silent drift:
 #### Projects
 - SSR initial data
 - unreadable stored data no longer masquerades as an empty portfolio
+- first true project-intake flow now saves:
+  - title
+  - description
+  - status
+  - priority
+  - initial owner
 - first owner/current-phase planning editor is now live
 - participating-agent visibility now reads directly on each project card
 - current-phase dependency visibility now reads directly on each project card
 - project ↔ task linkage now reads directly on each project card as a read-only Tasks summary
 - linked task summaries now call out blocked/overdue attention without pretending Projects owns task editing
 - zero-linked projects now include a focused Tasks-board handoff instead of reading like a dead-end empty state
-- **Still missing full operational CRUD, dependency editing, and linked-task editing.**
+- **Still missing delete coverage, broader project editing/management flows, dependency editing, and stable linked-task editing.**
 
 #### Calendar
 - SSR initial task-backed calendar data
@@ -1217,6 +1223,22 @@ Connect to real OpenClaw execution:
 - Next:
   - keep Project ↔ Task linkage read-only, then reassess the next tight Tasks/Projects trust issue instead of widening into fake cross-page editing.
 
+### 2026-03-12 18:23
+- Step: Projects create-flow kickoff
+- Files:
+  - `src/app/(dashboard)/agents/projects/ProjectsPageClient.tsx`
+  - `src/app/api/projects/route.ts`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/agents/projects/ProjectsPageClient.tsx" src/app/api/projects/route.ts`
+  - `npm run build`
+- Commit: current checkpoint commit (`feat(projects): add first real create flow`)
+- Result:
+  - Projects now has its first true create flow from the board itself instead of relying on stored JSON or pre-seeded data.
+  - New projects can save title, description, status, priority, and initial owner through `/api/projects`, with duplicate-title slug collisions rejected honestly instead of creating ambiguous project ids.
+  - Current phase, participating agents, delete coverage, and linked-task editing still remain separate steps, so this intake stays narrow instead of pretending Projects CRUD is complete.
+- Next:
+  - either add the next honest Projects CRUD step (most likely delete coverage or broader edit management), or stop and explicitly call out that stable Project ↔ Task editing needs a real schema decision before widening.
+
 ---
 
 ## How to Update This File
@@ -1245,10 +1267,10 @@ Suggested template:
 
 ## Current Focus
 
-**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + direct inline visibility for task-label/project-title mismatches + a scoped board-level mismatch attention summary + a mismatch-only board filter + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, task-row jumps into a focused Projects view, project-focused create-form defaults plus an empty-state intake CTA, a first Projects owner/phase editor, participating-agent visibility, current-phase dependency visibility, read-only Project ↔ Task linkage visibility, a linked-task attention summary, a zero-linked Tasks handoff, a Projects-board mismatch cleanup handoff that now lands on and briefly highlights the first affected Tasks row, and an urgent-overflow handoff that now jumps straight to the first hidden blocked or overdue linked task
+**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + direct inline visibility for task-label/project-title mismatches + a scoped board-level mismatch attention summary + a mismatch-only board filter + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, task-row jumps into a focused Projects view, project-focused create-form defaults plus an empty-state intake CTA, a first Projects create flow, a first Projects owner/phase editor, participating-agent visibility, current-phase dependency visibility, read-only Project ↔ Task linkage visibility, a linked-task attention summary, a zero-linked Tasks handoff, a Projects-board mismatch cleanup handoff that now lands on and briefly highlights the first affected Tasks row, and an urgent-overflow handoff that now jumps straight to the first hidden blocked or overdue linked task
 
 **Do next:**
-1. keep the new Agents capability profile plus Team reporting-line / review-coverage / delegation flows stable and honest
+1. take the next honest Projects CRUD step instead of pretending the board is already fully operational
 2. keep Project ↔ Task linkage honest; only widen beyond read-only visibility when the linkage model is stable enough for real editing
-3. keep Project ↔ Task linkage read-only, then reassess the next tight Tasks/Projects trust issue instead of widening into fake cross-page editing
+3. if stable Project ↔ Task editing requires a schema/product decision, say that explicitly before widening
 4. keep pushing coordination surfaces forward without pretending execution automation already exists
