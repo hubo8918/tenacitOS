@@ -125,11 +125,23 @@ export async function getAgentTasks(): Promise<AgentTask[]> {
     });
 
     if (didBackfillProjectIds) {
-      await fs.writeFile(DATA_PATH, JSON.stringify(nextTasks, null, 2));
+      await saveAgentTasks(nextTasks);
     }
 
     return nextTasks;
   } catch {
     return [];
   }
+}
+
+export async function saveAgentTasks(tasks: AgentTask[]): Promise<void> {
+  const dir = path.dirname(DATA_PATH);
+
+  try {
+    await fs.access(dir);
+  } catch {
+    await fs.mkdir(dir, { recursive: true });
+  }
+
+  await fs.writeFile(DATA_PATH, JSON.stringify(tasks, null, 2));
 }

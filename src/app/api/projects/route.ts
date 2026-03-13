@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Project } from "@/data/mockProjectsData";
+import { getAgentTasks, saveAgentTasks } from "@/lib/agent-tasks-data";
+import { taskLinksToProject } from "@/lib/project-task-linkage";
 import { getProjects, normalizeProject, saveProjects } from "@/lib/projects-data";
 
 function generateId(title: string): string {
@@ -139,6 +141,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
+    const detachLinkedTasks = searchParams.get("detachLinkedTasks") === "1";
 
     if (!id) {
       return NextResponse.json({ error: "Missing required query param: id" }, { status: 400 });
@@ -151,10 +154,27 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
+    const project = projects[index];
+
+    if (detachLinkedTasks) {
+      const tasks = await getAgentTasks();
+      const nextTasks = tasks.map((task) =>
+        taskLinksToProject(task, project)
+          ? {
+              ...task,
+              project: "",
+              projectId: undefined,
+            }
+          : task
+      );
+
+      await saveAgentTasks(nextTasks);
+    }
+
     projects.splice(index, 1);
     await saveProjects(projects);
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, detachedLinkedTasks: detachLinkedTasks });
   } catch (error) {
     console.error("Failed to delete project:", error);
     return NextResponse.json({ error: "Failed to delete project" }, { status: 500 });

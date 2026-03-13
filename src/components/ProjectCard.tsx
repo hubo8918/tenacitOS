@@ -156,6 +156,7 @@ export function ProjectCard({
   const [pendingLinkedTaskRemovalId, setPendingLinkedTaskRemovalId] = useState<string | null>(null);
   const [removingLinkedTaskId, setRemovingLinkedTaskId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [detachLinkedTasksOnDelete, setDetachLinkedTasksOnDelete] = useState(false);
   const [editTitle, setEditTitle] = useState(project.title);
   const [editDescription, setEditDescription] = useState(project.description);
   const [editStatus, setEditStatus] = useState(project.status);
@@ -260,6 +261,7 @@ export function ProjectCard({
     setRemovingLinkedTaskId(null);
     setReassigningTaskId(null);
     setConfirmDelete(false);
+    setDetachLinkedTasksOnDelete(false);
   };
 
   const resetLinkedTaskCreateDraft = () => {
@@ -590,7 +592,12 @@ export function ProjectCard({
     setSaveError(null);
 
     try {
-      const response = await fetch(`/api/projects?id=${encodeURIComponent(project.id)}`, {
+      const params = new URLSearchParams({ id: project.id });
+      if (detachLinkedTasksOnDelete) {
+        params.set("detachLinkedTasks", "1");
+      }
+
+      const response = await fetch(`/api/projects?${params.toString()}`, {
         method: "DELETE",
       });
 
@@ -600,6 +607,7 @@ export function ProjectCard({
       }
 
       setConfirmDelete(false);
+      setDetachLinkedTasksOnDelete(false);
       setEditing(false);
       onUpdate?.();
     } catch (error) {
@@ -1194,9 +1202,13 @@ export function ProjectCard({
                 Delete project
               </p>
               <p className="mt-1 text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
-                Deleting this project removes the Projects card and saved project record only. {linkedTasks.length > 0
-                  ? `${linkedTasks.length} linked task${linkedTasks.length === 1 ? " is" : "s are"} still attached here. Remove ${linkedTasks.length === 1 ? "that link" : "those links"} from this editor or clean them up on Tasks first if you do not want the saved project label left behind after deletion.`
-                  : "No current Tasks labels point here, so deletion only removes the project record."}
+                {linkedTasksLoading
+                  ? "Loading Tasks linkage now. Deleting still removes the project record, but Mission Control cannot honestly offer linked-task detachment until the Tasks board finishes loading."
+                  : linkedTasksUnavailable
+                    ? "Tasks data is unavailable right now. Deleting can still remove the project record, but Mission Control cannot honestly confirm or detach linked task labels until the Tasks board loads again."
+                    : linkedTasks.length > 0
+                      ? `Deleting this project removes the Projects card and saved project record. ${linkedTasks.length} linked task${linkedTasks.length === 1 ? " is" : "s are"} still attached here, so you can either leave those saved task links behind on purpose or detach ${linkedTasks.length === 1 ? "it" : "them"} in the confirmation step by clearing each task's saved project label plus stable project id.`
+                      : "No current Tasks labels point here, so deletion only removes the project record."}
               </p>
 
               {deleteError && (
@@ -1206,15 +1218,44 @@ export function ProjectCard({
               )}
 
               {confirmDelete ? (
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="mt-3 space-y-3">
                   <p className="text-[10px]" style={{ color: "var(--text-secondary)", lineHeight: 1.4 }}>
                     Confirm deletion of <span style={{ color: "var(--text-primary)" }}>{project.title}</span>.
                   </p>
-                  <div className="flex gap-2">
+
+                  {!linkedTasksLoading && !linkedTasksUnavailable && linkedTasks.length > 0 && (
+                    <label
+                      className="flex items-start gap-2 rounded-lg px-3 py-2"
+                      style={{
+                        backgroundColor: "var(--card)",
+                        border: "1px solid var(--border)",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={detachLinkedTasksOnDelete}
+                        onChange={(event) => setDetachLinkedTasksOnDelete(event.target.checked)}
+                        disabled={deleting}
+                        className="mt-0.5"
+                      />
+                      <span className="text-[10px]" style={{ color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                        Also detach {linkedTasks.length} linked task{linkedTasks.length === 1 ? "" : "s"} now by clearing each task&apos;s saved project label and stable project id before the project record is deleted. No other task fields will change.
+                      </span>
+                    </label>
+                  )}
+
+                  {linkedTasksUnavailable && (
+                    <p className="text-[10px]" style={{ color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                      Tasks data is unavailable right now, so this delete step cannot honestly offer linked-task detachment until the Tasks board loads again.
+                    </p>
+                  )}
+
+                  <div className="flex flex-wrap justify-end gap-2">
                     <button
                       type="button"
                       onClick={() => {
                         setConfirmDelete(false);
+                        setDetachLinkedTasksOnDelete(false);
                         setDeleteError(null);
                       }}
                       disabled={deleting}
@@ -1230,7 +1271,7 @@ export function ProjectCard({
                       className="text-xs px-3 py-1 rounded-lg font-medium"
                       style={{ backgroundColor: "var(--status-blocked, #FF453A)", color: "#fff", opacity: deleting ? 0.7 : 1 }}
                     >
-                      {deleting ? "Deleting..." : "Delete project"}
+                      {deleting ? "Deleting..." : detachLinkedTasksOnDelete ? "Delete + detach tasks" : "Delete project"}
                     </button>
                   </div>
                 </div>
@@ -1240,6 +1281,7 @@ export function ProjectCard({
                     type="button"
                     onClick={() => {
                       setConfirmDelete(true);
+                      setDetachLinkedTasksOnDelete(false);
                       setDeleteError(null);
                     }}
                     disabled={saving || deleting}
