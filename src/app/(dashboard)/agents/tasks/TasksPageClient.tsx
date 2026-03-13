@@ -23,6 +23,8 @@ const unassignedAgent = {
   color: "#8E8E93",
 };
 
+const customProjectSentinel = "__custom__";
+
 function parseLocalDate(dateString: string) {
   const [year, month, day] = dateString.split("-").map(Number);
   return new Date(year, month - 1, day);
@@ -117,6 +119,37 @@ export default function TasksPageClient({
   const effectiveProjectFocus = focusedProject?.title || projectFocus;
   const normalizedProjectFocus = normalizeProjectLabel(effectiveProjectFocus);
   const canCheckProjectMatches = projects.length > 0;
+  const defaultCreateProjectDraft = useMemo(() => {
+    if (focusedProject) {
+      return {
+        projectLabel: focusedProject.title,
+        projectLinkMode: focusedProject.id,
+      };
+    }
+
+    if (!effectiveProjectFocus.trim()) {
+      return {
+        projectLabel: "",
+        projectLinkMode: "",
+      };
+    }
+
+    const matchedProject = projectOptions.find(
+      (option) => normalizeProjectLabel(option.title) === normalizedProjectFocus
+    );
+
+    if (matchedProject) {
+      return {
+        projectLabel: matchedProject.title,
+        projectLinkMode: matchedProject.id,
+      };
+    }
+
+    return {
+      projectLabel: effectiveProjectFocus,
+      projectLinkMode: customProjectSentinel,
+    };
+  }, [effectiveProjectFocus, focusedProject, normalizedProjectFocus, projectOptions]);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [showMismatchOnly, setShowMismatchOnly] = useState(mismatchOnlyRequested);
@@ -128,11 +161,16 @@ export default function TasksPageClient({
   const [creatingTask, setCreatingTask] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
-  const [newProject, setNewProject] = useState(effectiveProjectFocus);
+  const [newProjectLabel, setNewProjectLabel] = useState(defaultCreateProjectDraft.projectLabel);
+  const [newProjectLinkMode, setNewProjectLinkMode] = useState(defaultCreateProjectDraft.projectLinkMode);
   const [newDueDate, setNewDueDate] = useState(() => getLocalDateInputValue(7));
   const [newStatus, setNewStatus] = useState<Task["status"]>("pending");
   const [newPriority, setNewPriority] = useState<Task["priority"]>("medium");
   const [newAssigneeAgentId, setNewAssigneeAgentId] = useState("");
+  const selectedCreateTrackedProject = useMemo(
+    () => projectOptions.find((option) => option.id === newProjectLinkMode) || null,
+    [newProjectLinkMode, projectOptions]
+  );
 
   const scopedTasks = useMemo(() => {
     if (focusedProject) {
@@ -388,13 +426,15 @@ export default function TasksPageClient({
 
   useEffect(() => {
     if (!showCreateForm) {
-      setNewProject(effectiveProjectFocus);
+      setNewProjectLabel(defaultCreateProjectDraft.projectLabel);
+      setNewProjectLinkMode(defaultCreateProjectDraft.projectLinkMode);
     }
-  }, [effectiveProjectFocus, showCreateForm]);
+  }, [defaultCreateProjectDraft, showCreateForm]);
 
   const resetCreateForm = () => {
     setNewTitle("");
-    setNewProject(effectiveProjectFocus);
+    setNewProjectLabel(defaultCreateProjectDraft.projectLabel);
+    setNewProjectLinkMode(defaultCreateProjectDraft.projectLinkMode);
     setNewDueDate(getLocalDateInputValue(7));
     setNewStatus("pending");
     setNewPriority("medium");
@@ -410,16 +450,29 @@ export default function TasksPageClient({
     }
 
     setCreateError(null);
-    setNewProject(effectiveProjectFocus);
+    setNewProjectLabel(defaultCreateProjectDraft.projectLabel);
+    setNewProjectLinkMode(defaultCreateProjectDraft.projectLinkMode);
     setShowCreateForm(true);
   };
 
   const handleCreateTask = async () => {
     const trimmedTitle = newTitle.trim();
-    const trimmedProject = newProject.trim();
+    const trimmedProjectLabel = newProjectLabel.trim();
+    const nextTrackedProject = selectedCreateTrackedProject;
+    const nextProjectLabel = nextTrackedProject
+      ? nextTrackedProject.title
+      : newProjectLinkMode === customProjectSentinel
+        ? trimmedProjectLabel
+        : "";
+    const nextProjectId = nextTrackedProject?.id;
 
     if (!trimmedTitle) {
       setCreateError("Title is required.");
+      return;
+    }
+
+    if (newProjectLinkMode === customProjectSentinel && !trimmedProjectLabel) {
+      setCreateError("Custom project label is required, or switch this task to No project.");
       return;
     }
 
@@ -438,7 +491,8 @@ export default function TasksPageClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: trimmedTitle,
-          project: trimmedProject,
+          project: nextProjectLabel,
+          projectId: nextProjectId,
           dueDate: newDueDate,
           status: newStatus,
           priority: newPriority,
@@ -807,12 +861,12 @@ export default function TasksPageClient({
                 Create a tracked task
               </p>
               <p className="mt-1 text-sm" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
-                This first CRUD milestone keeps creation honest: title, board status, priority, due date, project,
+                This first CRUD milestone keeps creation honest: title, board status, priority, due date, project linkage,
                 and initial owner all save here. Reviewer and handoff can still be added from the row-level routing editor after creation.
               </p>
               {effectiveProjectFocus && (
                 <p className="mt-2 text-xs" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
-                  Opened from Projects for <span style={{ color: "var(--text-primary)" }}>{effectiveProjectFocus}</span>; the project field starts with that label but stays editable here.
+                  Opened from Projects for <span style={{ color: "var(--text-primary)" }}>{effectiveProjectFocus}</span>; this intake now starts with {defaultCreateProjectDraft.projectLinkMode === customProjectSentinel ? "that saved label as an unresolved/custom project value" : "the live tracked project selected by stable id"}, but you can still switch it here.
                 </p>
               )}
             </div>
@@ -828,15 +882,61 @@ export default function TasksPageClient({
                 />
               </label>
 
-              <label className="flex flex-col gap-1.5 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
-                Project
-                <input
-                  value={newProject}
-                  onChange={(event) => setNewProject(event.target.value)}
-                  placeholder="Mission Control"
-                  style={formInputStyle}
-                />
-              </label>
+              <div className="flex flex-col gap-1.5 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                <label className="flex flex-col gap-1.5">
+                  Project linkage
+                  <select
+                    value={newProjectLinkMode}
+                    onChange={(event) => {
+                      const nextValue = event.target.value;
+                      setNewProjectLinkMode(nextValue);
+                      setCreateError(null);
+
+                      if (nextValue === customProjectSentinel) {
+                        setNewProjectLabel((current) => current || effectiveProjectFocus || "");
+                        return;
+                      }
+
+                      const nextProject = projectOptions.find((option) => option.id === nextValue);
+                      setNewProjectLabel(nextProject?.title || "");
+                    }}
+                    style={formInputStyle}
+                  >
+                    <option value="">No project</option>
+                    <option value={customProjectSentinel}>Custom label / unresolved link</option>
+                    {projectOptions.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                {newProjectLinkMode === customProjectSentinel ? (
+                  <>
+                    <label className="flex flex-col gap-1.5">
+                      Project label
+                      <input
+                        value={newProjectLabel}
+                        onChange={(event) => setNewProjectLabel(event.target.value)}
+                        placeholder="Mission Control"
+                        style={formInputStyle}
+                      />
+                    </label>
+                    <p style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                      This keeps the saved label editable, but the task will stay outside the live Projects linkage model until you relink it to a tracked project.
+                    </p>
+                  </>
+                ) : selectedCreateTrackedProject ? (
+                  <p style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                    This task will link to <span style={{ color: "var(--text-primary)" }}>{selectedCreateTrackedProject.title}</span> through its stable project id instead of relying only on a free-typed title.
+                  </p>
+                ) : (
+                  <p style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                    No project link will be saved for this task.
+                  </p>
+                )}
+              </div>
 
               <label className="flex flex-col gap-1.5 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
                 Due date
@@ -1181,7 +1281,7 @@ export default function TasksPageClient({
                 </div>
                 {effectiveProjectFocus && (
                   <p className="max-w-md text-xs" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
-                    The intake form opens with <span style={{ color: "var(--text-primary)" }}>{effectiveProjectFocus}</span> prefilled as the project label, but you can still change it before saving.
+                    The intake form opens with <span style={{ color: "var(--text-primary)" }}>{effectiveProjectFocus}</span> {defaultCreateProjectDraft.projectLinkMode === customProjectSentinel ? "prefilled as a custom/unresolved project label" : "selected as a tracked project link"}, but you can still change it before saving.
                   </p>
                 )}
               </div>

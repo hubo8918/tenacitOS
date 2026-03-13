@@ -1333,12 +1333,28 @@ Suggested template:
 - Next:
   - either apply the same stable tracked-project assignment model to task intake, or take the next narrow Projects CRUD step if that lands cleaner.
 
+### 2026-03-12 21:xx
+- Step: Tasks tracked-project intake selector
+- Files:
+  - `src/app/(dashboard)/agents/tasks/TasksPageClient.tsx`
+  - `src/components/ProjectCard.tsx`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/agents/tasks/TasksPageClient.tsx" src/components/ProjectCard.tsx`
+  - `npm run build`
+- Commit: current checkpoint commit (`feat(tasks): use tracked project linkage in intake`)
+- Result:
+  - The New task intake flow now uses the same tracked-project vs custom-label model as the task details editor instead of falling back to a free-typed project field.
+  - When Tasks opens from a live Projects focus, intake now defaults to the tracked project by stable id; custom/unresolved labels remain an explicit choice instead of hidden title matching.
+  - This widens the honest editable Project ↔ Task linkage model without pretending Projects can edit linked tasks inline or that unresolved labels have become automatic linkage.
+- Next:
+  - take the next narrow Projects CRUD/project-management step, unless a deeper Project ↔ Task or dependency flow clearly requires a schema/product decision first.
+
 ## Current Focus
 
-**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + direct inline visibility for task/project link mismatches + a scoped board-level mismatch attention summary + a mismatch-only board filter + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, task-row jumps into a focused Projects view, project-focused create-form defaults plus an empty-state intake CTA, a first Projects create flow, a first Projects owner/phase editor, a first Projects participating-agent editor, current-phase dependency visibility, a linked-task attention summary, a zero-linked Tasks handoff, a Projects-board mismatch cleanup handoff that now lands on and briefly highlights the first affected Tasks row, an urgent-overflow handoff that now jumps straight to the first hidden blocked or overdue linked task, a first honest Projects delete flow, a stable `projectId` foundation so Task ↔ Project linkage no longer depends only on exact title strings, and the first Tasks-side tracked-project selector that edits live linkage without collapsing back into free-typed title matching.
+**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + direct inline visibility for task/project link mismatches + a scoped board-level mismatch attention summary + a mismatch-only board filter + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, task-row jumps into a focused Projects view, project-focused task intake defaults plus an empty-state intake CTA, a first Projects create flow, a first Projects owner/phase editor, a first Projects participating-agent editor, current-phase dependency visibility, a linked-task attention summary, a zero-linked Tasks handoff, a Projects-board mismatch cleanup handoff that now lands on and briefly highlights the first affected Tasks row, an urgent-overflow handoff that now jumps straight to the first hidden blocked or overdue linked task, a first honest Projects delete flow, a stable `projectId` foundation so Task ↔ Project linkage no longer depends only on exact title strings, a tracked-project selector in the task details editor, and that same stable tracked-project/custom-label model now applied to the New task intake flow.
 
 **Do next:**
-1. either apply the same stable tracked-project assignment model to task intake, or take the next narrow Projects CRUD step if that is the tighter honest win
-2. keep widening Projects CRUD toward a genuinely operational board, one narrow flow at a time
+1. take the next narrow Projects CRUD/project-management step so the Projects board keeps closing its remaining honest Phase 3 gaps
+2. keep using the stable `projectId` linkage model for Project ↔ Task flows instead of title-only matching
 3. if project-title editing or deeper dependency UX needs a schema/product decision, say that explicitly before widening
 4. keep pushing coordination surfaces forward without pretending execution automation already exists
