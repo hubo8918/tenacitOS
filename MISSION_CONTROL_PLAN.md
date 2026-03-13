@@ -140,7 +140,8 @@ To avoid fake progress or silent drift:
 - the project delete flow can now optionally detach currently linked tasks by clearing their saved `project` / `projectId` fields in the same explicit confirmation step
 - linked task summaries now call out blocked/overdue attention without pretending Projects owns task editing
 - zero-linked projects now include a focused Tasks-board handoff instead of reading like a dead-end empty state
-- **Still missing deeper phase-structure management (for example reordering or deleting tracked phases) and any wider project-management step that needs a schema/product decision.**
+- the project planning editor can now delete a selected tracked phase when no other saved phase still depends on it, and it blocks that delete with named dependency refs instead of silently creating missing sequencing data
+- **Manual tracked-phase reordering still has no clear product meaning because the card's current-phase summary is driven by live phase status first; treat broader phase-list ordering as a later schema/product decision, not unfinished fake CRUD.**
 
 #### Calendar
 - SSR initial task-backed calendar data
@@ -298,11 +299,11 @@ Tasks should clearly show:
 - which project/phase it belongs to
 
 ### Status
-- **Phase 3 kickoff is now active**
+- **Phase 3 honest exit criteria are now met for core Tasks/Projects operations**
 - Files trust/stability pass is complete enough to widen back into Tasks
-- first true Tasks CRUD milestone is now in place through real task creation
-- Tasks now also supports a first honest row-level details edit flow for core board fields
-- **Not done at the CRUD/orchestration layer**
+- Tasks now has true create/edit/delete/assign/dependency/project-linkage flows
+- Projects now has true create/edit/delete/owner/participant/phase/link-management flows
+- Manual tracked-phase reordering is not part of the core exit and now looks like a later product decision because current-phase summaries are status-driven rather than manually ordered
 
 ### Exit criteria
 - Tasks page supports true create/edit/delete/assign flows
@@ -1498,12 +1499,27 @@ Suggested template:
 - Next:
   - take the next narrow phase-structure step (most likely tracked-phase deletion or reordering), unless that needs an explicit schema/product decision first.
 
+### 2026-03-13 04:xx
+- Step: Projects tracked-phase delete guard
+- Files:
+  - `src/components/ProjectCard.tsx`
+- Validation:
+  - `npx eslint src/components/ProjectCard.tsx`
+  - `npm run build`
+- Commit: current checkpoint commit (`feat(projects): add tracked-phase delete guard`)
+- Result:
+  - The Projects planning editor can now delete the selected saved phase when no other saved phase still depends on it.
+  - If another saved phase still depends on that phase, delete stays blocked and names the dependent phases instead of silently creating missing dependency ids.
+  - The delete copy explicitly says it discards unsaved planner edits and closes the editor after the narrow phase-delete step, which keeps the phase-structure trust boundary honest.
+  - This closes the remaining honest Phase 3 phase-structure gap; manual phase reordering now looks like a separate product decision because current-phase summaries are status-driven.
+- Next:
+  - honest Phase 3 work now looks complete; stop widening here and only revisit manual phase ordering if Bo wants a product decision beyond Phase 3.
+
 ## Current Focus
 
-**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + direct inline visibility for task/project link mismatches + a scoped board-level mismatch attention summary + a mismatch-only board filter + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, task-row jumps into a focused Projects view, project-focused task intake defaults plus an empty-state intake CTA, a first Projects create flow, a Projects planning editor that now covers title/description/status/priority/owner/participants plus selected tracked-phase editing, dependency editing across any saved tracked phase, and one-additional-phase append flow, a linked-task attention summary, a zero-linked Tasks handoff, a first Projects-side linked-task intake anchored by stable `projectId`, a Projects-side attach flow for unresolved/no-project tasks, a Projects-side move flow for tasks currently linked to another live project, a Projects-side remove-link flow for existing linked tasks, a Projects delete flow that can now optionally detach currently linked tasks in the same explicit confirmation step, a Projects-board mismatch cleanup handoff that now lands on and briefly highlights the first affected Tasks row, an urgent-overflow handoff that now jumps straight to the first hidden blocked or overdue linked task, a stable `projectId` foundation so Task ↔ Project linkage no longer depends only on exact title strings, a tracked-project selector in the task details editor, and that same stable tracked-project/custom-label model now applied to the New task intake flow.
+**Current focus:** Phase 3 honest exit criteria now look complete. Mission Control has real Tasks create/edit/delete/assign/dependency/project-linkage flows, real Projects create/edit/delete/owner/participant/phase/link-management flows, stable `projectId`-backed Project ↔ Task editing, and a tracked-phase planner that now supports dependency editing, append, selection, and guarded deletion without faking cross-surface automation.
 
 **Do next:**
-1. take the next narrow phase-structure step (most likely tracked-phase deletion or reordering) so the Projects board keeps closing its remaining honest Phase 3 gaps
-2. keep using the stable `projectId` linkage model for Project ↔ Task flows instead of title-only matching
-3. if deeper phase/dependency editing needs a schema/product decision, say that explicitly before widening
-4. keep pushing coordination surfaces forward without pretending execution automation already exists
+1. stop widening Phase 3 here; this cron can disable itself after checkpointing because the remaining manual phase-order question now looks like a separate product decision
+2. if Bo later wants manual tracked-phase ordering, treat it as a new schema/product call because current-phase summaries are status-driven rather than ordered by drag position
+3. only move on to Phase 4 / Calendar or later execution work if Bo explicitly wants the next product phase

@@ -170,6 +170,7 @@ export function ProjectCard({
   const [pendingLinkedTaskRemovalId, setPendingLinkedTaskRemovalId] = useState<string | null>(null);
   const [removingLinkedTaskId, setRemovingLinkedTaskId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmPhaseDelete, setConfirmPhaseDelete] = useState(false);
   const [detachLinkedTasksOnDelete, setDetachLinkedTasksOnDelete] = useState(false);
   const [editTitle, setEditTitle] = useState(project.title);
   const [editDescription, setEditDescription] = useState(project.description);
@@ -241,6 +242,15 @@ export function ProjectCard({
     const editablePhaseIds = new Set(editablePhaseDependencyOptions.map((phase) => phase.id));
     return editPhaseDependencyIds.filter((phaseId) => phaseId !== editablePhase?.id && !editablePhaseIds.has(phaseId));
   }, [editPhaseDependencyIds, editablePhaseDependencyOptions, editablePhase?.id]);
+  const selectedPhaseDependents = useMemo(() => {
+    if (!editablePhase) {
+      return [] as ProjectPhase[];
+    }
+
+    return project.phases.filter(
+      (phase) => phase.id !== editablePhase.id && phase.dependsOnPhaseIds.includes(editablePhase.id)
+    );
+  }, [project.phases, editablePhase]);
   const sortedLinkedTasks = useMemo(() => [...linkedTasks].sort(compareLinkedTaskPreviewPriority), [linkedTasks]);
   const availableLinkableTasksSorted = useMemo(
     () => [...availableLinkableTasks].sort(compareLinkedTaskPreviewPriority),
@@ -297,6 +307,7 @@ export function ProjectCard({
     setRemovingLinkedTaskId(null);
     setReassigningTaskId(null);
     setConfirmDelete(false);
+    setConfirmPhaseDelete(false);
     setDetachLinkedTasksOnDelete(false);
   };
 
@@ -341,6 +352,7 @@ export function ProjectCard({
     setEditPhaseTitle(nextPhase?.title || "");
     setEditPhaseStatus(nextPhase?.status || "pending");
     setEditPhaseDependencyIds(nextPhase?.dependsOnPhaseIds || []);
+    setConfirmPhaseDelete(false);
     setSaveError(null);
   };
 
@@ -559,6 +571,52 @@ export function ProjectCard({
       setLinkedTaskManageError(error instanceof Error ? error.message : "Failed to move tracked task");
     } finally {
       setReassigningTaskId(null);
+    }
+  }
+
+  async function handleDeleteSelectedPhase() {
+    if (!editablePhase || saving || deleting) {
+      return;
+    }
+
+    if (selectedPhaseDependents.length > 0) {
+      setSaveError(
+        `Remove dependency references from ${selectedPhaseDependents
+          .map((phase) => phase.title)
+          .join(", ")} before deleting this tracked phase.`
+      );
+      return;
+    }
+
+    setSaving(true);
+    setSaveError(null);
+    setDeleteError(null);
+
+    try {
+      const response = await fetch("/api/projects", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: project.id,
+          phases: project.phases.filter((phase) => phase.id !== editablePhase.id),
+          updatedAgo: "just now",
+          updatedBy: "Mission Control",
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to delete tracked phase");
+      }
+
+      setConfirmPhaseDelete(false);
+      onUpdate?.();
+      setEditing(false);
+    } catch (error) {
+      console.error("Failed to delete tracked phase:", error);
+      setSaveError(error instanceof Error ? error.message : "Failed to delete tracked phase");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -986,6 +1044,128 @@ export function ProjectCard({
               )}
             </div>
 
+            {editablePhase && (
+              <div
+                className="mb-3 rounded-lg px-3 py-2"
+                style={{
+                  backgroundColor: "color-mix(in srgb, var(--warning, #ff9f0a) 10%, transparent)",
+                  border: "1px solid color-mix(in srgb, var(--warning, #ff9f0a) 24%, transparent)",
+                }}
+              >
+                <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--warning, #ff9f0a)" }}>
+                  Delete tracked phase
+                </p>
+                <p className="mt-1 text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                  {selectedPhaseDependents.length > 0
+                    ? `Delete stays blocked until ${selectedPhaseDependents.length === 1 ? "the dependent saved phase removes" : "all dependent saved phases remove"} ${editablePhase.title}\'s dependency link.`
+                    : project.phases.length === 1
+                      ? "This removes the only tracked phase on this project. No other project fields save here, and the editor closes after the delete completes."
+                      : "This removes only the selected saved phase. No other project fields save here, and the card's current-phase summary recalculates from the remaining saved phases after delete."}
+                </p>
+
+                {selectedPhaseDependents.length > 0 && (
+                  <div
+                    className="mt-3 rounded-lg px-3 py-2"
+                    style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}
+                  >
+                    <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-primary)" }}>
+                      Dependent saved phases
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {selectedPhaseDependents.map((phase) => {
+                        const config = phaseStatusConfig[phase.status];
+                        return (
+                          <span
+                            key={phase.id}
+                            className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-medium"
+                            style={{
+                              color: config.color,
+                              border: `1px solid color-mix(in srgb, ${config.color} 35%, transparent)`,
+                              backgroundColor: `color-mix(in srgb, ${config.color} 12%, transparent)`,
+                            }}
+                          >
+                            <span>{phase.title}</span>
+                            <span aria-hidden="true">·</span>
+                            <span>{config.label}</span>
+                          </span>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-2 text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                      Remove those dependency references from the named saved phases first so Mission Control does not silently create missing dependency ids.
+                    </p>
+                  </div>
+                )}
+
+                {selectedPhaseDependents.length === 0 ? (
+                  confirmPhaseDelete ? (
+                    <div className="mt-3 space-y-3">
+                      <p className="text-[10px]" style={{ color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                        Confirm delete of <span style={{ color: "var(--text-primary)" }}>{editablePhase.title}</span>. Unsaved edits to other project fields in this planner will be discarded, so save them first if they matter.
+                      </p>
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setConfirmPhaseDelete(false);
+                            setSaveError(null);
+                          }}
+                          disabled={saving || deleting}
+                          className="text-xs px-3 py-1 rounded-lg"
+                          style={{ color: "var(--text-muted)", border: "1px solid var(--border)", opacity: saving || deleting ? 0.6 : 1 }}
+                        >
+                          Keep phase
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleDeleteSelectedPhase}
+                          disabled={saving || deleting}
+                          className="text-xs px-3 py-1 rounded-lg font-medium"
+                          style={{ backgroundColor: "var(--warning, #ff9f0a)", color: "#111", opacity: saving || deleting ? 0.7 : 1 }}
+                        >
+                          {saving ? "Deleting..." : "Delete phase"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConfirmPhaseDelete(true);
+                          setSaveError(null);
+                        }}
+                        disabled={saving || deleting}
+                        className="text-xs px-3 py-1 rounded-lg font-medium"
+                        style={{
+                          color: "var(--warning, #ff9f0a)",
+                          border: "1px solid color-mix(in srgb, var(--warning, #ff9f0a) 32%, transparent)",
+                          opacity: saving || deleting ? 0.6 : 1,
+                        }}
+                      >
+                        Delete selected phase…
+                      </button>
+                    </div>
+                  )
+                ) : (
+                  <div className="mt-3 flex justify-end">
+                    <button
+                      type="button"
+                      disabled
+                      className="text-xs px-3 py-1 rounded-lg font-medium"
+                      style={{
+                        color: "var(--text-muted)",
+                        border: "1px solid var(--border)",
+                        opacity: 0.75,
+                      }}
+                    >
+                      Remove dependency refs first
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="mb-3">
               <div className="flex items-center justify-between gap-2 mb-1">
                 <label className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
@@ -1049,7 +1229,7 @@ export function ProjectCard({
                     </div>
 
                     <p className="text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
-                      On Save, this appends one more tracked phase to the project&apos;s saved phase list with no dependencies yet. Reordering and deletion still stay out of scope for this micro-step.
+                      On Save, this appends one more tracked phase to the project&apos;s saved phase list with no dependencies yet. Manual phase reordering still stays out of scope because the card&apos;s live current-phase summary is driven by status first, not by drag order.
                     </p>
                   </>
                 ) : (
