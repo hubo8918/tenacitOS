@@ -430,6 +430,13 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
     setSelectedConflictAgentKey(null);
   }
 
+  function selectConflictDateFromCalendar(dateKey: string) {
+    setSelectedConflictDate(dateKey);
+    if (selectedConflictAgentKey && !filteredConflictDateKeys.has(dateKey)) {
+      setSelectedConflictAgentKey(null);
+    }
+  }
+
   const cells: (number | null)[] = [];
   for (let i = 0; i < firstDay; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
@@ -645,7 +652,7 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
               Same-day conflict drill-down
             </h2>
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-              Days where at least one assignee has multiple open tasks due together. Workload cards can now focus this drill-down on one agent without inventing project phase dates.
+              Days where at least one assignee has multiple open tasks due together. Workload cards and month-grid pileup days now hand off directly into this drill-down without inventing project phase dates.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -874,7 +881,7 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
             </div>
           ))}
           <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-            Day cells are ordered with blocked/overdue work first.
+            Day cells are ordered with blocked/overdue work first. Purple pileup days now open the drill-down directly.
           </span>
         </div>
 
@@ -895,8 +902,70 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
             const dayOverdueCount = dayOpenTasks.filter((task) => isTaskOverdue(task, startOfTodayTime)).length;
             const dayAgentCount = new Set(dayOpenTasks.map((task) => getTaskAgentKey(task))).size;
             const hasDayPileup = Boolean(day && visibleConflictDateKeys.has(dateStr));
+            const dayWouldResetAgentFocus = Boolean(selectedConflictAgentKey && hasDayPileup && !filteredConflictDateKeys.has(dateStr));
             const isToday = day ? isSameDay(new Date(year, month, day), today) : false;
             const isActiveConflictDay = Boolean(day && dateStr === activeConflictDate);
+
+            const dayCellContent = day ? (
+              <>
+                <span
+                  className="inline-flex items-center justify-center text-xs w-6 h-6 rounded-full mb-1"
+                  style={{
+                    backgroundColor: isToday ? "#0A84FF" : "transparent",
+                    color: isToday ? "#fff" : "var(--text-secondary)",
+                    fontWeight: isToday ? 700 : 400,
+                  }}
+                >
+                  {day}
+                </span>
+                <div className="space-y-0.5">
+                  {dayTasks.slice(0, 3).map((task) => {
+                    const color = taskStatusConfig[task.status].color;
+                    return (
+                      <div
+                        key={task.id}
+                        className="text-[10px] leading-tight px-1.5 py-0.5 rounded truncate"
+                        style={{ backgroundColor: `color-mix(in srgb, ${color} 15%, transparent)`, color }}
+                        title={task.title}
+                      >
+                        {task.title}
+                      </div>
+                    );
+                  })}
+                  {dayTasks.length > 3 && (
+                    <span className="text-[9px] pl-1 block" style={{ color: "var(--text-muted)" }}>
+                      +{dayTasks.length - 3} more
+                    </span>
+                  )}
+                </div>
+
+                {dayOpenTasks.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ color: "var(--text-muted)", backgroundColor: "var(--surface-elevated)" }}>
+                      {dayOpenTasks.length} open
+                    </span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ color: "var(--text-muted)", backgroundColor: "var(--surface-elevated)" }}>
+                      {dayAgentCount} agent{dayAgentCount === 1 ? "" : "s"}
+                    </span>
+                    {dayBlockedCount > 0 && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ color: "var(--status-blocked)", backgroundColor: "rgba(255, 69, 58, 0.12)" }}>
+                        {dayBlockedCount} blocked
+                      </span>
+                    )}
+                    {dayOverdueCount > 0 && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ color: "#FF9F0A", backgroundColor: "rgba(255, 159, 10, 0.12)" }}>
+                        {dayOverdueCount} overdue
+                      </span>
+                    )}
+                    {hasDayPileup && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ color: "#BF5AF2", backgroundColor: "rgba(191, 90, 242, 0.12)" }}>
+                        {dayWouldResetAgentFocus ? "pileup · show all" : "pileup · review below"}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </>
+            ) : null;
 
             return (
               <div
@@ -912,71 +981,26 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
                     : "var(--surface-elevated)",
                 }}
               >
-                {day && (
-                  <>
-                    <span
-                      className="inline-flex items-center justify-center text-xs w-6 h-6 rounded-full mb-1"
+                {day ? (
+                  hasDayPileup ? (
+                    <button
+                      type="button"
+                      onClick={() => selectConflictDateFromCalendar(dateStr)}
+                      className="h-full w-full rounded-lg text-left transition-colors"
                       style={{
-                        backgroundColor: isToday ? "#0A84FF" : "transparent",
-                        color: isToday ? "#fff" : "var(--text-secondary)",
-                        fontWeight: isToday ? 700 : 400,
+                        backgroundColor: isActiveConflictDay ? "rgba(191, 90, 242, 0.08)" : "transparent",
+                        border: isActiveConflictDay
+                          ? "1px solid rgba(191, 90, 242, 0.35)"
+                          : "1px solid rgba(191, 90, 242, 0.16)",
                       }}
+                      title={dayWouldResetAgentFocus ? "Open this conflict day and clear the current agent focus" : "Open this conflict day in the drill-down below"}
                     >
-                      {day}
-                    </span>
-                    <div className="space-y-0.5">
-                      {dayTasks.slice(0, 3).map((task) => {
-                        const color = taskStatusConfig[task.status].color;
-                        return (
-                          <div
-                            key={task.id}
-                            className="text-[10px] leading-tight px-1.5 py-0.5 rounded truncate"
-                            style={{ backgroundColor: `color-mix(in srgb, ${color} 15%, transparent)`, color }}
-                            title={task.title}
-                          >
-                            {task.title}
-                          </div>
-                        );
-                      })}
-                      {dayTasks.length > 3 && (
-                        <span className="text-[9px] pl-1 block" style={{ color: "var(--text-muted)" }}>
-                          +{dayTasks.length - 3} more
-                        </span>
-                      )}
-                    </div>
-
-                    {dayOpenTasks.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ color: "var(--text-muted)", backgroundColor: "var(--surface-elevated)" }}>
-                          {dayOpenTasks.length} open
-                        </span>
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ color: "var(--text-muted)", backgroundColor: "var(--surface-elevated)" }}>
-                          {dayAgentCount} agent{dayAgentCount === 1 ? "" : "s"}
-                        </span>
-                        {dayBlockedCount > 0 && (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ color: "var(--status-blocked)", backgroundColor: "rgba(255, 69, 58, 0.12)" }}>
-                            {dayBlockedCount} blocked
-                          </span>
-                        )}
-                        {dayOverdueCount > 0 && (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ color: "#FF9F0A", backgroundColor: "rgba(255, 159, 10, 0.12)" }}>
-                            {dayOverdueCount} overdue
-                          </span>
-                        )}
-                        {hasDayPileup && (
-                          <button
-                            type="button"
-                            onClick={() => setSelectedConflictDate(dateStr)}
-                            className="text-[9px] px-1.5 py-0.5 rounded-full"
-                            style={{ color: "#BF5AF2", backgroundColor: "rgba(191, 90, 242, 0.12)" }}
-                          >
-                            pileup
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </>
-                )}
+                      {dayCellContent}
+                    </button>
+                  ) : (
+                    <div className="h-full w-full rounded-lg">{dayCellContent}</div>
+                  )
+                ) : null}
               </div>
             );
           })}

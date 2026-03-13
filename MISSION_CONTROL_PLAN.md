@@ -1563,11 +1563,26 @@ Suggested template:
 - Next:
   - if the next Phase 4 step stays narrow, connect month-grid pileup days into the drill-down with a clearer whole-cell handoff instead of relying on the small pill CTA.
 
+### 2026-03-13 11:xx
+- Step: Calendar month-grid conflict handoff
+- Files:
+  - `src/app/(dashboard)/agents/calendar/CalendarPageClient.tsx`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/agents/calendar/CalendarPageClient.tsx"`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(calendar): make month grid drive conflict drill-down`)
+- Result:
+  - Month-grid pileup days now act as a whole-cell handoff into the existing conflict drill-down instead of hiding that workflow behind a tiny in-cell pill.
+  - Clicking a pileup day now always selects that date for drill-down review, and if an agent-specific focus would have hidden that date, Calendar clears the focus instead of silently ignoring the operator's selection.
+  - This keeps the conflict workflow task-backed and cross-agent honest without inventing project phase timing the current schema cannot support.
+- Next:
+  - if the next Phase 4 step stays narrow, let the blocked/overdue/upcoming summary cards hand off into concrete date/task slices so Calendar is not only actionable when same-day pileups exist.
+
 ## Current Focus
 
-**Current focus:** Phase 4 is now active. Calendar now surfaces task-backed workload pressure through visible-month open/blocked/overdue counts, per-agent due-date load, same-day pileups, a day-level conflict drill-down, and agent-focused conflict follow-up from the workload cards. Project phase timing still has no honest UI path yet because phases only carry title/status/owner/dependencies, not timing fields.
+**Current focus:** Phase 4 is now active. Calendar now surfaces task-backed workload pressure through visible-month open/blocked/overdue counts, per-agent due-date load, same-day pileups, a day-level conflict drill-down, agent-focused conflict follow-up from the workload cards, and direct month-grid handoff into that drill-down. Project phase timing still has no honest UI path yet because phases only carry title/status/owner/dependencies, not timing fields.
 
 **Do next:**
 1. keep Phase 4 focused on real task-scheduling/workload visibility until project phases gain an explicit timing model
-2. if the next Calendar step stays narrow, make month-grid pileup days hand off more directly into the existing drill-down so conflict follow-up takes fewer clicks
+2. if the next Calendar step stays narrow, let blocked/overdue/upcoming summary cards hand off into concrete date/task slices so Calendar stays useful beyond same-day pileups
 3. treat project-phase timing as a schema/product decision first; do not fake dates, bars, or sequencing spans from status-only phase data
