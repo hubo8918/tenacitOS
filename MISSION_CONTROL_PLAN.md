@@ -131,10 +131,10 @@ To avoid fake progress or silent drift:
 - the project planning editor now supports title, description, status, priority, owner, participating agents, and current phase edits in one surface
 - participating-agent visibility now reads directly on each project card, and the planning editor can now update participating-agent assignments
 - current-phase dependency visibility now reads directly on each project card
-- project ↔ task linkage now reads directly on each project card as a read-only Tasks summary
+- project ↔ task linkage now reads directly on each project card as a Tasks summary, and each card can now create a new linked task with the stable project id already attached
 - linked task summaries now call out blocked/overdue attention without pretending Projects owns task editing
 - zero-linked projects now include a focused Tasks-board handoff instead of reading like a dead-end empty state
-- **Still missing broader core project editing/management flows, richer phase/dependency editing, and stable linked-task editing.**
+- **Still missing broader core project editing/management flows, richer phase/dependency editing, and existing linked-task edit/cleanup on Projects.**
 
 #### Calendar
 - SSR initial task-backed calendar data
@@ -1365,9 +1365,25 @@ Suggested template:
 - Next:
   - take the next narrow Projects or dependency-management step, unless deeper phase/dependency editing first needs an explicit schema/product decision.
 
+### 2026-03-12 22:xx
+- Step: Projects card linked-task intake
+- Files:
+  - `src/components/ProjectCard.tsx`
+  - `src/app/(dashboard)/agents/projects/ProjectsPageClient.tsx`
+- Validation:
+  - `npx eslint src/components/ProjectCard.tsx "src/app/(dashboard)/agents/projects/ProjectsPageClient.tsx"`
+  - `npm run build`
+- Commit: current checkpoint commit (`feat(projects): add linked task intake to cards`)
+- Result:
+  - Each Project card can now create a new linked task directly from Projects, with the current project title plus stable `projectId` saved together instead of forcing every linkage change through a read-only summary and cross-page handoff.
+  - Existing linked-task summaries and task-row navigation still stay honest about their trust boundary: editing or cleaning up existing task links remains on the Tasks board.
+  - The Projects page now refetches both Projects and Tasks after a card-side linked-task create so the linkage summary updates immediately instead of looking stale.
+- Next:
+  - take the next narrow Projects or dependency-management step, unless deeper phase/dependency editing first needs an explicit schema/product decision.
+
 ## Current Focus
 
-**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + direct inline visibility for task/project link mismatches + a scoped board-level mismatch attention summary + a mismatch-only board filter + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, task-row jumps into a focused Projects view, project-focused task intake defaults plus an empty-state intake CTA, a first Projects create flow, a Projects planning editor that now covers title/description/status/priority/owner/participants/current phase, current-phase dependency visibility, a linked-task attention summary, a zero-linked Tasks handoff, a Projects-board mismatch cleanup handoff that now lands on and briefly highlights the first affected Tasks row, an urgent-overflow handoff that now jumps straight to the first hidden blocked or overdue linked task, a first honest Projects delete flow, a stable `projectId` foundation so Task ↔ Project linkage no longer depends only on exact title strings, a tracked-project selector in the task details editor, and that same stable tracked-project/custom-label model now applied to the New task intake flow.
+**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + direct inline visibility for task/project link mismatches + a scoped board-level mismatch attention summary + a mismatch-only board filter + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, task-row jumps into a focused Projects view, project-focused task intake defaults plus an empty-state intake CTA, a first Projects create flow, a Projects planning editor that now covers title/description/status/priority/owner/participants/current phase, current-phase dependency visibility, a linked-task attention summary, a zero-linked Tasks handoff, a first Projects-side linked-task intake anchored by stable `projectId`, a Projects-board mismatch cleanup handoff that now lands on and briefly highlights the first affected Tasks row, an urgent-overflow handoff that now jumps straight to the first hidden blocked or overdue linked task, a first honest Projects delete flow, a stable `projectId` foundation so Task ↔ Project linkage no longer depends only on exact title strings, a tracked-project selector in the task details editor, and that same stable tracked-project/custom-label model now applied to the New task intake flow.
 
 **Do next:**
 1. take the next narrow Projects CRUD/project-management or dependency-management step so the Projects board keeps closing its remaining honest Phase 3 gaps

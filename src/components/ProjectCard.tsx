@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { priorityConfig, statusConfig, type Project, type ProjectPhase } from "@/data/mockProjectsData";
-import { taskStatusConfig, type Task } from "@/data/mockTasksData";
+import { taskPriorityConfig, taskStatusConfig, type Task } from "@/data/mockTasksData";
 import type { TeamAgent } from "@/data/mockTeamData";
 
 const phaseStatusConfig: Record<ProjectPhase["status"], { label: string; color: string }> = {
@@ -20,6 +20,15 @@ const unassignedAgent = { emoji: "👤", name: "Unassigned", color: "#8E8E93" };
 function parseLocalDate(dateString: string) {
   const [year, month, day] = dateString.split("-").map(Number);
   return new Date(year, month - 1, day);
+}
+
+function getLocalDateInputValue(offsetDays = 0) {
+  const date = new Date();
+  date.setDate(date.getDate() + offsetDays);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function isTaskOverdue(dateString: string, status: Task["status"]) {
@@ -122,8 +131,11 @@ export function ProjectCard({
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showLinkedTaskCreate, setShowLinkedTaskCreate] = useState(false);
+  const [creatingLinkedTask, setCreatingLinkedTask] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [linkedTaskCreateError, setLinkedTaskCreateError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editTitle, setEditTitle] = useState(project.title);
   const [editDescription, setEditDescription] = useState(project.description);
@@ -135,6 +147,11 @@ export function ProjectCard({
   const currentPhase = useMemo(() => getCurrentPhase(project), [project]);
   const [editPhaseTitle, setEditPhaseTitle] = useState(currentPhase?.title || "");
   const [editPhaseStatus, setEditPhaseStatus] = useState<ProjectPhase["status"]>(currentPhase?.status || "pending");
+  const [newLinkedTaskTitle, setNewLinkedTaskTitle] = useState("");
+  const [newLinkedTaskDueDate, setNewLinkedTaskDueDate] = useState(() => getLocalDateInputValue(7));
+  const [newLinkedTaskStatus, setNewLinkedTaskStatus] = useState<Task["status"]>("pending");
+  const [newLinkedTaskPriority, setNewLinkedTaskPriority] = useState<Task["priority"]>("medium");
+  const [newLinkedTaskOwnerAgentId, setNewLinkedTaskOwnerAgentId] = useState("");
 
   const status = statusConfig[project.status];
   const priority = priorityConfig[project.priority];
@@ -202,6 +219,15 @@ export function ProjectCard({
     setConfirmDelete(false);
   };
 
+  const resetLinkedTaskCreateDraft = () => {
+    setNewLinkedTaskTitle("");
+    setNewLinkedTaskDueDate(getLocalDateInputValue(7));
+    setNewLinkedTaskStatus("pending");
+    setNewLinkedTaskPriority("medium");
+    setNewLinkedTaskOwnerAgentId("");
+    setLinkedTaskCreateError(null);
+  };
+
   const toggleParticipatingAgent = (agentId: string) => {
     setEditParticipatingAgentIds((current) =>
       current.includes(agentId)
@@ -209,6 +235,81 @@ export function ProjectCard({
         : [...current, agentId]
     );
   };
+
+  const handleToggleLinkedTaskCreate = () => {
+    if (showLinkedTaskCreate) {
+      resetLinkedTaskCreateDraft();
+      setShowLinkedTaskCreate(false);
+      return;
+    }
+
+    setLinkedTaskCreateError(null);
+    setShowLinkedTaskCreate(true);
+  };
+
+  async function handleCreateLinkedTask() {
+    if (creatingLinkedTask) {
+      return;
+    }
+
+    const trimmedTitle = newLinkedTaskTitle.trim();
+    if (!trimmedTitle) {
+      setLinkedTaskCreateError("Task title is required.");
+      return;
+    }
+
+    if (!newLinkedTaskDueDate) {
+      setLinkedTaskCreateError("Due date is required.");
+      return;
+    }
+
+    setCreatingLinkedTask(true);
+    setLinkedTaskCreateError(null);
+
+    const selectedOwner = teamAgents.find((agent) => agent.id === newLinkedTaskOwnerAgentId);
+
+    try {
+      const response = await fetch("/api/agent-tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: trimmedTitle,
+          project: project.title,
+          projectId: project.id,
+          dueDate: newLinkedTaskDueDate,
+          status: newLinkedTaskStatus,
+          priority: newLinkedTaskPriority,
+          assigneeAgentId: selectedOwner?.id || undefined,
+          agent: selectedOwner
+            ? {
+                id: selectedOwner.id,
+                emoji: selectedOwner.emoji,
+                name: selectedOwner.name,
+                color: selectedOwner.color,
+              }
+            : {
+                emoji: unassignedAgent.emoji,
+                name: unassignedAgent.name,
+                color: unassignedAgent.color,
+              },
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to create linked task");
+      }
+
+      resetLinkedTaskCreateDraft();
+      setShowLinkedTaskCreate(false);
+      onUpdate?.();
+    } catch (error) {
+      console.error("Failed to create linked task:", error);
+      setLinkedTaskCreateError(error instanceof Error ? error.message : "Failed to create linked task");
+    } finally {
+      setCreatingLinkedTask(false);
+    }
+  }
 
   async function handleSave() {
     if (saving || deleting) return;
@@ -951,7 +1052,7 @@ export function ProjectCard({
 
               <div className="flex items-center justify-between gap-2 pt-1">
                 <p className="text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
-                  Read-only summary from Tasks based on current task project labels; editing still lives on the Tasks board.
+                  Existing linked tasks still read here from the Tasks board, but this card can now create new linked tasks with the stable project id already attached. Editing existing rows still lives on Tasks.
                 </p>
                 <a
                   href={projectTasksHref}
@@ -971,7 +1072,7 @@ export function ProjectCard({
               </p>
               <div className="flex items-center justify-between gap-2 pt-1">
                 <p className="text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
-                  Projects stays read-only for linkage here; open the focused Tasks view for this project, then use New task there if you want the intake form to start with this tracked project already selected.
+                  Existing linked-task edits and cleanup still live on Tasks, but this card can now create the first linked task directly with the stable project id already attached.
                 </p>
                 <a
                   href={projectTasksHref}
@@ -983,6 +1084,159 @@ export function ProjectCard({
                   Open focused Tasks ↗
                 </a>
               </div>
+            </div>
+          )}
+
+          {!linkedTasksLoading && !linkedTasksUnavailable && (
+            <div className="mt-3 rounded-lg border px-3 py-3" style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}>
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="space-y-1">
+                  <p className="text-[11px] font-semibold" style={{ color: "var(--text-primary)" }}>
+                    {linkedTasks.length > 0 ? "Create another linked task" : "Create the first linked task"}
+                  </p>
+                  <p className="text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
+                    This is a narrow Projects-side intake only: it saves a new task already linked to <span style={{ color: "var(--text-primary)" }}>{project.title}</span> by stable project id. Editing existing linked tasks still stays on the Tasks board.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleToggleLinkedTaskCreate}
+                  className="text-[10px] font-medium rounded-full px-3 py-1"
+                  style={{
+                    color: showLinkedTaskCreate ? "var(--text-primary)" : "#0A84FF",
+                    border: `1px solid ${showLinkedTaskCreate ? "var(--border)" : "color-mix(in srgb, #0A84FF 30%, transparent)"}`,
+                    backgroundColor: showLinkedTaskCreate ? "var(--surface-elevated)" : "transparent",
+                  }}
+                >
+                  {showLinkedTaskCreate ? "Close linked-task intake" : linkedTasks.length > 0 ? "Add linked task" : "Create first linked task"}
+                </button>
+              </div>
+
+              {showLinkedTaskCreate && (
+                <div className="mt-3 space-y-3">
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    <label className="flex flex-col gap-1 text-[10px] font-semibold" style={{ color: "var(--text-secondary)" }}>
+                      Title
+                      <input
+                        value={newLinkedTaskTitle}
+                        onChange={(event) => setNewLinkedTaskTitle(event.target.value)}
+                        placeholder="Add a linked task"
+                        className="w-full rounded-lg px-3 py-2 text-sm"
+                        style={{
+                          backgroundColor: "var(--surface-elevated)",
+                          color: "var(--text-primary)",
+                          border: "1px solid var(--border)",
+                        }}
+                      />
+                    </label>
+
+                    <label className="flex flex-col gap-1 text-[10px] font-semibold" style={{ color: "var(--text-secondary)" }}>
+                      Due date
+                      <input
+                        type="date"
+                        value={newLinkedTaskDueDate}
+                        onChange={(event) => setNewLinkedTaskDueDate(event.target.value)}
+                        className="w-full rounded-lg px-3 py-2 text-sm"
+                        style={{
+                          backgroundColor: "var(--surface-elevated)",
+                          color: "var(--text-primary)",
+                          border: "1px solid var(--border)",
+                        }}
+                      />
+                    </label>
+
+                    <label className="flex flex-col gap-1 text-[10px] font-semibold" style={{ color: "var(--text-secondary)" }}>
+                      Owner
+                      <select
+                        value={newLinkedTaskOwnerAgentId}
+                        onChange={(event) => setNewLinkedTaskOwnerAgentId(event.target.value)}
+                        className="w-full rounded-lg px-3 py-2 text-sm"
+                        style={{
+                          backgroundColor: "var(--surface-elevated)",
+                          color: "var(--text-primary)",
+                          border: "1px solid var(--border)",
+                        }}
+                      >
+                        <option value="">Unassigned</option>
+                        {teamAgents.map((agent) => (
+                          <option key={agent.id} value={agent.id}>
+                            {agent.emoji} {agent.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="flex flex-col gap-1 text-[10px] font-semibold" style={{ color: "var(--text-secondary)" }}>
+                      Initial status
+                      <select
+                        value={newLinkedTaskStatus}
+                        onChange={(event) => setNewLinkedTaskStatus(event.target.value as Task["status"])}
+                        className="w-full rounded-lg px-3 py-2 text-sm"
+                        style={{
+                          backgroundColor: "var(--surface-elevated)",
+                          color: "var(--text-primary)",
+                          border: "1px solid var(--border)",
+                        }}
+                      >
+                        {Object.entries(taskStatusConfig).map(([value, config]) => (
+                          <option key={value} value={value}>
+                            {config.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="flex flex-col gap-1 text-[10px] font-semibold" style={{ color: "var(--text-secondary)" }}>
+                      Priority
+                      <select
+                        value={newLinkedTaskPriority}
+                        onChange={(event) => setNewLinkedTaskPriority(event.target.value as Task["priority"])}
+                        className="w-full rounded-lg px-3 py-2 text-sm"
+                        style={{
+                          backgroundColor: "var(--surface-elevated)",
+                          color: "var(--text-primary)",
+                          border: "1px solid var(--border)",
+                        }}
+                      >
+                        {Object.entries(taskPriorityConfig).map(([value, config]) => (
+                          <option key={value} value={value}>
+                            {config.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  {linkedTaskCreateError && (
+                    <p className="text-[10px] font-medium" style={{ color: "var(--text-error, #ef4444)" }}>
+                      {linkedTaskCreateError}
+                    </p>
+                  )}
+
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        resetLinkedTaskCreateDraft();
+                        setShowLinkedTaskCreate(false);
+                      }}
+                      className="text-[10px] px-3 py-1 rounded-lg"
+                      style={{ color: "var(--text-muted)", border: "1px solid var(--border)" }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCreateLinkedTask}
+                      disabled={creatingLinkedTask}
+                      className="text-[10px] px-3 py-1 rounded-lg font-medium"
+                      style={{ backgroundColor: "#0A84FF", color: "#fff", opacity: creatingLinkedTask ? 0.7 : 1 }}
+                    >
+                      {creatingLinkedTask ? "Creating..." : linkedTasks.length > 0 ? "Create linked task" : "Create first linked task"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

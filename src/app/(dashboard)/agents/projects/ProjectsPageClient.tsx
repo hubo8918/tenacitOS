@@ -37,6 +37,7 @@ export default function ProjectsPageClient({
     data: tasksData,
     loading: tasksLoading,
     error: tasksError,
+    refetch: refetchTasks,
   } = useFetch<{ tasks: Task[] }>("/api/agent-tasks", {
     initialData: initialTasksAvailable ? { tasks: initialTasks } : null,
     fetchOnMount: !initialTasksAvailable,
@@ -480,7 +481,10 @@ export default function ProjectsPageClient({
               linkedTasks={linkedTasks}
               linkedTasksLoading={linkedTasksLoading}
               linkedTasksUnavailable={linkedTasksUnavailable}
-              onUpdate={refetch}
+              onUpdate={() => {
+                refetch();
+                refetchTasks();
+              }}
             />
           );
         })}
