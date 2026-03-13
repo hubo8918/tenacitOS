@@ -136,6 +136,9 @@ export function ProjectCard({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [linkedTaskCreateError, setLinkedTaskCreateError] = useState<string | null>(null);
+  const [linkedTaskManageError, setLinkedTaskManageError] = useState<string | null>(null);
+  const [pendingLinkedTaskRemovalId, setPendingLinkedTaskRemovalId] = useState<string | null>(null);
+  const [removingLinkedTaskId, setRemovingLinkedTaskId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editTitle, setEditTitle] = useState(project.title);
   const [editDescription, setEditDescription] = useState(project.description);
@@ -216,6 +219,9 @@ export function ProjectCard({
     setEditPhaseStatus(nextPhase?.status || "pending");
     setSaveError(null);
     setDeleteError(null);
+    setLinkedTaskManageError(null);
+    setPendingLinkedTaskRemovalId(null);
+    setRemovingLinkedTaskId(null);
     setConfirmDelete(false);
   };
 
@@ -308,6 +314,45 @@ export function ProjectCard({
       setLinkedTaskCreateError(error instanceof Error ? error.message : "Failed to create linked task");
     } finally {
       setCreatingLinkedTask(false);
+    }
+  }
+
+  const handleToggleLinkedTaskRemoval = (taskId: string) => {
+    setLinkedTaskManageError(null);
+    setPendingLinkedTaskRemovalId((current) => (current === taskId ? null : taskId));
+  };
+
+  async function handleRemoveLinkedTask(task: Task) {
+    if (saving || deleting || creatingLinkedTask || removingLinkedTaskId) {
+      return;
+    }
+
+    setRemovingLinkedTaskId(task.id);
+    setLinkedTaskManageError(null);
+
+    try {
+      const response = await fetch("/api/agent-tasks", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: task.id,
+          project: "",
+          projectId: null,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to remove linked task");
+      }
+
+      setPendingLinkedTaskRemovalId(null);
+      onUpdate?.();
+    } catch (error) {
+      console.error("Failed to remove linked task:", error);
+      setLinkedTaskManageError(error instanceof Error ? error.message : "Failed to remove linked task");
+    } finally {
+      setRemovingLinkedTaskId(null);
     }
   }
 
@@ -658,6 +703,138 @@ export function ProjectCard({
             )}
 
             <div
+              className="mb-3 rounded-lg px-3 py-3"
+              style={{
+                backgroundColor: "var(--surface-elevated)",
+                border: "1px solid var(--border)",
+              }}
+            >
+              <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-primary)" }}>
+                Linked task links
+              </p>
+              <p className="mt-1 text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                This project editor can now remove an existing task link by clearing that task&apos;s saved project assignment here. Reassigning a task to a different project or editing the rest of the task still happens on Tasks.
+              </p>
+
+              {linkedTasksLoading ? (
+                <p className="mt-3 text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
+                  Loading linked tasks before link-management controls can open...
+                </p>
+              ) : linkedTasksUnavailable ? (
+                <p className="mt-3 text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
+                  Tasks data is unavailable right now, so existing link cleanup still needs to wait for the Tasks board to load again.
+                </p>
+              ) : linkedTasks.length > 0 ? (
+                <div className="mt-3 space-y-2">
+                  {sortedLinkedTasks.map((task) => {
+                    const taskStatus = taskStatusConfig[task.status];
+                    const taskHref = getProjectTasksHref(project.title, project.id, task.id, "linked-preview");
+                    const isPendingRemoval = pendingLinkedTaskRemovalId === task.id;
+                    const isRemovingTask = removingLinkedTaskId === task.id;
+
+                    return (
+                      <div
+                        key={task.id}
+                        className="rounded-lg px-3 py-2"
+                        style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <a
+                              href={taskHref}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-xs font-medium hover:underline"
+                              style={{ color: "var(--text-secondary)" }}
+                              title={`Open ${task.title} in the focused Tasks view`}
+                            >
+                              {task.title}
+                            </a>
+                            <p className="mt-1 text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
+                              {task.projectId === project.id ? "Linked by stable project id." : "Linked by saved project label."} {task.dueDate ? `Due ${task.dueDate}.` : "No due date."}
+                            </p>
+                          </div>
+
+                          {isPendingRemoval ? (
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPendingLinkedTaskRemovalId(null);
+                                  setLinkedTaskManageError(null);
+                                }}
+                                disabled={isRemovingTask}
+                                className="text-[10px] px-3 py-1 rounded-lg"
+                                style={{ color: "var(--text-muted)", border: "1px solid var(--border)", opacity: isRemovingTask ? 0.6 : 1 }}
+                              >
+                                Keep link
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveLinkedTask(task)}
+                                disabled={isRemovingTask}
+                                className="text-[10px] px-3 py-1 rounded-lg font-medium"
+                                style={{ backgroundColor: "var(--status-blocked, #FF453A)", color: "#fff", opacity: isRemovingTask ? 0.7 : 1 }}
+                              >
+                                {isRemovingTask ? "Removing..." : "Remove link"}
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleLinkedTaskRemoval(task.id)}
+                              disabled={Boolean(removingLinkedTaskId)}
+                              className="text-[10px] px-3 py-1 rounded-lg font-medium"
+                              style={{
+                                color: "#FF9F0A",
+                                border: "1px solid color-mix(in srgb, #FF9F0A 32%, transparent)",
+                                opacity: removingLinkedTaskId ? 0.6 : 1,
+                              }}
+                            >
+                              Remove link…
+                            </button>
+                          )}
+                        </div>
+
+                        {isPendingRemoval && (
+                          <p className="mt-2 text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
+                            This clears the task&apos;s saved project link from <span style={{ color: "var(--text-primary)" }}>{project.title}</span>. The task itself stays on the Tasks board and can be relinked there later.
+                          </p>
+                        )}
+
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <span
+                            className="inline-flex items-center rounded-full px-2 py-1 text-[10px] font-medium whitespace-nowrap"
+                            style={{
+                              backgroundColor: `color-mix(in srgb, ${taskStatus.color} 12%, transparent)`,
+                              color: taskStatus.color,
+                              border: `1px solid color-mix(in srgb, ${taskStatus.color} 28%, transparent)`,
+                            }}
+                          >
+                            {taskStatus.label}
+                          </span>
+                          <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                            {task.projectId === project.id ? "Stable tracked link" : "Legacy/custom label link"}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="mt-3 text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
+                  No linked tasks to manage yet. Use the Projects-side linked-task intake below to create the first one.
+                </p>
+              )}
+
+              {linkedTaskManageError && (
+                <p className="mt-3 text-xs" style={{ color: "var(--text-error, #ef4444)" }}>
+                  {linkedTaskManageError}
+                </p>
+              )}
+            </div>
+
+            <div
               className="mb-3 rounded-lg px-3 py-2"
               style={{
                 backgroundColor: "color-mix(in srgb, var(--status-blocked, #FF453A) 10%, transparent)",
@@ -669,7 +846,7 @@ export function ProjectCard({
               </p>
               <p className="mt-1 text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
                 Deleting this project removes the Projects card and saved project record only. {linkedTasks.length > 0
-                  ? `${linkedTasks.length} linked task${linkedTasks.length === 1 ? " still uses" : "s still use"} this title on the Tasks board and ${linkedTasks.length === 1 ? "will" : "will all"} need cleanup there afterward instead of pretending deletion updates task labels automatically.`
+                  ? `${linkedTasks.length} linked task${linkedTasks.length === 1 ? " is" : "s are"} still attached here. Remove ${linkedTasks.length === 1 ? "that link" : "those links"} from this editor or clean them up on Tasks first if you do not want the saved project label left behind after deletion.`
                   : "No current Tasks labels point here, so deletion only removes the project record."}
               </p>
 
@@ -1052,7 +1229,7 @@ export function ProjectCard({
 
               <div className="flex items-center justify-between gap-2 pt-1">
                 <p className="text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
-                  Existing linked tasks still read here from the Tasks board, but this card can now create new linked tasks with the stable project id already attached. Editing existing rows still lives on Tasks.
+                  This card can now create new linked tasks and remove an existing saved link from the project editor. Reassigning a task to a different project or editing the rest of the task still lives on Tasks.
                 </p>
                 <a
                   href={projectTasksHref}
@@ -1072,7 +1249,7 @@ export function ProjectCard({
               </p>
               <div className="flex items-center justify-between gap-2 pt-1">
                 <p className="text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
-                  Existing linked-task edits and cleanup still live on Tasks, but this card can now create the first linked task directly with the stable project id already attached.
+                  This card can now create the first linked task directly with the stable project id already attached. Broader relinking or task-field cleanup still lives on Tasks.
                 </p>
                 <a
                   href={projectTasksHref}
@@ -1095,7 +1272,7 @@ export function ProjectCard({
                     {linkedTasks.length > 0 ? "Create another linked task" : "Create the first linked task"}
                   </p>
                   <p className="text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
-                    This is a narrow Projects-side intake only: it saves a new task already linked to <span style={{ color: "var(--text-primary)" }}>{project.title}</span> by stable project id. Editing existing linked tasks still stays on the Tasks board.
+                    This is a narrow Projects-side linkage flow: it saves a new task already linked to <span style={{ color: "var(--text-primary)" }}>{project.title}</span> by stable project id. Existing links can now be removed from the project editor, but reassigning or editing the rest of a task still stays on the Tasks board.
                   </p>
                 </div>
                 <button

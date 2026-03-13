@@ -132,9 +132,10 @@ To avoid fake progress or silent drift:
 - participating-agent visibility now reads directly on each project card, and the planning editor can now update participating-agent assignments
 - current-phase dependency visibility now reads directly on each project card
 - project ↔ task linkage now reads directly on each project card as a Tasks summary, and each card can now create a new linked task with the stable project id already attached
+- the project planning editor can now also remove an existing linked task from the current project without pretending Projects owns the rest of that task's fields
 - linked task summaries now call out blocked/overdue attention without pretending Projects owns task editing
 - zero-linked projects now include a focused Tasks-board handoff instead of reading like a dead-end empty state
-- **Still missing broader core project editing/management flows, richer phase/dependency editing, and existing linked-task edit/cleanup on Projects.**
+- **Still missing broader core project editing/management flows, richer phase/dependency editing, and broader linked-task reassignment/cleanup beyond the new remove-link path on Projects.**
 
 #### Calendar
 - SSR initial task-backed calendar data
@@ -1381,12 +1382,28 @@ Suggested template:
 - Next:
   - take the next narrow Projects or dependency-management step, unless deeper phase/dependency editing first needs an explicit schema/product decision.
 
+### 2026-03-12 23:xx
+- Step: Projects linked-task remove-link flow
+- Files:
+  - `src/components/ProjectCard.tsx`
+  - `src/app/(dashboard)/agents/tasks/TasksPageClient.tsx`
+- Validation:
+  - `npx eslint src/components/ProjectCard.tsx "src/app/(dashboard)/agents/tasks/TasksPageClient.tsx"`
+  - `npm run build`
+- Commit: current checkpoint commit (`feat(projects): add linked-task remove flow`)
+- Result:
+  - The Projects planning editor can now remove an existing task link by clearing that task's saved `project`/`projectId` assignment from the project side instead of forcing every existing-link cleanup back through Tasks.
+  - This widens the stable Project ↔ Task linkage model into a real editable remove-link path on Projects while keeping the trust boundary explicit: reassigning a task to a different project or editing the rest of the task still stays on Tasks.
+  - Tasks-side handoff copy now reflects that Projects can add/remove links without pretending the project card has become a full inline task editor.
+- Next:
+  - take the next narrow dependency-management or linked-task reassignment step, unless deeper phase/dependency editing first needs an explicit schema/product decision.
+
 ## Current Focus
 
-**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + direct inline visibility for task/project link mismatches + a scoped board-level mismatch attention summary + a mismatch-only board filter + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, task-row jumps into a focused Projects view, project-focused task intake defaults plus an empty-state intake CTA, a first Projects create flow, a Projects planning editor that now covers title/description/status/priority/owner/participants/current phase, current-phase dependency visibility, a linked-task attention summary, a zero-linked Tasks handoff, a first Projects-side linked-task intake anchored by stable `projectId`, a Projects-board mismatch cleanup handoff that now lands on and briefly highlights the first affected Tasks row, an urgent-overflow handoff that now jumps straight to the first hidden blocked or overdue linked task, a first honest Projects delete flow, a stable `projectId` foundation so Task ↔ Project linkage no longer depends only on exact title strings, a tracked-project selector in the task details editor, and that same stable tracked-project/custom-label model now applied to the New task intake flow.
+**Current focus:** Files trust/stability is in a good stop state, and Phase 3 now has real Tasks create + row-level details editing + honest row-action confirmation + visible project linkage + direct inline visibility for task/project link mismatches + a scoped board-level mismatch attention summary + a mismatch-only board filter + dependency visibility + a first dependency editor + dependency cycle/stale-blocker trust guards, plus board-level stale blocker cleanup visibility, project-focused board summaries that now stay scoped honestly, task-row jumps into a focused Projects view, project-focused task intake defaults plus an empty-state intake CTA, a first Projects create flow, a Projects planning editor that now covers title/description/status/priority/owner/participants/current phase, current-phase dependency visibility, a linked-task attention summary, a zero-linked Tasks handoff, a first Projects-side linked-task intake anchored by stable `projectId`, a Projects-side remove-link flow for existing linked tasks, a Projects-board mismatch cleanup handoff that now lands on and briefly highlights the first affected Tasks row, an urgent-overflow handoff that now jumps straight to the first hidden blocked or overdue linked task, a first honest Projects delete flow, a stable `projectId` foundation so Task ↔ Project linkage no longer depends only on exact title strings, a tracked-project selector in the task details editor, and that same stable tracked-project/custom-label model now applied to the New task intake flow.
 
 **Do next:**
-1. take the next narrow Projects CRUD/project-management or dependency-management step so the Projects board keeps closing its remaining honest Phase 3 gaps
+1. take the next narrow dependency-management or linked-task reassignment step so the Projects board keeps closing its remaining honest Phase 3 gaps
 2. keep using the stable `projectId` linkage model for Project ↔ Task flows instead of title-only matching
 3. if deeper phase/dependency editing needs a schema/product decision, say that explicitly before widening
 4. keep pushing coordination surfaces forward without pretending execution automation already exists
