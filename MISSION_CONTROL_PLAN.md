@@ -336,28 +336,70 @@ Calendar should reflect:
 
 ---
 
-## Phase 5 — Execution Layer
-**Goal:** Connect structured Mission Control work to actual agent execution.
+## Phase 5 — Execution Layer (Honest Version)
+**Goal:** Add an execution/run history layer that tracks what was attempted, what ran, and what the results were - without pretending we're running agents ourselves.
 
-### First version
-Support safe, semi-manual execution:
-- generate agent work orders from tasks
-- record run intent
-- show run status/history
-- capture result summaries
+**Status:** adjusted for stepwise completion
 
-### Later version
-Connect to real OpenClaw execution:
-- `sessions_spawn`
-- Henry as coordinator
-- worker-agent delegation
-- review / handoff tracking
+**Phases:**
 
-### Status
-- not started
+### Phase 5.1 — Execution Data Model Foundation
+**Goal:** Ensure the existing execution model is complete and can be used to record manual execution attempts.
 
-### Exit criteria
-- A project task can move from backlog -> assigned agent -> result summary in one coherent flow
+**Target:**
+- `executionMode`: "manual" | "agent-run" (already exists)
+- `runStatus`: "idle" | "queued" | "running" | "needs_review" | "done" | "failed" (already exists)
+- `deliverable`: result summary string (already exists)
+
+**Exit criteria:**
+- The existing AgentTask model has all fields needed to record manual execution attempts
+- Fields are properly typed and validated
+- Existing `saveAgentTasks` API can store execution records
+
+### Phase 5.2 — Manual Execution Buttons (Task Row)
+**Goal:** Add honest manual execution buttons to task rows that don't pretend to run agents.
+
+**Target:**
+- "Mark as started" button that sets `runStatus` to "running" and updates task status
+- "Record result" button that opens a simple form for result summary
+- No fake agent execution - just record what happened
+
+**Exit criteria:**
+- Task row has "Mark as started" and "Record result" buttons
+- Buttons only modify task execution metadata (no fake automation)
+- Result is saved through existing `/api/agent-tasks` endpoint
+
+### Phase 5.3 — Run History Display
+**Goal:** Show run history in task details so operators can see what was attempted.
+
+**Target:**
+- Display runStatus and deliverable in task details
+- Show timestamp when status changed
+- Keep execution manual and explicit
+
+**Exit criteria:**
+- Task details show run history (runStatus, deliverable, timestamp)
+- No fake progress bars or automated status updates
+- Trust boundaries stay explicit
+
+### Phase 5.4 — Execution Status in Task Board
+**Goal:** Make execution status visible in the task board.
+
+**Target:**
+- Show runStatus badges in task rows (e.g., "running", "done", "failed")
+- Show "needs_review" status when appropriate
+- No fake auto-progress
+
+**Exit criteria:**
+- Task board shows execution status at a glance
+- Status updates are only from manual buttons
+- No fake automation
+
+### Later version (Phase 5.5+ — Optional, requires separate product decision)
+- Connect to real OpenClaw execution via `sessions_spawn`
+- Henry as coordinator for multi-agent workflows
+- Worker-agent delegation tracking
+- Review/handoff tracking across execution lifecycle
 
 ---
 

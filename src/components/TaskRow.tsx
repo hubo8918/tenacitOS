@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import type { CSSProperties } from "react";
-import { MoreHorizontal, ExternalLink } from "lucide-react";
+import { MoreHorizontal, ExternalLink, Play, CheckSquare, AlertCircle } from "lucide-react";
 import { taskPriorityConfig, taskStatusConfig, type Task } from "@/data/mockTasksData";
 
 function parseLocalDate(dateString: string) {
@@ -98,10 +98,11 @@ export function TaskRow({
   const [savingOwnership, setSavingOwnership] = useState(false);
   const [ownershipError, setOwnershipError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [actionPending, setActionPending] = useState<"status" | "delete" | null>(null);
+  const [actionPending, setActionPending] = useState<"status" | "delete" | "execution" | null>(null);
   const [pendingStatusLabel, setPendingStatusLabel] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [confirmingStatus, setConfirmingStatus] = useState<Task["status"] | null>(null);
+  const [confirmingExecution, setConfirmingExecution] = useState<"start" | "review" | "debug" | null>(null);
   const resolvedProjectLabel = linkedProjectTitle || task.project;
   const [title, setTitle] = useState(task.title);
   const [project, setProject] = useState(resolvedProjectLabel);
@@ -601,6 +602,50 @@ export function TaskRow({
     }
   };
 
+  const handleManualExecution = async (intent: "start" | "review" | "debug") => {
+    setActionPending("execution");
+    setActionError(null);
+    setConfirmingExecution(intent);
+
+    try {
+      // Determine execution status based on intent
+      let runStatus: "idle" | "queued" | "running" | "needs_review" | "done" | "failed" = "idle";
+      if (intent === "start") {
+        runStatus = "running";
+      } else if (intent === "review" || intent === "debug") {
+        runStatus = "needs_review";
+      }
+
+      const response = await fetch("/api/execution-attempts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          taskId: task.id,
+          intent,
+          runStatus,
+          executionMode: "manual",
+          deliverable: undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to record execution attempt");
+      }
+
+      setConfirmingExecution(null);
+      setActionPending(null);
+
+      if (onUpdate) {
+        onUpdate();
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      setActionError(errorMessage);
+      setActionPending(null);
+      setConfirmingExecution(null);
+    }
+  };
+
   const menuItemStyle: CSSProperties = {
     padding: "0.375rem 0.75rem",
     fontSize: "0.75rem",
@@ -857,6 +902,63 @@ export function TaskRow({
                   margin: "0.25rem 0",
                 }}
               />
+              <button
+                style={{ ...menuItemStyle, color: "#34C759", opacity: actionPending ? 0.6 : 1 }}
+                onClick={() => setConfirmingExecution("start")}
+                disabled={Boolean(actionPending)}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = "var(--surface-hover)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "transparent";
+                }}
+              >
+                <span className="flex items-center gap-2">
+                  <Play className="w-3 h-3" />
+                  Start working
+                </span>
+              </button>
+              <button
+                style={{ ...menuItemStyle, color: "#5AC8FA", opacity: actionPending ? 0.6 : 1 }}
+                onClick={() => setConfirmingExecution("review")}
+                disabled={Boolean(actionPending)}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = "var(--surface-hover)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "transparent";
+                }}
+              >
+                <span className="flex items-center gap-2">
+                  <CheckSquare className="w-3 h-3" />
+                  Review
+                </span>
+              </button>
+              {task.status !== "completed" && task.status !== "pending" && (
+                <button
+                  style={{ ...menuItemStyle, color: "#FF9F0A", opacity: actionPending ? 0.6 : 1 }}
+                  onClick={() => setConfirmingExecution("debug")}
+                  disabled={Boolean(actionPending)}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = "var(--surface-hover)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "transparent";
+                  }}
+                >
+                  <span className="flex items-center gap-2">
+                    <AlertCircle className="w-3 h-3" />
+                    Debug
+                  </span>
+                </button>
+              )}
+              <div
+                style={{
+                  height: "1px",
+                  backgroundColor: "var(--border)",
+                  margin: "0.25rem 0",
+                }}
+              />
               {task.status !== "completed" && (
                 <button
                   style={{ ...menuItemStyle, opacity: actionPending ? 0.6 : 1 }}
@@ -1045,6 +1147,52 @@ export function TaskRow({
                       }}
                     >
                       {actionPending === "status" ? "Updating..." : "Confirm change"}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {confirmingExecution && (
+                <>
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                      {confirmingExecution === "start"
+                        ? "Start working on this task?"
+                        : confirmingExecution === "review"
+                          ? "Review this task?"
+                          : "Debug this task?"}
+                    </p>
+                    <p className="text-xs mt-1" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+                      This records your execution intent without pretending to run an agent. The task status will be updated, and your intent will be logged for later tracking.
+                    </p>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => {
+                        setConfirmingExecution(null);
+                        setActionError(null);
+                      }}
+                      disabled={actionPending === "execution"}
+                      className="text-xs px-3 py-1.5 rounded-lg transition-colors"
+                      style={{
+                        color: "var(--text-secondary)",
+                        border: "1px solid var(--border)",
+                        opacity: actionPending === "execution" ? 0.6 : 1,
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => handleManualExecution(confirmingExecution)}
+                      disabled={actionPending === "execution"}
+                      className="text-xs px-3 py-1.5 rounded-lg transition-colors"
+                      style={{
+                        backgroundColor: "var(--accent)",
+                        color: "#000",
+                        opacity: actionPending === "execution" ? 0.6 : 1,
+                      }}
+                    >
+                      {actionPending === "execution" ? "Recording..." : "Confirm intent"}
                     </button>
                   </div>
                 </>
