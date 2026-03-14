@@ -67,7 +67,11 @@ interface DependencyOption {
 
 interface TaskRowProps {
   rowId?: string;
-  task: Task;
+  task: Task & {
+    runStatus?: "idle" | "queued" | "running" | "needs_review" | "done" | "failed";
+    executionMode?: "manual" | "agent-run";
+    deliverable?: string;
+  };
   agentOptions: TaskAgentOption[];
   projectOptions: TaskProjectOption[];
   allTasks: Task[];
@@ -103,6 +107,17 @@ export function TaskRow({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [confirmingStatus, setConfirmingStatus] = useState<Task["status"] | null>(null);
   const [confirmingExecution, setConfirmingExecution] = useState<"start" | "review" | "debug" | null>(null);
+  const [executionAttempts, setExecutionAttempts] = useState<Array<{
+    id: string;
+    intent: "start" | "review" | "debug";
+    timestamp: string;
+    userAgent?: string;
+    runStatus?: string;
+    executionMode?: string;
+    deliverable?: string;
+  }>>([]);
+  const [loadingExecutionHistory, setLoadingExecutionHistory] = useState(false);
+  const [executionHistoryError, setExecutionHistoryError] = useState<string | null>(null);
   const resolvedProjectLabel = linkedProjectTitle || task.project;
   const [title, setTitle] = useState(task.title);
   const [project, setProject] = useState(resolvedProjectLabel);
@@ -352,6 +367,31 @@ export function TaskRow({
     setConfirmingDelete(false);
     setConfirmingStatus(null);
   }, [resolvedProjectLabel, task.id, task.status, task.title, task.dueDate, task.priority]);
+
+  useEffect(() => {
+    // Fetch execution attempts when task id changes
+    const fetchExecutionHistory = async () => {
+      if (!task.id) return;
+      setLoadingExecutionHistory(true);
+      setExecutionHistoryError(null);
+      setExecutionAttempts([]);
+
+      try {
+        const response = await fetch(`/api/execution-attempts?id=${task.id}`);
+        if (!response.ok) {
+          throw new Error("Failed to fetch execution history");
+        }
+        const data = await response.json();
+        setExecutionAttempts(data.attempts || []);
+      } catch (err) {
+        setExecutionHistoryError(err instanceof Error ? err.message : "Failed to fetch execution history");
+      } finally {
+        setLoadingExecutionHistory(false);
+      }
+    };
+
+    fetchExecutionHistory();
+  }, [task.id]);
 
   const resetDetailsDraft = () => {
     setTitle(task.title);
@@ -1231,6 +1271,92 @@ export function TaskRow({
                 <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
                   Edit the core board fields here: title, project linkage, due date, status, and priority. Reviewer and handoff stay in the routing editor so this row does not pretend to be a giant everything form.
                 </p>
+              </div>
+
+              {/* Execution History Section */}
+              <div className="rounded-xl p-3" style={{ border: "1px solid var(--border)", backgroundColor: "var(--card)" }}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
+                      Execution history
+                    </p>
+                    <p className="mt-1 text-[11px]" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+                      Shows manual execution attempts recorded for this task. No fake agent execution - just what you&apos;ve chosen to attempt.
+                    </p>
+                  </div>
+                  {loadingExecutionHistory && (
+                    <span className="text-[11px] font-medium" style={{ color: "var(--text-secondary)" }}>
+                      Loading...
+                    </span>
+                  )}
+                </div>
+
+                {executionHistoryError && (
+                  <p className="mt-2 text-[11px] font-medium" style={{ color: "var(--status-blocked)" }}>
+                    {executionHistoryError}
+                  </p>
+                )}
+
+                {!loadingExecutionHistory && executionAttempts.length === 0 && !executionHistoryError && (
+                  <p className="mt-2 text-[11px]" style={{ color: "var(--text-muted)" }}>
+                    No execution attempts recorded yet.
+                  </p>
+                )}
+
+                {!loadingExecutionHistory && executionAttempts.length > 0 && (
+                  <div className="mt-2 space-y-2">
+                    {executionAttempts.map((attempt) => (
+                      <div
+                        key={attempt.id}
+                        className="rounded-lg p-2"
+                        style={{
+                          backgroundColor: "var(--surface-hover)",
+                          border: "1px solid color-mix(in srgb, var(--border) 30%, transparent)",
+                        }}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>
+                              {attempt.intent === "start" && "Start working"}
+                              {attempt.intent === "review" && "Review"}
+                              {attempt.intent === "debug" && "Debug"}
+                            </p>
+                            <p className="mt-0.5 text-[11px]" style={{ color: "var(--text-secondary)" }}>
+                              {new Date(attempt.timestamp).toLocaleString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                hour: "numeric",
+                                minute: "numeric",
+                              })}
+                            </p>
+                          </div>
+                          {attempt.runStatus && (
+                            <span
+                              className="text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap"
+                              style={{
+                                backgroundColor: `color-mix(in srgb, var(--accent) 15%, transparent)`,
+                                color: "var(--accent)",
+                                border: `1px solid color-mix(in srgb, var(--accent) 30%, transparent)`,
+                              }}
+                            >
+                              {attempt.runStatus}
+                            </span>
+                          )}
+                        </div>
+                        {attempt.deliverable && (
+                          <div className="mt-2">
+                            <p className="text-[11px] font-semibold mb-1" style={{ color: "var(--text-secondary)" }}>
+                              Result:
+                            </p>
+                            <p className="text-[11px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                              {attempt.deliverable}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
