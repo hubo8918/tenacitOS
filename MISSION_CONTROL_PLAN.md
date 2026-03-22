@@ -1907,6 +1907,25 @@ Suggested template:
 - Next:
   - keep the Team/Agents trust pass narrow; the next best candidate is another small wording or handoff fix where Team edit/config language still sounds more runtime-oriented than organizational.
 
+### 2026-03-22 12:0x
+- Step: Team profile save failures stop masquerading as prompt results
+- Diagnosis:
+  - The Team editor reused `actionResult` for save failures, so a profile-save error would render as if it were a `quick check-in` response.
+  - That is a real trust bug: editing metadata and prompting an agent are different actions, but the card collapsed them into the same feedback channel.
+- Files:
+  - `src/components/AgentCard.tsx`
+  - `MISSION_CONTROL_PLAN.md`
+- Validation:
+  - `npx eslint src/components/AgentCard.tsx`
+  - `npm run build`
+  - browser smoke check on `/agents/team` confirmed the Henry profile editor still opens correctly after the state split
+- Commit: current checkpoint commit (`fix(team): separate profile save errors from prompts`)
+- Result:
+  - Team profile saves now have a dedicated inline error path instead of hijacking the prompt-result box with a fake `quick check-in` label.
+  - Prompt feedback and profile-edit feedback are now separate, which keeps Team card interactions honest about what actually failed.
+- Next:
+  - another good narrow trust pass candidate is renaming Team edit copy (`Edit Agent`, `edit henry`) so profile editing reads as organizational metadata work instead of runtime-agent control.
+
 ## Current Focus
 
 **Current focus:** Continue the Team/Agents trust pass one narrow step at a time. The highest-value work right now is making relationship, runtime, and permission surfaces say exactly what they mean without implying stronger org structure or orchestration than the product actually has.

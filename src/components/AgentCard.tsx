@@ -162,6 +162,7 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
   const [canDelegateTo, setCanDelegateTo] = useState<string[]>(agent.canDelegateTo || []);
   const [tagsInput, setTagsInput] = useState(agent.tags.map((tag) => tag.label).join(", "));
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [actionRunning, setActionRunning] = useState<"wake" | "check-in" | null>(null);
   const [actionResult, setActionResult] = useState<AgentActionResult | null>(null);
 
@@ -196,6 +197,7 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
 
   const handleSave = async () => {
     setSaving(true);
+    setSaveError(null);
     try {
       const response = await fetch("/api/team", {
         method: "PUT",
@@ -221,10 +223,11 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
       }
 
       setEditing(false);
+      setSaveError(null);
       onUpdate?.();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setActionResult({ action: "check-in", text: `error: ${message}` });
+      setSaveError(message);
     } finally {
       setSaving(false);
     }
@@ -241,11 +244,13 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
     setCanReviewFor(agent.canReviewFor || []);
     setCanDelegateTo(agent.canDelegateTo || []);
     setTagsInput(agent.tags.map((tag) => tag.label).join(", "));
+    setSaveError(null);
     setEditing(false);
   };
 
   const runAgentAction = async (action: "wake" | "check-in") => {
     setActionRunning(action);
+    setSaveError(null);
     setActionResult(null);
 
     try {
@@ -481,6 +486,12 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
             <p className="text-[11px] -mt-1" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
               Delegation targets describe likely handoff paths in Mission Control, not an enforced spawn/permission rule.
             </p>
+
+            {saveError && (
+              <p className="text-xs" style={{ color: "var(--negative, #FF453A)" }}>
+                Failed to save team profile: {saveError}
+              </p>
+            )}
 
             <div className="flex justify-end gap-2 mt-auto">
               <button
