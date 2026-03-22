@@ -83,27 +83,31 @@ export function Notepad() {
       <div
         style={{
           display: "flex",
-          alignItems: "center",
+          alignItems: "flex-start",
           gap: "0.5rem",
           padding: "0.625rem 0.875rem",
           borderBottom: "1px solid var(--border)",
           flexShrink: 0,
         }}
       >
-        <StickyNote className="w-3.5 h-3.5" style={{ color: "#fbbf24", flexShrink: 0 }} />
-        <span
-          style={{
-            fontSize: "0.75rem",
-            color: "var(--text-secondary)",
-            flex: 1,
-            fontWeight: 500,
-          }}
-        >
-          Notepad
-        </span>
+        <StickyNote className="w-3.5 h-3.5" style={{ color: "#fbbf24", flexShrink: 0, marginTop: "0.1rem" }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: "0.75rem",
+              color: "var(--text-secondary)",
+              fontWeight: 500,
+            }}
+          >
+            Notepad
+          </div>
+          <div style={{ fontSize: "0.65rem", color: "var(--text-muted)", marginTop: "0.125rem" }}>
+            Browser-local scratchpad · saved in this browser only
+          </div>
+        </div>
         <span
           suppressHydrationWarning
-          style={{ fontSize: "0.65rem", color: "var(--text-muted)", minWidth: "72px", textAlign: "right" }}
+          style={{ fontSize: "0.65rem", color: "var(--text-muted)", minWidth: "72px", textAlign: "right", paddingTop: "0.05rem" }}
         >
           {isDirty
             ? "saving..."

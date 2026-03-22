@@ -1721,6 +1721,21 @@ Suggested template:
 - Next:
   - keep the dashboard sweep narrow; the next useful step should target another secondary surface only if it still overpromises or hides unavailable state.
 
+### 2026-03-21 23:xx
+- Step: Dashboard notepad now admits it is browser-local
+- Files:
+  - `src/components/Notepad.tsx`
+  - `MISSION_CONTROL_PLAN.md`
+- Validation:
+  - `npx eslint src/components/Notepad.tsx`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(dashboard): label notepad as browser-local scratchpad`)
+- Result:
+  - The dashboard notepad no longer reads like shared Mission Control state; it now explicitly says it is a browser-local scratchpad saved only in the current browser.
+  - This closes a quiet trust gap in the secondary column, because operators can now tell the difference between local convenience notes and real app-backed data.
+- Next:
+  - keep the dashboard sweep narrow; if another secondary card still implies shared state or stronger affordances than it really has, tighten that one next.
+
 ## Current Focus
 
 **Current focus:** Continue the dashboard trust pass one narrow step at a time. The highest-value work right now is trimming misleading affordances and making unavailable/optional data read explicitly unavailable instead of disappearing or pretending to be interactive.
