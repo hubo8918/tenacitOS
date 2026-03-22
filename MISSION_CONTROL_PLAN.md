@@ -1736,6 +1736,24 @@ Suggested template:
 - Next:
   - keep the dashboard sweep narrow; if another secondary card still implies shared state or stronger affordances than it really has, tighten that one next.
 
+### 2026-03-21 23:xx
+- Step: Dashboard activity counters stop pretending to be execution history
+- Diagnosis:
+  - `getActivityStats()` reads from the generic `activities` log (`src/lib/activities-db.ts`), so the dashboard label `Successful runs` overstated what that counter actually measures.
+- Files:
+  - `src/app/(dashboard)/page.tsx`
+  - `MISSION_CONTROL_PLAN.md`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/page.tsx"`
+  - `npm run build`
+  - browser smoke check on `/` confirmed the rendered label now reads `Successful events`
+- Commit: current checkpoint commit (`fix(dashboard): relabel activity counters as generic events`)
+- Result:
+  - The dashboard activity counter now says `Successful events` instead of `Successful runs`, which keeps generic activity-log history from reading like task execution telemetry.
+  - The helper copy under the card now explicitly says those counts come from the generic activity log, while the runtime summary remains the primary health signal.
+- Next:
+  - keep the dashboard sweep narrow; the next honest candidate is reducing the oversized empty-state footprint in Recent Activity when there has been nothing in the last 24 hours.
+
 ## Current Focus
 
 **Current focus:** Continue the dashboard trust pass one narrow step at a time. The highest-value work right now is trimming misleading affordances and making unavailable/optional data read explicitly unavailable instead of disappearing or pretending to be interactive.

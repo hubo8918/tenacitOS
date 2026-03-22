@@ -351,7 +351,7 @@ export default async function DashboardPage() {
                   color: "var(--info)",
                 },
                 {
-                  label: "Successful runs",
+                  label: "Successful events",
                   value: stats.success.toLocaleString(),
                   icon: CheckCircle,
                   color: "var(--success)",
@@ -378,7 +378,7 @@ export default async function DashboardPage() {
                 </div>
               ))}
               <div className="pt-1 text-xs" style={{ color: "var(--text-muted)" }}>
-                Historical counters are useful for trend reading, but the runtime summary above is the primary health signal.
+                These counters come from the generic activity log, not the task execution history; the runtime summary above is still the primary health signal.
               </div>
             </div>
           </div>
