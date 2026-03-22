@@ -1773,6 +1773,24 @@ Suggested template:
 - Next:
   - keep the dashboard sweep narrow; the next likely candidate is another trust/wayfinding issue on Team or Agents rather than more cosmetic dashboard polish.
 
+### 2026-03-21 23:xx
+- Step: Team hero copy stops claiming autonomous 24/7 value production
+- Diagnosis:
+  - The Team page hero quote claimed Mission Control was already `an autonomous organization of AI agents` that `produces value 24/7`, which overpromised relative to the product's current honest scope.
+- Files:
+  - `src/app/(dashboard)/agents/team/TeamPageClient.tsx`
+  - `MISSION_CONTROL_PLAN.md`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/agents/team/TeamPageClient.tsx"`
+  - `npm run build`
+  - browser smoke check on `/agents/team` confirmed the new factual hero copy renders
+- Commit: current checkpoint commit (`fix(team): replace autonomous 24-7 hero claim`)
+- Result:
+  - The Team page now opens with factual copy about configured roles, relationships, and recent presence instead of claiming a level of autonomy or continuous value production that Mission Control does not yet deliver.
+  - This keeps the organization view aligned with the actual product: identity and collaboration context first, not marketing promises about orchestration.
+- Next:
+  - stop widening the Team page unless another concrete affordance or status label is misleading; the next best candidate is likely an Agents/Team wayfinding or action-label trust issue, not more headline copy churn.
+
 ## Current Focus
 
 **Current focus:** Continue the dashboard trust pass one narrow step at a time. The highest-value work right now is trimming misleading affordances and making unavailable/optional data read explicitly unavailable instead of disappearing or pretending to be interactive.

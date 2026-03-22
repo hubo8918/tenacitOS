@@ -187,7 +187,7 @@ export default function TeamPageClient({ initialTeam }: TeamPageClientProps) {
             lineHeight: 1.6,
           }}
         >
-          &ldquo;An autonomous organization of AI agents that does work for me and produces value 24/7&rdquo;
+          &ldquo;Configured agent roster with roles, relationships, and recent presence at a glance.&rdquo;
         </p>
       </div>
 
