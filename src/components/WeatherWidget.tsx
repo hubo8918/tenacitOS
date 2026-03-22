@@ -64,11 +64,9 @@ export function WeatherWidget() {
     );
   }
 
-  if (!weather || weather.error) {
-    return null;
-  }
+  if (!weather || weather.error || weather.unavailable) {
+    const reason = weather?.error || weather?.reason || "Location not configured";
 
-  if (weather.unavailable) {
     return (
       <div
         style={{
@@ -87,7 +85,7 @@ export function WeatherWidget() {
             Weather unavailable
           </div>
           <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
-            {weather.reason || "Location not configured"}
+            {reason}
           </div>
         </div>
       </div>

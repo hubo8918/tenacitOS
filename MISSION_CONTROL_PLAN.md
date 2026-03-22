@@ -1704,9 +1704,26 @@ Suggested template:
 - Next:
   - keep the dashboard page sweep narrow; if the next step stays honest, tighten another secondary card that currently disappears or overpromises when its data is unavailable.
 
+### 2026-03-21 23:xx
+- Step: Dashboard weather card stays explicit when unavailable
+- Files:
+  - `src/app/(dashboard)/page.tsx`
+  - `src/components/WeatherWidget.tsx`
+  - `MISSION_CONTROL_PLAN.md`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/page.tsx" src/components/WeatherWidget.tsx`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(dashboard): keep weather state visible when unavailable`)
+- Result:
+  - The dashboard now keeps the weather card visible even when the location is unconfigured or the weather fetch fails, instead of silently dropping the whole panel.
+  - WeatherWidget now renders the same explicit unavailable state for both missing configuration and fetch errors, so operators get honest status instead of a disappearing sidebar section.
+  - This keeps the secondary dashboard column trustworthy: missing data now reads as unavailable, not absent or accidentally hidden.
+- Next:
+  - keep the dashboard sweep narrow; the next useful step should target another secondary surface only if it still overpromises or hides unavailable state.
+
 ## Current Focus
 
-**Current focus:** Resume the page sweep with dashboard trust/wayfinding cleanup. The execution layer is at a clean honest stop, so the next useful work should keep improving top-level navigation and data honesty on high-visibility surfaces instead of widening into fake automation.
+**Current focus:** Continue the dashboard trust pass one narrow step at a time. The highest-value work right now is trimming misleading affordances and making unavailable/optional data read explicitly unavailable instead of disappearing or pretending to be interactive.
 
 **Do next:**
 1. keep page-sweep steps narrow and trust-first
