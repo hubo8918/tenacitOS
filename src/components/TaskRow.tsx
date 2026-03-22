@@ -33,6 +33,24 @@ function taskDependsOn(taskId: string, targetTaskId: string, dependencyMap: Map<
   return blockedByTaskIds.some((blockedTaskId) => taskDependsOn(blockedTaskId, targetTaskId, dependencyMap, visited));
 }
 
+function getExecutionStatusConfig(runStatus?: "idle" | "queued" | "running" | "needs_review" | "done" | "failed") {
+  switch (runStatus) {
+    case "queued":
+      return { label: "Queued", color: "#64D2FF" };
+    case "running":
+      return { label: "Running", color: "#0A84FF" };
+    case "needs_review":
+      return { label: "Needs review", color: "#FF9F0A" };
+    case "done":
+      return { label: "Done", color: "#32D74B" };
+    case "failed":
+      return { label: "Failed", color: "#FF453A" };
+    case "idle":
+    default:
+      return { label: "Idle", color: "#8E8E93" };
+  }
+}
+
 interface TaskAgentOption {
   id: string;
   name: string;
@@ -143,6 +161,8 @@ export function TaskRow({
 
   const status = taskStatusConfig[task.status];
   const priority = taskPriorityConfig[task.priority];
+  const executionStatus = getExecutionStatusConfig(task.runStatus);
+  const showExecutionBadge = task.runStatus && task.runStatus !== "idle";
   const isOverdue = isTaskOverdue(task.dueDate) && task.status !== "completed";
   const blockedByTaskIds = useMemo(() => task.blockedByTaskIds || [], [task.blockedByTaskIds]);
 
@@ -728,9 +748,27 @@ export function TaskRow({
         }}
       >
         <div className="flex-[3] min-w-0">
-          <span className="text-sm font-medium truncate block" style={{ color: "var(--text-primary)" }}>
-            {task.title}
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium truncate block min-w-0" style={{ color: "var(--text-primary)" }}>
+              {task.title}
+            </span>
+            {showExecutionBadge && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap"
+                style={{
+                  backgroundColor: `color-mix(in srgb, ${executionStatus.color} 14%, transparent)`,
+                  color: executionStatus.color,
+                  border: `1px solid color-mix(in srgb, ${executionStatus.color} 28%, transparent)`,
+                }}
+                title={task.deliverable?.trim()
+                  ? `Execution status: ${executionStatus.label}. Deliverable recorded.`
+                  : `Execution status: ${executionStatus.label}.`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: executionStatus.color }} />
+                {executionStatus.label}
+              </span>
+            )}
+          </div>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]" style={{ color: "var(--text-muted)" }}>
             <span>
               Review:{" "}

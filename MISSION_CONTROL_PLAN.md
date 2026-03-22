@@ -339,11 +339,11 @@ Calendar should reflect:
 ## Phase 5 — Execution Layer (Honest Version)
 **Goal:** Add an execution/run history layer that tracks what was attempted, what ran, and what the results were - without pretending we're running agents ourselves.
 
-**Status:** adjusted for stepwise completion
+**Status:** core honest scope complete; anything beyond this now needs a separate product decision
 
 **Phases:**
 
-### Phase 5.1 — Execution Data Model Foundation
+### Phase 5.1 — Execution Data Model Foundation ✅ COMPLETE
 **Goal:** Ensure the existing execution model is complete and can be used to record manual execution attempts.
 
 **Target:**
@@ -352,24 +352,26 @@ Calendar should reflect:
 - `deliverable`: result summary string (already exists)
 
 **Exit criteria:**
-- The existing AgentTask model has all fields needed to record manual execution attempts
-- Fields are properly typed and validated
-- Existing `saveAgentTasks` API can store execution records
+- The existing AgentTask model has all fields needed to record manual execution attempts ✓
+- Fields are properly typed and validated ✓
+- Existing `saveAgentTasks` API can store execution records ✓
 
-### Phase 5.2 — Manual Execution Buttons (Task Row)
+### Phase 5.2 — Manual Execution Buttons (Task Row) ✅ COMPLETE
 **Goal:** Add honest manual execution buttons to task rows that don't pretend to run agents.
 
 **Target:**
-- "Mark as started" button that sets `runStatus` to "running" and updates task status
-- "Record result" button that opens a simple form for result summary
+- "Start working" button that sets `runStatus` to "running"
+- "Review" button that sets `runStatus` to "needs_review"
+- "Debug" button that sets `runStatus` to "needs_review"
+- POST to `/api/execution-attempts` to record intent
 - No fake agent execution - just record what happened
 
 **Exit criteria:**
-- Task row has "Mark as started" and "Record result" buttons
-- Buttons only modify task execution metadata (no fake automation)
-- Result is saved through existing `/api/agent-tasks` endpoint
+- Task row has "Start working", "Review", "Debug" buttons ✓
+- Buttons POST to `/api/execution-attempts` ✓
+- No fake automation ✓
 
-### Phase 5.3 — Run History Display
+### Phase 5.3 — Run History Display ✅ COMPLETE
 **Goal:** Show run history in task details so operators can see what was attempted.
 
 **Target:**
@@ -378,22 +380,24 @@ Calendar should reflect:
 - Keep execution manual and explicit
 
 **Exit criteria:**
-- Task details show run history (runStatus, deliverable, timestamp)
-- No fake progress bars or automated status updates
-- Trust boundaries stay explicit
+- Task details show run history (runStatus, deliverable, timestamp) ✓
+- No fake progress bars or automated status updates ✓
+- Trust boundaries stay explicit ✓
 
-### Phase 5.4 — Execution Status in Task Board
+### Phase 5.4 — Execution Status in Task Board ✅ COMPLETE
 **Goal:** Make execution status visible in the task board.
 
 **Target:**
-- Show runStatus badges in task rows (e.g., "running", "done", "failed")
-- Show "needs_review" status when appropriate
-- No fake auto-progress
+- Show runStatus badges in task rows (e.g., "running", "done", "failed") ✓
+- Show "needs_review" status when appropriate ✓
+- No fake auto-progress ✓
+- Badges use color-coded styling that matches the existing badge system ✓
+- Status is derived from task metadata (`runStatus`) ✓
 
 **Exit criteria:**
-- Task board shows execution status at a glance
-- Status updates are only from manual buttons
-- No fake automation
+- Task board shows execution status at a glance ✓
+- Status updates are only from manual buttons ✓
+- No fake automation ✓
 
 ### Later version (Phase 5.5+ — Optional, requires separate product decision)
 - Connect to real OpenClaw execution via `sessions_spawn`
@@ -1667,11 +1671,27 @@ Suggested template:
 - Next:
   - if the next Phase 4 step stays narrow, turn these selected-day project groups into a more direct project/task follow-up handoff instead of stopping at read-only pressure summaries.
 
+### 2026-03-21 23:xx
+- Step: Tasks execution-status badges on board
+- Files:
+  - `src/components/TaskRow.tsx`
+  - `MISSION_CONTROL_PLAN.md`
+- Validation:
+  - `npx eslint src/components/TaskRow.tsx`
+  - `npm run build`
+- Commit: current checkpoint commit (`feat(execution): show run status badges in task rows`)
+- Result:
+  - Task rows now surface non-idle `runStatus` directly on the board with color-coded badges, so operators can spot `running`, `needs_review`, `done`, or `failed` work without opening task details.
+  - Badge styling now matches the existing board badge language and stays derived only from saved task metadata instead of inventing any automatic execution progress.
+  - This closes the planned honest Phase 5 scope: Mission Control now records manual execution intent, shows run history in task details, and exposes current execution state directly on the board.
+- Next:
+  - stop here unless Bo wants a separate product decision for real agent-run orchestration or another narrow page-sweep step.
+
 ## Current Focus
 
-**Current focus:** Phase 4 is now active. Calendar now surfaces task-backed workload pressure through visible-month open/blocked/overdue counts, per-agent due-date load, same-day pileups, a day-level workload drill-down, agent-focused conflict follow-up from the workload cards, direct month-grid handoff into that drill-down, blocked/overdue/upcoming summary slices whose date groups can pin concrete days back into the calendar, and selected-day project pressure grouped from the same due-date data. Project phase timing still has no honest UI path yet because phases only carry title/status/owner/dependencies, not timing fields.
+**Current focus:** The honest Phase 5 execution layer is now at a clean stopping point. Mission Control can record manual execution intent, show run history inside task details, and surface current non-idle execution state directly on the task board through saved `runStatus` metadata. It still does **not** pretend to run agents automatically.
 
 **Do next:**
-1. keep Phase 4 focused on real task-scheduling/workload visibility until project phases gain an explicit timing model
-2. if the next Calendar step stays narrow, turn selected-day project pressure into a direct project/task follow-up handoff without inventing phase timing
-3. treat project-phase timing as a schema/product decision first; do not fake dates, bars, or sequencing spans from status-only phase data
+1. stop here unless Bo explicitly wants a new narrow micro-step
+2. if execution work continues, require a separate product decision before connecting Mission Control to real OpenClaw runs or cross-agent orchestration
+3. otherwise resume the page sweep with another trust-first micro-step instead of widening execution into fake automation
