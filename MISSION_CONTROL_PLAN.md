@@ -1812,6 +1812,25 @@ Suggested template:
 - Next:
   - keep the Team/Agents trust pass narrow; the next best candidate is another expectation-setting label on those pages, not a broader layout or schema change.
 
+### 2026-03-22 10:xx
+- Step: Agents handoff copy stops underselling the Team page
+- Diagnosis:
+  - The Agents intro linked to Team with the copy `Looking for roles and personalities?`, which blurred Team into a softer persona surface instead of describing its actual job as the organization/relationship view.
+  - Browser smoke check on `/agents` confirmed that the old handoff copy was still visible directly above the cards/spawn-graph tabs.
+- Files:
+  - `src/app/(dashboard)/agents/AgentsPageClient.tsx`
+  - `MISSION_CONTROL_PLAN.md`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/agents/AgentsPageClient.tsx"`
+  - `npm run build`
+  - browser smoke check on `/agents` confirmed the handoff now reads `Looking for roles, relationships, and identity? Open Team →`
+- Commit: current checkpoint commit (`fix(agents): clarify team handoff copy`)
+- Result:
+  - The reciprocal link from Agents now points to Team using factual scope language, so the handoff better matches Team's real role as the identity/relationship surface.
+  - This keeps the Team/Agents split easier to read at a glance without widening into layout or data-model changes.
+- Next:
+  - keep the Team/Agents trust pass narrow; the next best candidate is another small label/wayfinding fix or an honest unavailable-state adjustment on one of those pages.
+
 ## Current Focus
 
 **Current focus:** Continue the Team/Agents trust pass one narrow step at a time. The highest-value work right now is making relationship, runtime, and permission surfaces say exactly what they mean without implying stronger org structure or orchestration than the product actually has.

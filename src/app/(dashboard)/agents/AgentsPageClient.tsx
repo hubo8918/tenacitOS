@@ -631,7 +631,7 @@ export default function AgentsPageClient({ initialAgents }: AgentsPageClientProp
           Use this page for models, workspaces, permissions, recent activity, and Mission Control capability profiles.
           {" "}
           <Link href="/agents/team" style={{ color: "var(--accent)", fontWeight: 600 }}>
-            Looking for roles and personalities? Open Team →
+            Looking for roles, relationships, and identity? Open Team →
           </Link>
         </p>
       </div>
