@@ -21,13 +21,6 @@ function getActivityState(agent: TeamAgent): Exclude<ActivityFilter, "all"> {
   return "never";
 }
 
-function workspaceLabel(workspace?: string): string {
-  if (!workspace) return "unknown";
-  const normalized = workspace.replace(/\\/g, "/");
-  const parts = normalized.split("/").filter(Boolean);
-  return parts[parts.length - 1] || workspace;
-}
-
 function describeTeamError(error: string | null): string {
   if (!error) return "Unknown error";
   if (error.startsWith("Request timed out")) {
@@ -50,8 +43,6 @@ export default function TeamPageClient({ initialTeam }: TeamPageClientProps) {
   const [query, setQuery] = useState("");
   const [tierFilter, setTierFilter] = useState<TierFilter>("all");
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
-  const [modelFilter, setModelFilter] = useState("all");
-  const [workspaceFilter, setWorkspaceFilter] = useState("all");
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -60,14 +51,6 @@ export default function TeamPageClient({ initialTeam }: TeamPageClientProps) {
 
     return () => clearInterval(timer);
   }, [refetch]);
-
-  const modelOptions = useMemo(() => {
-    return Array.from(new Set(teamAgents.map((agent) => agent.model || "unknown"))).sort();
-  }, [teamAgents]);
-
-  const workspaceOptions = useMemo(() => {
-    return Array.from(new Set(teamAgents.map((agent) => workspaceLabel(agent.workspace)))).sort();
-  }, [teamAgents]);
 
   const filteredAgents = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -78,12 +61,6 @@ export default function TeamPageClient({ initialTeam }: TeamPageClientProps) {
       const activity = getActivityState(agent);
       if (activityFilter !== "all" && activity !== activityFilter) return false;
 
-      const model = agent.model || "unknown";
-      if (modelFilter !== "all" && model !== modelFilter) return false;
-
-      const workspace = workspaceLabel(agent.workspace);
-      if (workspaceFilter !== "all" && workspace !== workspaceFilter) return false;
-
       if (!q) return true;
 
       const haystack = [
@@ -91,8 +68,6 @@ export default function TeamPageClient({ initialTeam }: TeamPageClientProps) {
         agent.name,
         agent.role,
         agent.description,
-        agent.model || "",
-        agent.workspace || "",
         agent.tags.map((tag) => tag.label).join(" "),
         agent.reportsTo || "",
         (agent.canReviewFor || []).join(" "),
@@ -103,7 +78,7 @@ export default function TeamPageClient({ initialTeam }: TeamPageClientProps) {
 
       return haystack.includes(q);
     });
-  }, [teamAgents, query, tierFilter, activityFilter, modelFilter, workspaceFilter]);
+  }, [teamAgents, query, tierFilter, activityFilter]);
 
   const summary = useMemo(() => {
     const active = filteredAgents.filter((agent) => getActivityState(agent) === "active").length;
@@ -265,11 +240,11 @@ export default function TeamPageClient({ initialTeam }: TeamPageClientProps) {
           border: "1px solid var(--border)",
         }}
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search name, role, skill, model..."
+            placeholder="Search name, role, skill, relationship..."
             style={controlStyle}
             aria-label="Search team"
           />
@@ -299,33 +274,6 @@ export default function TeamPageClient({ initialTeam }: TeamPageClientProps) {
             <option value="never">No activity yet</option>
           </select>
 
-          <select
-            value={modelFilter}
-            onChange={(e) => setModelFilter(e.target.value)}
-            style={controlStyle}
-            aria-label="Filter by model"
-          >
-            <option value="all">All models</option>
-            {modelOptions.map((model) => (
-              <option key={model} value={model}>
-                {model}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={workspaceFilter}
-            onChange={(e) => setWorkspaceFilter(e.target.value)}
-            style={controlStyle}
-            aria-label="Filter by workspace"
-          >
-            <option value="all">All workspaces</option>
-            {workspaceOptions.map((workspace) => (
-              <option key={workspace} value={workspace}>
-                {workspace}
-              </option>
-            ))}
-          </select>
         </div>
 
         <div className="flex flex-wrap gap-3 mt-3 text-xs" style={{ color: "var(--text-muted)" }}>

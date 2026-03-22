@@ -1850,6 +1850,25 @@ Suggested template:
 - Next:
   - stop here unless Bo wants another micro-step after deciding how hybrid the Team page should remain; the next meaningful question is whether Team should keep surfacing runtime model/workspace/session metadata at all, or push that detail back toward Agents.
 
+### 2026-03-22 11:xx
+- Step: Team filters stop treating runtime metadata like org metadata
+- Diagnosis:
+  - The Team control bar still offered `All models` and `All workspaces` filters plus a search placeholder that named `model`, which made runtime metadata a first-class discovery path on the org/identity page.
+  - Browser smoke check on `/agents/team` confirmed the control bar is now narrowed to search, tier, and presence only, while the Team intro still hands runtime questions off to `/agents`.
+- Files:
+  - `src/app/(dashboard)/agents/team/TeamPageClient.tsx`
+  - `MISSION_CONTROL_PLAN.md`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/agents/team/TeamPageClient.tsx"`
+  - `npm run build`
+  - browser smoke check on `/agents/team` confirmed the Team toolbar no longer shows model/workspace filters and the search placeholder now reads `Search name, role, skill, relationship...`
+- Commit: current checkpoint commit (`fix(team): remove runtime filters from org view`)
+- Result:
+  - Team filtering now stays centered on org-facing concerns: identity search, tier, and presence.
+  - Runtime-oriented discovery for models and workspaces is no longer promoted from the Team toolbar, which pushes that metadata back toward the Agents surface without a broader card refactor.
+- Next:
+  - if Bo wants one more narrow step in the same direction, the cleanest follow-up is trimming the per-card runtime footer (`model`, `workspace`, `live sessions`) into an Agents handoff instead of leaving those runtime details visible on every Team card.
+
 ## Current Focus
 
 **Current focus:** Continue the Team/Agents trust pass one narrow step at a time. The highest-value work right now is making relationship, runtime, and permission surfaces say exactly what they mean without implying stronger org structure or orchestration than the product actually has.
