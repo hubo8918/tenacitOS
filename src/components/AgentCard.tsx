@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { Edit3, X, Save } from "lucide-react";
 
@@ -98,14 +99,6 @@ function formatActionTime(timestamp?: string | null): string {
   });
 }
 
-function formatWorkspace(workspace?: string): string {
-  if (!workspace) return "unknown";
-
-  const normalized = workspace.replace(/\\/g, "/");
-  const parts = normalized.split("/").filter(Boolean);
-  return parts[parts.length - 1] || workspace;
-}
-
 function formatModel(model?: string | null): string {
   if (!model) return "unknown";
   return model.length > 24 ? `${model.slice(0, 24)}…` : model;
@@ -147,6 +140,20 @@ function getPresenceMeta(state: PresenceState): {
 
 function actionLabel(action: AgentActionResult["action"]): string {
   return action === "wake" ? "ready ping" : "quick check-in";
+}
+
+function describePresence(agent: TeamAgent): string {
+  const state = getPresenceState(agent);
+
+  if (state === "active") {
+    return "Recent runtime activity detected.";
+  }
+
+  if (state === "idle") {
+    return `Last active ${formatLastActive(agent.lastActiveAt)}.`;
+  }
+
+  return "No recent activity recorded yet.";
 }
 
 export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
@@ -639,31 +646,18 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
         )}
 
         <div className="flex items-start justify-between gap-3">
-          <div className="text-[11px] leading-tight" style={{ color: "var(--text-muted)" }}>
-            <p>
-              model:{" "}
-              <span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>
-                {formatModel(agent.model)}
-              </span>
+          <div className="text-[11px] leading-tight max-w-[240px]" style={{ color: "var(--text-muted)" }}>
+            <p className="font-semibold uppercase tracking-[0.08em]" style={{ color: "var(--text-muted)" }}>
+              Presence record
             </p>
-            <p>
-              workspace:{" "}
-              <span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>
-                {formatWorkspace(agent.workspace)}
-              </span>
-            </p>
-            <p>
-              live sessions:{" "}
-              <span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>
-                {agent.activeSessions ?? 0}
-              </span>
-            </p>
-            <p>
-              last active:{" "}
-              <span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>
-                {formatLastActive(agent.lastActiveAt)}
-              </span>
-            </p>
+            <p style={{ color: "var(--text-secondary)" }}>{describePresence(agent)}</p>
+            <Link
+              href={`/agents#agent-card-${agent.id}`}
+              className="inline-block mt-1"
+              style={{ color: "var(--accent)", fontWeight: 600 }}
+            >
+              Runtime details on Agents →
+            </Link>
           </div>
 
           <div className="flex flex-col items-end gap-2">

@@ -1869,6 +1869,25 @@ Suggested template:
 - Next:
   - if Bo wants one more narrow step in the same direction, the cleanest follow-up is trimming the per-card runtime footer (`model`, `workspace`, `live sessions`) into an Agents handoff instead of leaving those runtime details visible on every Team card.
 
+### 2026-03-22 11:xx
+- Step: Team cards stop carrying a full runtime footer
+- Diagnosis:
+  - Even after the Team toolbar stopped foregrounding models/workspaces, every Team card still repeated `model`, `workspace`, `live sessions`, and `last active` in a footer block.
+  - Browser smoke on `/agents/team` confirmed those runtime fields were still visible on every card, which kept the org/identity view feeling hybrid instead of clearly handing runtime detail back to `/agents`.
+- Files:
+  - `src/components/AgentCard.tsx`
+  - `MISSION_CONTROL_PLAN.md`
+- Validation:
+  - `npx eslint src/components/AgentCard.tsx`
+  - `npm run build`
+  - browser smoke check on `/agents/team` confirmed cards now show `Presence record` plus `Runtime details on Agents →`, and that handoff opens the matching `/agents#agent-card-…` runtime card
+- Commit: current checkpoint commit (`fix(team): replace runtime footer with agents handoff`)
+- Result:
+  - Team cards now summarize only recent presence in the footer instead of repeating model/workspace/session metadata on every profile.
+  - Runtime detail is still one click away through a per-agent handoff into the matching Agents card, which makes the Team/Agents split cleaner without removing access.
+- Next:
+  - if Bo wants the next equally narrow step, the best candidate is trimming Team action-result runtime crumbs (`model` / session id) so prompt feedback stays org-surface-friendly too.
+
 ## Current Focus
 
 **Current focus:** Continue the Team/Agents trust pass one narrow step at a time. The highest-value work right now is making relationship, runtime, and permission surfaces say exactly what they mean without implying stronger org structure or orchestration than the product actually has.
