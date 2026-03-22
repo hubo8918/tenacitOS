@@ -1754,6 +1754,25 @@ Suggested template:
 - Next:
   - keep the dashboard sweep narrow; the next honest candidate is reducing the oversized empty-state footprint in Recent Activity when there has been nothing in the last 24 hours.
 
+### 2026-03-21 23:xx
+- Step: Dashboard recent-activity empty state stops stretching to sidebar height
+- Diagnosis:
+  - On large screens the main content area uses a 3-column grid, and with no recent activity the compact empty state still stretched to the height of the much taller sidebar column.
+  - Browser measurement on `/` showed the `Recent Activity` card at about `880.9px` tall versus `290px` for `Activity Counters`, which turned a small honest empty state into a giant dead rectangle.
+- Files:
+  - `src/app/(dashboard)/page.tsx`
+  - `MISSION_CONTROL_PLAN.md`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/page.tsx"`
+  - `npm run build`
+  - browser smoke check on `/` confirmed the `Recent Activity` card now self-sizes to about `163.3px` instead of stretching to the sidebar height
+- Commit: current checkpoint commit (`fix(dashboard): stop stretching empty activity panel`)
+- Result:
+  - The `Recent Activity` panel now uses `lg:self-start`, so the compact empty state stays compact instead of dominating the lower dashboard row.
+  - This keeps quiet periods readable and honest: no recent activity now looks like a brief status, not a giant alarming vacancy.
+- Next:
+  - keep the dashboard sweep narrow; the next likely candidate is another trust/wayfinding issue on Team or Agents rather than more cosmetic dashboard polish.
+
 ## Current Focus
 
 **Current focus:** Continue the dashboard trust pass one narrow step at a time. The highest-value work right now is trimming misleading affordances and making unavailable/optional data read explicitly unavailable instead of disappearing or pretending to be interactive.

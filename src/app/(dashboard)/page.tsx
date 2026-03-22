@@ -279,7 +279,7 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
         {/* Activity Feed */}
         <div
-          className="lg:col-span-2 rounded-xl overflow-hidden"
+          className="lg:col-span-2 lg:self-start rounded-xl overflow-hidden"
           style={{
             backgroundColor: "var(--card)",
             border: "1px solid var(--border)",
