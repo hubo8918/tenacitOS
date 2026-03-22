@@ -43,10 +43,18 @@ export function AgentOrganigrama({ agents }: AgentOrganigramaProps) {
     );
   }
 
-  // Build parent-child relationships from allowAgents
+  if (!agents.some((agent) => (agent.allowAgents || []).length > 0)) {
+    return (
+      <div style={{ textAlign: "center", padding: "3rem", color: "var(--text-muted)" }}>
+        No subagent spawn allowances configured yet.
+      </div>
+    );
+  }
+
+  // Build spawn relationships from allowAgents
   const agentMap = new Map(agents.map((a) => [a.id, a]));
 
-  // Determine root agents (not listed as sub of anyone)
+  // Determine root agents (not listed as a spawn target of anyone else)
   const childIds = new Set(agents.flatMap((a) => a.allowAgents));
   const roots = agents.filter((a) => !childIds.has(a.id));
 
@@ -252,9 +260,9 @@ export function AgentOrganigrama({ agents }: AgentOrganigramaProps) {
 
       {/* Legend */}
       <div style={{ display: "flex", gap: "1.5rem", justifyContent: "center", marginTop: "1rem", fontSize: "0.75rem", color: "var(--text-muted)" }}>
-        <span>● Online</span>
-        <span style={{ color: "#6b7280" }}>● Offline</span>
-        <span>--- allows communication</span>
+        <span>● Online runtime</span>
+        <span style={{ color: "#6b7280" }}>● Offline runtime</span>
+        <span>--- allows subagent spawning</span>
       </div>
     </div>
   );

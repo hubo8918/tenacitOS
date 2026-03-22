@@ -1791,11 +1791,32 @@ Suggested template:
 - Next:
   - stop widening the Team page unless another concrete affordance or status label is misleading; the next best candidate is likely an Agents/Team wayfinding or action-label trust issue, not more headline copy churn.
 
+### 2026-03-22 10:xx
+- Step: Agents spawn graph stops pretending to be an org chart
+- Diagnosis:
+  - The second Agents tab and its panel copy described the `allowAgents` visualization as an `Org Chart` / `Agent Hierarchy`, even though the underlying graph only reflects configured subagent spawn allowances.
+  - Browser smoke check on `/agents` confirmed that the previous label could be mistaken for the Team reporting structure even though Team is the actual organization/relationship surface.
+- Files:
+  - `src/app/(dashboard)/agents/AgentsPageClient.tsx`
+  - `src/components/AgentOrganigrama.tsx`
+  - `MISSION_CONTROL_PLAN.md`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/agents/AgentsPageClient.tsx" src/components/AgentOrganigrama.tsx`
+  - `npm run build`
+  - browser smoke check on `/agents` confirmed the tab now reads `Spawn Graph` and the panel now reads `Subagent spawn graph`
+- Commit: current checkpoint commit (`fix(agents): relabel spawn graph away from org hierarchy`)
+- Result:
+  - The Agents page now labels the `allowAgents` view as a spawn graph instead of an org chart, so operators are not nudged into reading subagent permissions as reporting structure.
+  - The panel copy now explicitly says the graph shows configured allowlist spawn relationships and is not the Team org structure.
+  - When no spawn allowances exist, the panel now says that directly instead of rendering an empty hierarchy shell.
+- Next:
+  - keep the Team/Agents trust pass narrow; the next best candidate is another expectation-setting label on those pages, not a broader layout or schema change.
+
 ## Current Focus
 
-**Current focus:** Continue the dashboard trust pass one narrow step at a time. The highest-value work right now is trimming misleading affordances and making unavailable/optional data read explicitly unavailable instead of disappearing or pretending to be interactive.
+**Current focus:** Continue the Team/Agents trust pass one narrow step at a time. The highest-value work right now is making relationship, runtime, and permission surfaces say exactly what they mean without implying stronger org structure or orchestration than the product actually has.
 
 **Do next:**
 1. keep page-sweep steps narrow and trust-first
-2. prefer dashboard issues where the UI currently implies affordances or data availability more strongly than the product really supports
+2. prefer Team/Agents issues where labels or wayfinding blur identity/organization vs runtime/permissions vs spawn allowances
 3. only return to execution/orchestration if Bo explicitly wants a new product decision there

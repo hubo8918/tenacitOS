@@ -664,7 +664,7 @@ export default function AgentsPageClient({ initialAgents }: AgentsPageClientProp
       <div className="flex gap-2 mb-6 border-b" style={{ borderColor: "var(--border)" }}>
         {[
           { id: "cards" as const, label: "Agent Cards", icon: LayoutGrid },
-          { id: "orgChart" as const, label: "Org Chart", icon: GitBranch },
+          { id: "orgChart" as const, label: "Spawn Graph", icon: GitBranch },
         ].map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -692,10 +692,10 @@ export default function AgentsPageClient({ initialAgents }: AgentsPageClientProp
         <div className="rounded-xl" style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}>
           <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
             <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>
-              Agent Hierarchy
+              Subagent spawn graph
             </h2>
             <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-              Visualization of agent communication allowances
+              Visualization of configured allowlist spawn relationships, not the Team org structure.
             </p>
           </div>
           <AgentOrganigrama agents={agents} />
