@@ -1926,6 +1926,25 @@ Suggested template:
 - Next:
   - another good narrow trust pass candidate is renaming Team edit copy (`Edit Agent`, `edit henry`) so profile editing reads as organizational metadata work instead of runtime-agent control.
 
+### 2026-03-22 12:1x
+- Step: Team edit copy now reads like profile editing, not runtime control
+- Diagnosis:
+  - Even after Team was narrowed into an org/identity/relationships surface, the visible edit affordances still said `edit henry` and `Edit Agent`.
+  - That copy subtly pulled the page back toward runtime-agent management instead of organizational metadata editing.
+- Files:
+  - `src/components/AgentCard.tsx`
+  - `MISSION_CONTROL_PLAN.md`
+- Validation:
+  - `npx eslint src/components/AgentCard.tsx`
+  - `npm run build`
+  - browser smoke check on `/agents/team` confirmed cards now say `edit profile`, and the Henry overlay title now reads `Edit team profile`
+- Commit: current checkpoint commit (`fix(team): clarify profile editing copy`)
+- Result:
+  - Team edit affordances now read as profile maintenance for the organization view rather than as direct runtime-agent control.
+  - This keeps the Team/Agents split consistent with the rest of the trust pass without changing any underlying behavior.
+- Next:
+  - the next best candidate is another small Team wording or state-surface cleanup where org metadata and runtime state still share language too loosely.
+
 ## Current Focus
 
 **Current focus:** Continue the Team/Agents trust pass one narrow step at a time. The highest-value work right now is making relationship, runtime, and permission surfaces say exactly what they mean without implying stronger org structure or orchestration than the product actually has.

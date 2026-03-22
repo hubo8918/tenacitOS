@@ -323,13 +323,13 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
           >
             <div className="flex items-center justify-between mb-1">
               <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-                Edit Agent
+                Edit team profile
               </span>
               <button
                 onClick={handleCancel}
                 className="p-1 rounded-lg transition-colors"
                 style={{ color: "var(--text-muted)" }}
-                aria-label="Cancel editing"
+                aria-label="Cancel editing team profile"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -700,7 +700,7 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
                 }}
               >
                 <Edit3 className="w-3 h-3" />
-                edit {agent.id}
+                edit profile
               </button>
             </div>
 
