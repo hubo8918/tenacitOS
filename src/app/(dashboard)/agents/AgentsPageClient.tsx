@@ -356,7 +356,8 @@ function CapabilityEditor({
 function AgentRuntimeCard({ agent, onSaved }: { agent: Agent; onSaved: () => void }) {
   return (
     <div
-      className="rounded-xl overflow-hidden transition-all hover:scale-[1.02]"
+      id={`agent-card-${agent.id}`}
+      className="rounded-xl overflow-hidden transition-all hover:scale-[1.02] scroll-mt-6"
       style={{
         backgroundColor: "var(--card)",
         border: "1px solid var(--border)",

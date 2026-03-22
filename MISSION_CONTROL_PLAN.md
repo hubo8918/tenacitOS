@@ -1687,11 +1687,28 @@ Suggested template:
 - Next:
   - stop here unless Bo wants a separate product decision for real agent-run orchestration or another narrow page-sweep step.
 
+### 2026-03-21 23:xx
+- Step: Dashboard multi-agent cards become real handoffs
+- Files:
+  - `src/app/(dashboard)/page.tsx`
+  - `src/app/(dashboard)/agents/AgentsPageClient.tsx`
+  - `MISSION_CONTROL_PLAN.md`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/page.tsx" "src/app/(dashboard)/agents/AgentsPageClient.tsx"`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(dashboard): link multi-agent cards to Agents view`)
+- Result:
+  - Dashboard multi-agent cards no longer pretend to be clickable summary tiles; each card now opens the matching agent card on the Agents page.
+  - The Agents view now exposes stable card anchors, so the dashboard handoff lands on a concrete runtime/config card instead of a generic page top.
+  - This keeps the dashboard's top-level story trustable: glanceable summary on Dashboard, deeper runtime detail on Agents, with honest wayfinding between them.
+- Next:
+  - keep the dashboard page sweep narrow; if the next step stays honest, tighten another secondary card that currently disappears or overpromises when its data is unavailable.
+
 ## Current Focus
 
-**Current focus:** The honest Phase 5 execution layer is now at a clean stopping point. Mission Control can record manual execution intent, show run history inside task details, and surface current non-idle execution state directly on the task board through saved `runStatus` metadata. It still does **not** pretend to run agents automatically.
+**Current focus:** Resume the page sweep with dashboard trust/wayfinding cleanup. The execution layer is at a clean honest stop, so the next useful work should keep improving top-level navigation and data honesty on high-visibility surfaces instead of widening into fake automation.
 
 **Do next:**
-1. stop here unless Bo explicitly wants a new narrow micro-step
-2. if execution work continues, require a separate product decision before connecting Mission Control to real OpenClaw runs or cross-agent orchestration
-3. otherwise resume the page sweep with another trust-first micro-step instead of widening execution into fake automation
+1. keep page-sweep steps narrow and trust-first
+2. prefer dashboard issues where the UI currently implies affordances or data availability more strongly than the product really supports
+3. only return to execution/orchestration if Bo explicitly wants a new product decision there

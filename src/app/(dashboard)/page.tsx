@@ -218,14 +218,16 @@ export default async function DashboardPage() {
             {sortedAgents.map((agent) => {
               const isOnline = agent.status === "online";
               return (
-                <div
+                <Link
                   key={agent.id}
-                  className="p-3 rounded-lg transition-all hover:scale-105"
+                  href={`/agents#agent-card-${agent.id}`}
+                  className="block p-3 rounded-lg transition-all hover:scale-105"
                   style={{
                     backgroundColor: "var(--card-elevated)",
                     border: `2px solid ${agent.color}`,
                     cursor: "pointer",
                   }}
+                  title={`Open ${agent.name} on the Agents page`}
                 >
                   <div className="flex items-center justify-between mb-2">
                     <div className="text-2xl">{agent.emoji}</div>
@@ -266,7 +268,7 @@ export default async function DashboardPage() {
                       Connected
                     </div>
                   )}
-                </div>
+                </Link>
               );
             })}
           </div>
