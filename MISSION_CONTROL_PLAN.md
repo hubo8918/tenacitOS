@@ -1888,6 +1888,25 @@ Suggested template:
 - Next:
   - if Bo wants the next equally narrow step, the best candidate is trimming Team action-result runtime crumbs (`model` / session id) so prompt feedback stays org-surface-friendly too.
 
+### 2026-03-22 11:5x
+- Step: Team prompt feedback stops leaking runtime metadata
+- Diagnosis:
+  - Team cards now frame `ready ping` and `quick check-in` as one-off prompts, but the rendered result line still exposed runtime crumbs like `model gpt-5.4` and a session id fragment.
+  - Browser smoke on `/agents/team` confirmed the action feedback still read like runtime telemetry even though the page already hands runtime detail back to `/agents`.
+- Files:
+  - `src/components/AgentCard.tsx`
+  - `MISSION_CONTROL_PLAN.md`
+- Validation:
+  - `npx eslint src/components/AgentCard.tsx`
+  - `npm run build`
+  - browser smoke check on `/agents/team` confirmed a fresh `quick check-in` result now shows only the returned text plus `5s · 11:51`, without model or session-id details
+- Commit: current checkpoint commit (`fix(team): hide runtime crumbs in prompt feedback`)
+- Result:
+  - Team prompt feedback now stays org-surface-friendly: operators still see what the prompt returned and roughly when it happened, without a detour into model/session telemetry.
+  - Runtime inspection remains available through the existing `Runtime details on Agents →` handoff instead of being repeated inside Team action results.
+- Next:
+  - keep the Team/Agents trust pass narrow; the next best candidate is another small wording or handoff fix where Team edit/config language still sounds more runtime-oriented than organizational.
+
 ## Current Focus
 
 **Current focus:** Continue the Team/Agents trust pass one narrow step at a time. The highest-value work right now is making relationship, runtime, and permission surfaces say exactly what they mean without implying stronger org structure or orchestration than the product actually has.

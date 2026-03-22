@@ -29,8 +29,6 @@ interface AgentActionResult {
   action: "wake" | "check-in";
   text: string;
   durationMs?: number | null;
-  model?: string | null;
-  sessionId?: string | null;
   timestamp?: string | null;
 }
 
@@ -97,11 +95,6 @@ function formatActionTime(timestamp?: string | null): string {
     minute: "2-digit",
     hour12: false,
   });
-}
-
-function formatModel(model?: string | null): string {
-  if (!model) return "unknown";
-  return model.length > 24 ? `${model.slice(0, 24)}…` : model;
 }
 
 function getPresenceState(agent: TeamAgent): PresenceState {
@@ -271,8 +264,6 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
         action,
         text: typeof data.text === "string" ? data.text : "done",
         durationMs: typeof data.durationMs === "number" ? data.durationMs : null,
-        model: typeof data.model === "string" ? data.model : null,
-        sessionId: typeof data.sessionId === "string" ? data.sessionId : null,
         timestamp: typeof data.timestamp === "string" ? data.timestamp : null,
       });
       onUpdate?.();
@@ -296,8 +287,6 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
   };
 
   const actionDetailParts: string[] = [];
-  if (actionResult?.model) actionDetailParts.push(`model ${formatModel(actionResult.model)}`);
-  if (actionResult?.sessionId) actionDetailParts.push(`session ${actionResult.sessionId.slice(0, 8)}`);
   if (typeof actionResult?.durationMs === "number") {
     actionDetailParts.push(`${Math.max(1, Math.round(actionResult.durationMs / 1000))}s`);
   }
