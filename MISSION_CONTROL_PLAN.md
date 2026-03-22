@@ -1831,6 +1831,25 @@ Suggested template:
 - Next:
   - keep the Team/Agents trust pass narrow; the next best candidate is another small label/wayfinding fix or an honest unavailable-state adjustment on one of those pages.
 
+### 2026-03-22 11:xx
+- Step: Team card action labels stop implying runtime control
+- Diagnosis:
+  - The Team cards exposed `wake` and `check-in` buttons, but `/api/team/actions` actually sends one-off prompts to an agent (`Wake up and confirm readiness` / `Quick team check-in`) rather than changing runtime state.
+  - Browser inspection on `/agents/team` confirmed those terse button labels were rendered directly on every card without any note explaining their scope.
+- Files:
+  - `src/components/AgentCard.tsx`
+  - `MISSION_CONTROL_PLAN.md`
+- Validation:
+  - `npx eslint src/components/AgentCard.tsx`
+  - `npm run build`
+  - browser smoke check on `/agents/team` confirmed the buttons now read `ready ping` / `quick check-in` and the cards say `One-off prompts only. These do not change runtime state.`
+- Commit: current checkpoint commit (`fix(team): clarify prompt-only card actions`)
+- Result:
+  - Team card actions now read like what they really are: quick prompts to an agent, not lifecycle or runtime controls.
+  - The inline note makes the scope explicit before anyone clicks, which keeps the Team page's organizational surface from quietly impersonating an operations console.
+- Next:
+  - stop here unless Bo wants another micro-step after deciding how hybrid the Team page should remain; the next meaningful question is whether Team should keep surfacing runtime model/workspace/session metadata at all, or push that detail back toward Agents.
+
 ## Current Focus
 
 **Current focus:** Continue the Team/Agents trust pass one narrow step at a time. The highest-value work right now is making relationship, runtime, and permission surfaces say exactly what they mean without implying stronger org structure or orchestration than the product actually has.

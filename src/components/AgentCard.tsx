@@ -145,6 +145,10 @@ function getPresenceMeta(state: PresenceState): {
   };
 }
 
+function actionLabel(action: AgentActionResult["action"]): string {
+  return action === "wake" ? "ready ping" : "quick check-in";
+}
+
 export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(agent.name);
@@ -674,7 +678,7 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
                   opacity: actionRunning ? 0.6 : 1,
                 }}
               >
-                {actionRunning === "wake" ? "waking..." : "wake"}
+                {actionRunning === "wake" ? "prompting..." : "ready ping"}
               </button>
 
               <button
@@ -687,7 +691,7 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
                   opacity: actionRunning ? 0.6 : 1,
                 }}
               >
-                {actionRunning === "check-in" ? "checking..." : "check-in"}
+                {actionRunning === "check-in" ? "checking..." : "quick check-in"}
               </button>
 
               <button
@@ -706,10 +710,14 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
               </button>
             </div>
 
+            <p className="text-[10px] max-w-[290px] text-right" style={{ color: "var(--text-muted)", lineHeight: 1.35 }}>
+              One-off prompts only. These do not change runtime state.
+            </p>
+
             {actionResult && (
               <div className="text-[11px] max-w-[290px] text-right" style={{ color: "var(--text-muted)", lineHeight: 1.35 }}>
                 <p title={actionResult.text}>
-                  {actionResult.action}: {actionResult.text}
+                  {actionLabel(actionResult.action)}: {actionResult.text}
                 </p>
                 {actionDetailParts.length > 0 && <p>{actionDetailParts.join(" · ")}</p>}
               </div>
