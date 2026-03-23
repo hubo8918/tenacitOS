@@ -2126,6 +2126,26 @@ Suggested template:
 - Next:
   - stay on `/agents/tasks`; the next best candidate is another narrow unset-state or handoff-copy pass where row metadata still sounds more configured or navigable than it really is.
 
+### 2026-03-23 12:xx
+- Step: Tasks unset routing metadata exposes a direct row-level routing entrypoint
+- Diagnosis:
+  - Fresh Tasks review showed rows could now open details directly, but routing follow-up still hid behind the overflow menu even when the row itself visibly said `Review: Not set` and `Handoff: Not set`.
+  - That left a trust/wayfinding mismatch: the board admitted routing metadata was unset, but it did not expose the existing routing editor from the same row-level context.
+- Files:
+  - `src/components/TaskRow.tsx`
+  - `MISSION_CONTROL_PLAN.md`
+- Validation:
+  - `npx eslint "src/components/TaskRow.tsx"`
+  - `npm run build`
+  - browser smoke check on `/agents/tasks` confirmed rows with unset routing now show `Set routing →`
+  - browser smoke check confirmed clicking `Set routing →` on `QA review of Mission Control dashboard` opens the existing `Task routing & dependencies` editor
+- Commit: current checkpoint commit (`fix(tasks): expose routing entrypoint`)
+- Result:
+  - Tasks rows no longer force routing follow-up through a hidden three-dot menu when the row already advertises missing reviewer/handoff metadata.
+  - The page now exposes details and routing as separate honest row-level entrypoints without widening into a giant all-in-one editor.
+- Next:
+  - stay on `/agents/tasks`; the next best candidate is another tiny unset-state or action-copy pass where task row metadata still admits a missing state but hides the existing repair path.
+
 ## Current Focus
 
 **Current focus:** Continue the page sweep on Tasks one narrow trust-first step at a time. The current job is to keep `/agents/tasks` honest about what each row actually opens, which metadata is intentionally unset, and which follow-up belongs in details, routing, or project handoff surfaces.

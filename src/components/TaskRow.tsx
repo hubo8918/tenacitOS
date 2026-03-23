@@ -795,6 +795,18 @@ export function TaskRow({
                 {handoffOption ? `${handoffOption.emoji} ${handoffOption.name}` : "Not set"}
               </span>
             </span>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                handleOpenOwnershipEditor();
+              }}
+              className="inline-flex items-center gap-1 hover:underline transition-colors"
+              style={{ color: "#0A84FF" }}
+              title={`Open routing and dependency settings for ${task.title}`}
+            >
+              {reviewerOption || handoffOption || blockedByTaskIds.length > 0 ? "Edit routing →" : "Set routing →"}
+            </button>
             {blockedByTaskIds.length > 0 && (
               <>
                 <button
