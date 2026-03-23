@@ -33,6 +33,7 @@ export default function ProjectsPageClient({
   const projectFocus = searchParams.get("project")?.trim() || "";
   const projectIdFocus = searchParams.get("projectId")?.trim() || "";
   const requestedTaskId = searchParams.get("task")?.trim() || "";
+  const projectFocusSource = searchParams.get("source")?.trim() || (requestedTaskId ? "tasks" : "");
   const normalizedProjectFocus = normalizeProjectLabel(projectFocus);
   const hasInitialProjects = initialProjects.length > 0;
   const { data, loading, error, refetch } = useFetch<{ projects: Project[] }>("/api/projects", {
@@ -101,6 +102,12 @@ export default function ProjectsPageClient({
 
   const activeCount = visibleProjects.filter((p) => p.status === "active").length;
   const planningCount = visibleProjects.filter((p) => p.status === "planning").length;
+  const projectFocusSourceNote =
+    projectFocusSource === "calendar"
+      ? "Opened from Calendar."
+      : projectFocusSource === "tasks"
+        ? "Opened from Tasks."
+        : "Focused from another surface.";
 
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
@@ -379,7 +386,7 @@ export default function ProjectsPageClient({
               Project focus: {effectiveProjectFocus}
             </p>
             <p style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
-              Opened from Tasks. Showing {visibleProjects.length} matching project{visibleProjects.length === 1 ? "" : "s"} with this exact title.
+              {projectFocusSourceNote} Showing {visibleProjects.length} matching tracked project{visibleProjects.length === 1 ? "" : "s"} for this focus.
             </p>
           </div>
           <a

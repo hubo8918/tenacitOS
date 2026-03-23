@@ -672,8 +672,16 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
 
   function navigateToProject(project: DayProjectDetail) {
     setSelectedProjectKey(project.key);
-    router.push("/agents/projects");
-    // We'll use a query parameter to filter by project in the Projects page
+    const params = new URLSearchParams({
+      project: project.label,
+      source: "calendar",
+    });
+
+    if (project.projectId) {
+      params.set("projectId", project.projectId);
+    }
+
+    router.push(`/agents/projects?${params.toString()}`);
     setTimeout(() => {
       setSelectedProjectKey(null);
     }, 100);

@@ -1964,11 +1964,32 @@ Suggested template:
 - Next:
   - finish the Team/Agents trust pass only if another narrow wording/state mismatch is still visible; otherwise continue the page sweep to the next surface in the plan order.
 
+### 2026-03-22 18:xx
+- Step: Calendar project cards now hand off to the matching focused project
+- Diagnosis:
+  - Browser diagnosis on `/agents/calendar` showed the day-level `Project pressure on this date` cards looked like focused drill-downs, but clicking one just pushed to `/agents/projects` with no query params.
+  - The Calendar click handler confirmed the bug in code: it ignored the chosen project entirely even though the comment claimed the Projects page would be filtered.
+- Files:
+  - `src/app/(dashboard)/agents/calendar/CalendarPageClient.tsx`
+  - `src/app/(dashboard)/agents/projects/ProjectsPageClient.tsx`
+  - `MISSION_CONTROL_PLAN.md`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/agents/calendar/CalendarPageClient.tsx" "src/app/(dashboard)/agents/projects/ProjectsPageClient.tsx"`
+  - `npm run build`
+  - browser smoke check on `/agents/calendar` confirmed clicking the `Mission Control` project card now lands on `/agents/projects?project=Mission+Control&source=calendar&projectId=mission-control`
+  - browser smoke check on `/agents/projects` confirmed the focused banner now reads `Opened from Calendar. Showing 1 matching tracked project for this focus.`
+- Commit: current checkpoint commit (`fix(calendar): focus project handoff into Projects`)
+- Result:
+  - Calendar's project grouping cards now do what they visually promise: they carry the selected project into the Projects view instead of dropping operators onto the full board.
+  - The Projects focus banner is also source-aware now, so a Calendar-origin handoff no longer falsely claims it was opened from Tasks.
+- Next:
+  - the next clean Calendar trust candidate is deciding what to do with the legacy `/calendar` route so the app stops carrying two different Calendar surfaces with different semantics.
+
 ## Current Focus
 
-**Current focus:** Continue the Team/Agents trust pass one narrow step at a time. The highest-value work right now is making relationship, runtime, and permission surfaces say exactly what they mean without implying stronger org structure or orchestration than the product actually has.
+**Current focus:** Continue the page sweep on Calendar one narrow trust-first step at a time. The current job is to keep Calendar honest about what it can actually schedule, which surface owns follow-up work, and which route is the real calendar entrypoint.
 
 **Do next:**
-1. keep page-sweep steps narrow and trust-first
-2. prefer Team/Agents issues where labels or wayfinding blur identity/organization vs runtime/permissions vs spawn allowances
-3. only return to execution/orchestration if Bo explicitly wants a new product decision there
+1. keep Calendar steps limited to one trust or wayfinding problem per checkpoint
+2. prefer route/handoff clarity and unavailable-state honesty before any layout or workflow expansion
+3. avoid fake scheduling CRUD or project-phase timeline claims until the data model truly supports them
