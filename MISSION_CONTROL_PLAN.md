@@ -2024,6 +2024,28 @@ Suggested template:
 - Next:
   - stay on `/agents/calendar`; the next narrow candidate is another expectation-setting pass where a card or header still suggests stronger scheduling ownership than the page actually has.
 
+### 2026-03-22 18:xx
+- Step: Calendar selected-day task cards hand off into Tasks
+- Diagnosis:
+  - Browser review on `/agents/calendar` showed the selected-day assignee task rows looked like concrete follow-up cards, but they were still inert text even after project-level handoff work landed.
+  - That left Calendar overstating its ownership of task follow-up: the page could point at the right due-day pressure, but the deepest visible task rows still stranded the operator instead of handing off to the surface that actually edits task state.
+- Files:
+  - `src/app/(dashboard)/agents/calendar/CalendarPageClient.tsx`
+  - `src/app/(dashboard)/agents/tasks/TasksPageClient.tsx`
+  - `MISSION_CONTROL_PLAN.md`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/agents/calendar/CalendarPageClient.tsx" "src/app/(dashboard)/agents/tasks/TasksPageClient.tsx"`
+  - `npm run build`
+  - browser smoke check on `/agents/calendar` confirmed the selected-day `QA review of Mission Control dashboard` task row now exposes `Open in Tasks →`
+  - browser smoke check confirmed that handoff lands on `/agents/tasks?task=task-010&taskSource=calendar`
+  - browser smoke check on `/agents/tasks` confirmed the focused banner now reads `Focused calendar follow-up: QA review of Mission Control dashboard`
+- Commit: current checkpoint commit (`fix(calendar): hand off day tasks into Tasks`)
+- Result:
+  - Calendar's selected-day task rows now do what they visually imply: they hand off deeper task follow-up into Tasks instead of trapping the operator on a read-only card.
+  - The Tasks targeted-handoff banner is also source-aware now, so a Calendar-origin jump no longer falsely claims it came from Projects.
+- Next:
+  - stay on `/agents/calendar`; the next likely trust candidate is another narrow expectation-setting pass inside the workload-slice drill-down, where task rows still read as rich cards but do not yet expose the same explicit Tasks handoff.
+
 ## Current Focus
 
 **Current focus:** Continue the page sweep on Calendar one narrow trust-first step at a time. The current job is to keep `/agents/calendar` honest about what it can actually schedule, which surface owns follow-up work, and how quiet or legacy states are presented.

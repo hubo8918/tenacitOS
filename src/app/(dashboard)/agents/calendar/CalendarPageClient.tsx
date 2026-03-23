@@ -674,6 +674,15 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
     setSelectedDayDate(dateKey);
   }
 
+  function navigateToTask(task: Task) {
+    const params = new URLSearchParams({
+      task: task.id,
+      taskSource: "calendar",
+    });
+
+    router.push(`/agents/tasks?${params.toString()}`);
+  }
+
   function navigateToProject(project: DayProjectDetail) {
     setSelectedProjectKey(project.key);
     const params = new URLSearchParams({
@@ -1316,19 +1325,27 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
                       {agent.tasks.map((task) => {
                         const statusTone = taskStatusConfig[task.status].color;
                         return (
-                          <div
+                          <button
                             key={task.id}
-                            className="rounded-lg px-3 py-2"
+                            type="button"
+                            onClick={() => navigateToTask(task)}
+                            className="w-full rounded-lg px-3 py-2 text-left transition-colors"
                             style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}
+                            title="Open this task on Tasks for deeper follow-up"
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
                                 <p className="text-sm font-medium leading-tight" style={{ color: "var(--text-primary)" }}>
                                   {task.title}
                                 </p>
-                                <p className="text-xs mt-1 truncate" style={{ color: "var(--text-secondary)" }}>
-                                  {task.project || "No project"}
-                                </p>
+                                <div className="mt-1 flex items-center justify-between gap-3">
+                                  <p className="text-xs truncate" style={{ color: "var(--text-secondary)" }}>
+                                    {task.project || "No project"}
+                                  </p>
+                                  <span className="text-[10px] whitespace-nowrap" style={{ color: "#0A84FF" }}>
+                                    Open in Tasks →
+                                  </span>
+                                </div>
                               </div>
                               <span
                                 className="text-[10px] px-2 py-1 rounded-full whitespace-nowrap"
@@ -1337,7 +1354,7 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
                                 {taskStatusConfig[task.status].label}
                               </span>
                             </div>
-                          </div>
+                          </button>
                         );
                       })}
                     </div>

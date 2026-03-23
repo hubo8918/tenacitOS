@@ -228,6 +228,7 @@ export default function TasksPageClient({
   );
   const isUrgentOverflowHandoff = requestedTaskSource === "urgent-overflow";
   const isLinkedPreviewHandoff = requestedTaskSource === "linked-preview";
+  const isCalendarTaskHandoff = requestedTaskSource === "calendar";
   const requestedTaskOutsideFocus = Boolean(
     requestedTaskId &&
       effectiveProjectFocus &&
@@ -678,7 +679,9 @@ export default function TasksPageClient({
                   ? `Focused task handoff moved outside ${effectiveProjectFocus}`
                   : isUrgentOverflowHandoff
                     ? "Requested hidden urgent task is no longer on this board"
-                    : "Requested linked task is no longer on this board"}
+                    : isCalendarTaskHandoff
+                      ? "Requested calendar task is no longer on this board"
+                      : "Requested linked task is no longer on this board"}
             </p>
             <p style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
               {isUrgentOverflowHandoff && requestedTaskOutsideFocus && requestedTaskAnywhere
@@ -691,7 +694,9 @@ export default function TasksPageClient({
                     ? replacementUrgentOverflowTask
                       ? `This Tasks view opened from the Projects urgent-overflow handoff, but the requested hidden blocked/overdue task is no longer present on the current Tasks board. Mission Control shows the missing-target state instead of pretending the original urgent-overflow shortcut still has a live row to land on. The current board still has another hidden urgent task beyond the three-row Projects preview, and you can jump straight to it here.`
                       : "This Tasks view opened from the Projects urgent-overflow handoff, but the requested hidden blocked/overdue task is no longer present on the current Tasks board. Mission Control shows the missing-target state instead of pretending the urgent-overflow shortcut still has a live row to land on."
-                    : "This Tasks view opened from a direct Projects handoff, but the requested task is no longer present on the current Tasks board. Mission Control shows the missing-target state instead of pretending the row still exists."}
+                    : isCalendarTaskHandoff
+                      ? "This Tasks view opened from a task card on Calendar, but the requested task is no longer present on the current Tasks board. Mission Control shows the missing-target state instead of pretending Calendar still has a live task row to hand off here."
+                      : "This Tasks view opened from a direct Projects handoff, but the requested task is no longer present on the current Tasks board. Mission Control shows the missing-target state instead of pretending the row still exists."}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -744,14 +749,20 @@ export default function TasksPageClient({
         >
           <div className="space-y-1">
             <p className="font-semibold" style={{ color: "#0A84FF" }}>
-              {isUrgentOverflowHandoff ? `Focused urgent follow-up: ${requestedTask.title}` : `Focused task handoff: ${requestedTask.title}`}
+              {isUrgentOverflowHandoff
+                ? `Focused urgent follow-up: ${requestedTask.title}`
+                : isCalendarTaskHandoff
+                  ? `Focused calendar follow-up: ${requestedTask.title}`
+                  : `Focused task handoff: ${requestedTask.title}`}
             </p>
             <p style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
               {isUrgentOverflowHandoff
                 ? "This Tasks view opened from the Projects card's urgent-overflow handoff. That CTA only exists when blocked or overdue linked work still sits beyond the three-row preview, so the handoff lands on the first hidden urgent task here and briefly highlights it instead of pretending the Project card preview already showed every urgent item."
                 : isLinkedPreviewHandoff
                   ? "This Tasks view opened from a specific linked task in the Projects card preview. Projects can now create, attach, or remove a task link, but deeper task editing still happens here, so the handoff lands on the requested row and briefly highlights it instead of pretending the project card edits the whole task inline."
-                  : "This Tasks view opened from a specific linked task on Projects. Projects can now create, attach, or remove a task link, but deeper task editing still happens here, so the handoff lands on the requested row and briefly highlights it instead of pretending the project card edits the whole task inline."}
+                  : isCalendarTaskHandoff
+                    ? "This Tasks view opened from a specific task card on Calendar. Calendar stays task-backed and read-only, so deeper task follow-up still happens here on Tasks; the handoff lands on the requested row and briefly highlights it instead of pretending Calendar can edit the task inline."
+                    : "This Tasks view opened from a specific linked task on Projects. Projects can now create, attach, or remove a task link, but deeper task editing still happens here, so the handoff lands on the requested row and briefly highlights it instead of pretending the project card edits the whole task inline."}
             </p>
           </div>
           <button
