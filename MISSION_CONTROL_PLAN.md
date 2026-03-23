@@ -2088,11 +2088,31 @@ Suggested template:
 - Next:
   - Calendar now feels like a clean stopping point for this trust pass; move to `/agents/tasks` next unless another live Calendar affordance still overclaims ownership.
 
+### 2026-03-23 01:xx
+- Step: Tasks row-level details follow-up stops hiding behind fake row click affordance
+- Diagnosis:
+  - Fresh baseline review on `/agents/tasks` showed every task row still used a full-row hover treatment and pointer cursor, but the visible row itself did not open anything; only the overflow menu or tiny repair buttons actually did work.
+  - That made the coordination board overstate row clickability: task summaries looked like list items you could open directly, yet the UI hid the real path to the existing details editor.
+- Files:
+  - `src/components/TaskRow.tsx`
+  - `MISSION_CONTROL_PLAN.md`
+- Validation:
+  - `npx eslint "src/components/TaskRow.tsx"`
+  - `npm run build`
+  - browser smoke check on `/agents/tasks` confirmed each task row now shows a visible `Open details →` control next to the title instead of relying on implied row click behavior
+  - browser smoke check confirmed clicking `Open details →` on `QA review of Mission Control dashboard` opens the existing `Task details` editor
+- Commit: current checkpoint commit (`fix(tasks): expose row details entrypoint`)
+- Result:
+  - Tasks no longer relies on a misleading pointer/hover cue to imply a hidden row click; the board now exposes its existing details editor with an explicit row-level affordance.
+  - This keeps the page honest about what is actually actionable while reusing the editor Mission Control already had.
+- Next:
+  - stay on `/agents/tasks`; the next best candidate is another narrow trust pass around how unset routing/review metadata or other row-level follow-up states are described.
+
 ## Current Focus
 
-**Current focus:** Continue the page sweep on Calendar one narrow trust-first step at a time. The current job is to keep `/agents/calendar` honest about what it can actually schedule, which surface owns follow-up work, and how quiet or legacy states are presented.
+**Current focus:** Continue the page sweep on Tasks one narrow trust-first step at a time. The current job is to keep `/agents/tasks` honest about what each row actually opens, what metadata is intentionally unset, and which follow-up belongs in details, routing, or project handoff surfaces.
 
 **Do next:**
-1. keep Calendar steps limited to one trust or wayfinding problem per checkpoint
-2. prefer route/handoff clarity and unavailable-state honesty before any layout or workflow expansion
-3. avoid fake scheduling CRUD or project-phase timeline claims until the data model truly supports them
+1. keep Tasks steps limited to one trust or wayfinding problem per checkpoint
+2. prefer explicit row-level actions and honest unset-state copy before expanding task management scope
+3. avoid fake runtime semantics or giant all-in-one editors; preserve clear boundaries between details, routing, and project handoffs

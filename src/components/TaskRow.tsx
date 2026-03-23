@@ -739,7 +739,7 @@ export function TaskRow({
       }}
     >
       <div
-        className="flex items-center gap-3 px-4 py-3 transition-colors duration-150 cursor-pointer"
+        className="flex items-center gap-3 px-4 py-3 transition-colors duration-150"
         onMouseEnter={(e) => {
           e.currentTarget.style.backgroundColor = "var(--surface-hover)";
         }}
@@ -752,6 +752,18 @@ export function TaskRow({
             <span className="text-sm font-medium truncate block min-w-0" style={{ color: "var(--text-primary)" }}>
               {task.title}
             </span>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                handleOpenDetailsEditor();
+              }}
+              className="text-[10px] font-semibold whitespace-nowrap transition-colors hover:underline"
+              style={{ color: "#0A84FF" }}
+              title={`Open task details for ${task.title}`}
+            >
+              Open details →
+            </button>
             {showExecutionBadge && (
               <span
                 className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap"
