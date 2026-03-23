@@ -860,78 +860,99 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
                 const isActiveGroupDate = group.dateKey === activeSelectedDate;
 
                 return (
-                <button
-                  key={group.dateKey}
-                  type="button"
-                  onClick={() => focusDateFromWorkloadSlice(group.dateKey)}
-                  className="rounded-xl p-4 text-left transition-colors"
-                  style={{
-                    backgroundColor: isActiveGroupDate ? `color-mix(in srgb, ${activeWorkloadSlice.tone} 10%, var(--surface-elevated))` : "var(--surface-elevated)",
-                    border: isActiveGroupDate
-                      ? `1px solid color-mix(in srgb, ${activeWorkloadSlice.tone} 35%, transparent)`
-                      : "1px solid var(--border)",
-                  }}
-                  aria-pressed={isActiveGroupDate}
-                  title="Pin this due date into the calendar and day drill-down below"
-                >
-                  <div className="flex flex-col gap-2 mb-3 lg:flex-row lg:items-start lg:justify-between">
-                    <div>
-                      <h3 className="text-base font-semibold" style={{ color: "var(--text-primary)", fontFamily: "var(--font-heading)" }}>
-                        {fmtCalendarDate(group.dateKey)}
-                      </h3>
-                      <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                        {group.taskCount} matching task{group.taskCount === 1 ? "" : "s"} across {group.agentCount} agent{group.agentCount === 1 ? "" : "s"}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2 text-[11px]">
-                      <span className="px-2 py-1 rounded-full" style={{ color: "var(--text-primary)", backgroundColor: "var(--card)" }}>
-                        {group.taskCount} tasks
-                      </span>
-                      {group.blockedCount > 0 && (
-                        <span className="px-2 py-1 rounded-full" style={{ color: "var(--status-blocked)", backgroundColor: "rgba(255, 69, 58, 0.12)" }}>
-                          {group.blockedCount} blocked
-                        </span>
-                      )}
-                      {group.overdueCount > 0 && (
-                        <span className="px-2 py-1 rounded-full" style={{ color: "#FF9F0A", backgroundColor: "rgba(255, 159, 10, 0.12)" }}>
-                          {group.overdueCount} overdue
-                        </span>
-                      )}
-                    </div>
-                  </div>
+                  <div
+                    key={group.dateKey}
+                    className="rounded-xl p-4"
+                    style={{
+                      backgroundColor: isActiveGroupDate ? `color-mix(in srgb, ${activeWorkloadSlice.tone} 10%, var(--surface-elevated))` : "var(--surface-elevated)",
+                      border: isActiveGroupDate
+                        ? `1px solid color-mix(in srgb, ${activeWorkloadSlice.tone} 35%, transparent)`
+                        : "1px solid var(--border)",
+                    }}
+                  >
+                    <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <h3 className="text-base font-semibold" style={{ color: "var(--text-primary)", fontFamily: "var(--font-heading)" }}>
+                          {fmtCalendarDate(group.dateKey)}
+                        </h3>
+                        <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                          {group.taskCount} matching task{group.taskCount === 1 ? "" : "s"} across {group.agentCount} agent{group.agentCount === 1 ? "" : "s"}
+                        </p>
+                      </div>
 
-                  <div className="space-y-2">
-                    {group.tasks.map((task) => {
-                      const statusTone = taskStatusConfig[task.status].color;
-                      const agentMeta = getTaskAgentMeta(task);
-
-                      return (
-                        <div
-                          key={task.id}
-                          className="rounded-lg px-3 py-2"
-                          style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium leading-tight" style={{ color: "var(--text-primary)" }}>
-                                {task.title}
-                              </p>
-                              <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
-                                {agentMeta.emoji} {agentMeta.name} &bull; {task.project || "No project"}
-                              </p>
-                            </div>
-                            <span
-                              className="text-[10px] px-2 py-1 rounded-full whitespace-nowrap"
-                              style={{ color: statusTone, backgroundColor: `color-mix(in srgb, ${statusTone} 15%, transparent)` }}
-                            >
-                              {taskStatusConfig[task.status].label}
+                      <div className="flex flex-col gap-2 lg:items-end">
+                        <div className="flex flex-wrap gap-2 text-[11px]">
+                          <span className="px-2 py-1 rounded-full" style={{ color: "var(--text-primary)", backgroundColor: "var(--card)" }}>
+                            {group.taskCount} tasks
+                          </span>
+                          {group.blockedCount > 0 && (
+                            <span className="px-2 py-1 rounded-full" style={{ color: "var(--status-blocked)", backgroundColor: "rgba(255, 69, 58, 0.12)" }}>
+                              {group.blockedCount} blocked
                             </span>
-                          </div>
+                          )}
+                          {group.overdueCount > 0 && (
+                            <span className="px-2 py-1 rounded-full" style={{ color: "#FF9F0A", backgroundColor: "rgba(255, 159, 10, 0.12)" }}>
+                              {group.overdueCount} overdue
+                            </span>
+                          )}
                         </div>
-                      );
-                    })}
+                        <button
+                          type="button"
+                          onClick={() => focusDateFromWorkloadSlice(group.dateKey)}
+                          className="self-start rounded-full px-3 py-1 text-xs font-semibold transition-colors lg:self-auto"
+                          style={{
+                            color: activeWorkloadSlice.tone,
+                            backgroundColor: `color-mix(in srgb, ${activeWorkloadSlice.tone} 14%, transparent)`,
+                            border: `1px solid color-mix(in srgb, ${activeWorkloadSlice.tone} 24%, transparent)`,
+                          }}
+                          aria-pressed={isActiveGroupDate}
+                          title="Pin this due date into the calendar and day drill-down below"
+                        >
+                          {isActiveGroupDate ? "Pinned in day drill-down" : "Pin date in day drill-down ↓"}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      {group.tasks.map((task) => {
+                        const statusTone = taskStatusConfig[task.status].color;
+                        const agentMeta = getTaskAgentMeta(task);
+
+                        return (
+                          <button
+                            key={task.id}
+                            type="button"
+                            onClick={() => navigateToTask(task)}
+                            className="w-full rounded-lg px-3 py-2 text-left transition-colors"
+                            style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}
+                            title="Open this task on Tasks for deeper follow-up"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium leading-tight" style={{ color: "var(--text-primary)" }}>
+                                  {task.title}
+                                </p>
+                                <div className="mt-1 flex items-center justify-between gap-3">
+                                  <p className="text-xs truncate" style={{ color: "var(--text-secondary)" }}>
+                                    {agentMeta.emoji} {agentMeta.name} &bull; {task.project || "No project"}
+                                  </p>
+                                  <span className="text-[10px] whitespace-nowrap" style={{ color: "#0A84FF" }}>
+                                    Open in Tasks →
+                                  </span>
+                                </div>
+                              </div>
+                              <span
+                                className="text-[10px] px-2 py-1 rounded-full whitespace-nowrap"
+                                style={{ color: statusTone, backgroundColor: `color-mix(in srgb, ${statusTone} 15%, transparent)` }}
+                              >
+                                {taskStatusConfig[task.status].label}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </button>
                 );
               })}
             </div>

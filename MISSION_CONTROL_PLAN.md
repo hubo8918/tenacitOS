@@ -2046,6 +2046,28 @@ Suggested template:
 - Next:
   - stay on `/agents/calendar`; the next likely trust candidate is another narrow expectation-setting pass inside the workload-slice drill-down, where task rows still read as rich cards but do not yet expose the same explicit Tasks handoff.
 
+### 2026-03-22 18:xx
+- Step: Calendar workload-slice task cards hand off into Tasks
+- Diagnosis:
+  - Browser review on `/agents/calendar` confirmed the next narrow trust gap from the prior checkpoint: the workload-slice drill-down still wrapped each due-date group in one big click target, so the embedded task rows looked like actionable follow-up cards even though they only repinned the date below.
+  - That made the slice UI overclaim Calendar ownership again: operators could see specific blocked/overdue tasks, but the surface still hid whether the next click would pin the day or continue task follow-up on Tasks.
+- Files:
+  - `src/app/(dashboard)/agents/calendar/CalendarPageClient.tsx`
+  - `MISSION_CONTROL_PLAN.md`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/agents/calendar/CalendarPageClient.tsx"`
+  - `npm run build`
+  - browser smoke check on `/agents/calendar` confirmed the blocked slice now shows a dedicated `Pinned in day drill-down` / `Pin date in day drill-down ↓` control instead of making the whole date card the click target
+  - browser smoke check on `/agents/calendar` confirmed the blocked slice task row now exposes `Open in Tasks →`
+  - browser smoke check confirmed that workload-slice task handoff lands on `/agents/tasks?task=task-010&taskSource=calendar`
+  - browser smoke check on `/agents/tasks` confirmed the focused banner still reads `Focused calendar follow-up: QA review of Mission Control dashboard`
+- Commit: current checkpoint commit (`fix(calendar): clarify workload-slice task handoff`)
+- Result:
+  - Calendar's workload-slice drill-down now separates its two actions honestly: date cards pin the day drill-down, while task rows explicitly hand deeper follow-up into Tasks.
+  - This keeps the summary-slice workflow useful without making rich task rows impersonate in-place Calendar actions.
+- Next:
+  - stay on `/agents/calendar`; the next likely micro-step is another tiny expectation-setting pass only if a remaining Calendar affordance still blurs `pin this day here` versus `continue follow-up on another page`.
+
 ## Current Focus
 
 **Current focus:** Continue the page sweep on Calendar one narrow trust-first step at a time. The current job is to keep `/agents/calendar` honest about what it can actually schedule, which surface owns follow-up work, and how quiet or legacy states are presented.
