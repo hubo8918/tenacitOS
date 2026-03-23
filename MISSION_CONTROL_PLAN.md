@@ -1985,9 +1985,29 @@ Suggested template:
 - Next:
   - the next clean Calendar trust candidate is deciding what to do with the legacy `/calendar` route so the app stops carrying two different Calendar surfaces with different semantics.
 
+### 2026-03-22 18:xx
+- Step: collapse the legacy `/calendar` route into the real Calendar surface
+- Diagnosis:
+  - Browser diagnosis on `/calendar` showed a second Calendar experience with `Weekly view of scheduled tasks and cron jobs`, which conflicted with the real sidebar-backed `/agents/calendar` surface and its task-scheduling semantics.
+  - Repo search showed no first-class navigation pointing to `/calendar`, so keeping a second divergent route around was just latent confusion rather than a supported product split.
+- Files:
+  - `src/app/(dashboard)/calendar/page.tsx`
+  - `MISSION_CONTROL_PLAN.md`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/calendar/page.tsx"`
+  - `npm run build`
+  - browser smoke check confirmed visiting `/calendar` now lands on `/agents/calendar`
+  - browser smoke check confirmed the redirected page shows `Task scheduling view` and no longer shows the old `Weekly view of scheduled tasks and cron jobs` copy
+- Commit: current checkpoint commit (`fix(calendar): redirect legacy calendar route`)
+- Result:
+  - Mission Control now has one real Calendar entrypoint instead of two conflicting route-level calendar stories.
+  - Operators who hit the legacy URL now land on the supported task-backed calendar immediately, which keeps route semantics honest without inventing any new scheduling behavior.
+- Next:
+  - the next Calendar trust candidate should stay inside `/agents/calendar` itself, likely another small clarity fix where workload follow-up or empty-state wording still over-explains instead of handoffing cleanly.
+
 ## Current Focus
 
-**Current focus:** Continue the page sweep on Calendar one narrow trust-first step at a time. The current job is to keep Calendar honest about what it can actually schedule, which surface owns follow-up work, and which route is the real calendar entrypoint.
+**Current focus:** Continue the page sweep on Calendar one narrow trust-first step at a time. The current job is to keep `/agents/calendar` honest about what it can actually schedule, which surface owns follow-up work, and how quiet or legacy states are presented.
 
 **Do next:**
 1. keep Calendar steps limited to one trust or wayfinding problem per checkpoint
