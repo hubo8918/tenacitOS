@@ -2068,6 +2068,26 @@ Suggested template:
 - Next:
   - stay on `/agents/calendar`; the next likely micro-step is another tiny expectation-setting pass only if a remaining Calendar affordance still blurs `pin this day here` versus `continue follow-up on another page`.
 
+### 2026-03-23 01:xx
+- Step: Calendar project cards admit they hand off into Projects
+- Diagnosis:
+  - Fresh browser review on `/agents/calendar` showed the selected-day `Project pressure on this date` cards had become real navigation targets after the earlier handoff fix, but the cards still read like static summaries because they never visibly said they open Projects.
+  - That left Calendar with one last handoff asymmetry on the live page: task rows already said `Open in Tasks →`, while project cards still hid their cross-page follow-up behind an unlabeled click target.
+- Files:
+  - `src/app/(dashboard)/agents/calendar/CalendarPageClient.tsx`
+  - `MISSION_CONTROL_PLAN.md`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/agents/calendar/CalendarPageClient.tsx"`
+  - `npm run build`
+  - browser smoke check on `/agents/calendar` confirmed the day-level `Mission Control` project card now shows `Open in Projects →`
+  - browser smoke check confirmed the project card still opens the focused Projects handoff after the label pass
+- Commit: current checkpoint commit (`fix(calendar): label project handoff into Projects`)
+- Result:
+  - Calendar's selected-day project cards now read like the handoffs they actually are instead of making cross-page follow-up depend on a hidden click target.
+  - This keeps Calendar's day drill-down consistent: task rows visibly hand off to Tasks, and project rows now visibly hand off to Projects.
+- Next:
+  - Calendar now feels like a clean stopping point for this trust pass; move to `/agents/tasks` next unless another live Calendar affordance still overclaims ownership.
+
 ## Current Focus
 
 **Current focus:** Continue the page sweep on Calendar one narrow trust-first step at a time. The current job is to keep `/agents/calendar` honest about what it can actually schedule, which surface owns follow-up work, and how quiet or legacy states are presented.

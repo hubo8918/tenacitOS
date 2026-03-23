@@ -1209,6 +1209,7 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
                           ? `1px solid color-mix(in srgb, ${project.agentCount > 1 ? "#BF5AF2" : "#30D158"} 35%, transparent)`
                           : "1px solid var(--border)",
                       }}
+                      title="Open this project on Projects for deeper follow-up"
                     >
                       <div className="flex items-start justify-between gap-3 mb-3">
                         <div className="min-w-0">
@@ -1219,15 +1220,20 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
                             {project.taskCount} open task{project.taskCount === 1 ? "" : "s"} across {project.agentCount} agent{project.agentCount === 1 ? "" : "s"}
                           </p>
                         </div>
-                        <span
-                          className="text-[10px] px-2 py-1 rounded-full whitespace-nowrap"
-                          style={{
-                            color: project.agentCount > 1 ? "#BF5AF2" : "var(--text-muted)",
-                            backgroundColor: project.agentCount > 1 ? "rgba(191, 90, 242, 0.12)" : "var(--surface-elevated)",
-                          }}
-                        >
-                          {project.agentCount > 1 ? `${project.agentCount} agents due` : "single-agent day"}
-                        </span>
+                        <div className="flex flex-col items-end gap-2 shrink-0">
+                          <span
+                            className="text-[10px] px-2 py-1 rounded-full whitespace-nowrap"
+                            style={{
+                              color: project.agentCount > 1 ? "#BF5AF2" : "var(--text-muted)",
+                              backgroundColor: project.agentCount > 1 ? "rgba(191, 90, 242, 0.12)" : "var(--surface-elevated)",
+                            }}
+                          >
+                            {project.agentCount > 1 ? `${project.agentCount} agents due` : "single-agent day"}
+                          </span>
+                          <span className="text-[10px] whitespace-nowrap" style={{ color: "#0A84FF" }}>
+                            Open in Projects →
+                          </span>
+                        </div>
                       </div>
 
                       <div className="flex flex-wrap gap-2 text-xs mb-3">
