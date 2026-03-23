@@ -2005,6 +2005,25 @@ Suggested template:
 - Next:
   - the next Calendar trust candidate should stay inside `/agents/calendar` itself, likely another small clarity fix where workload follow-up or empty-state wording still over-explains instead of handoffing cleanly.
 
+### 2026-03-22 18:xx
+- Step: Calendar day drill-down defaults to the first open due date
+- Diagnosis:
+  - Browser diagnosis on `/agents/calendar` showed March 2026 with 9 open due tasks and 0 same-day pileups, but the `Day workload drill-down` section still rendered an empty-state dead end until the operator manually clicked a date.
+  - That made the page look less useful than it really was: any due day was already drillable, but the initial state hid the first available day behind an unnecessary blank panel.
+- Files:
+  - `src/app/(dashboard)/agents/calendar/CalendarPageClient.tsx`
+  - `MISSION_CONTROL_PLAN.md`
+- Validation:
+  - `npx eslint "src/app/(dashboard)/agents/calendar/CalendarPageClient.tsx"`
+  - `npm run build`
+  - browser smoke check on `/agents/calendar` confirmed the live March view now opens the drill-down on `Sun, Mar 8` instead of showing the old no-selection empty state when pileups are zero
+- Commit: current checkpoint commit (`fix(calendar): default drill-down to first due day`)
+- Result:
+  - Calendar now opens on the first visible open due date whenever the month has work but no conflict day, so the drill-down stays immediately useful instead of implying there is nothing to inspect.
+  - The true empty state is now reserved for months with no open due dates in view, which keeps quiet months honest without obscuring real due-day workload.
+- Next:
+  - stay on `/agents/calendar`; the next narrow candidate is another expectation-setting pass where a card or header still suggests stronger scheduling ownership than the page actually has.
+
 ## Current Focus
 
 **Current focus:** Continue the page sweep on Calendar one narrow trust-first step at a time. The current job is to keep `/agents/calendar` honest about what it can actually schedule, which surface owns follow-up work, and how quiet or legacy states are presented.

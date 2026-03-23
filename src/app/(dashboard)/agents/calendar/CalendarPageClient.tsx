@@ -216,6 +216,10 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
   );
 
   const visibleMonthOpenTasks = useMemo(() => visibleMonthTasks.filter((task) => isOpenTask(task)), [visibleMonthTasks]);
+  const visibleMonthOpenDateKeys = useMemo(
+    () => Array.from(new Set(visibleMonthOpenTasks.map((task) => task.dueDate).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+    [visibleMonthOpenTasks]
+  );
   const visibleBlockedCount = useMemo(
     () => visibleMonthOpenTasks.filter((task) => task.status === "blocked").length,
     [visibleMonthOpenTasks]
@@ -459,8 +463,8 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
       return selectedDayDate;
     }
 
-    return filteredConflictDays[0]?.dateKey ?? null;
-  }, [filteredConflictDays, month, selectedDayDate, year]);
+    return filteredConflictDays[0]?.dateKey ?? visibleMonthOpenDateKeys[0] ?? null;
+  }, [filteredConflictDays, month, selectedDayDate, visibleMonthOpenDateKeys, year]);
 
   const activeConflictSummary = useMemo(
     () => filteredConflictDays.find((day) => day.dateKey === activeSelectedDate) ?? null,
@@ -1347,7 +1351,7 @@ export default function CalendarPageClient({ initialTasks }: CalendarPageClientP
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
               {selectedConflictAgent
                 ? `${selectedConflictAgent.name} has no same-day assignee pileups visible in ${fmtMonth(year, month)}. Clear the current focus to review all month conflicts again.`
-                : `No assignee has more than one open task due on the same day in ${fmtMonth(year, month)}. Calendar still shows due-date workload, but there is no selected day to drill into yet.`}
+                : `No open task due dates land in ${fmtMonth(year, month)} right now. Use the summary cards above for blocked, overdue, or upcoming slices across other dates.`}
             </p>
           </div>
         )}
