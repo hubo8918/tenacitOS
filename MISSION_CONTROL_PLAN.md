@@ -1945,6 +1945,25 @@ Suggested template:
 - Next:
   - the next best candidate is another small Team wording or state-surface cleanup where org metadata and runtime state still share language too loosely.
 
+### 2026-03-22 17:xx
+- Step: Team editor field labels now read like org-profile metadata
+- Diagnosis:
+  - The Team editor title and CTA already read as profile editing, but the fields inside still used generic runtime-ish labels like `Name`, `Role`, `Agent tier`, and `Tags, comma separated`.
+  - That mismatch made the Team overlay feel half-converted: the shell said organization profile, while the form still read like raw agent configuration.
+- Files:
+  - `src/components/AgentCard.tsx`
+  - `MISSION_CONTROL_PLAN.md`
+- Validation:
+  - `npx eslint src/components/AgentCard.tsx`
+  - `npm run build`
+  - browser smoke check on `/agents/team` should confirm the editor now shows org-profile language like `Profile name`, `Team role`, `Review coverage`, `Likely handoffs`, and `Save profile`
+- Commit: current checkpoint commit (`fix(team): clarify org-profile field labels`)
+- Result:
+  - The Team editor now reads consistently as organizational profile editing instead of drifting back toward runtime-agent management once the overlay opens.
+  - This keeps the Team/Agents boundary coherent without changing any saved data shape or behavior.
+- Next:
+  - finish the Team/Agents trust pass only if another narrow wording/state mismatch is still visible; otherwise continue the page sweep to the next surface in the plan order.
+
 ## Current Focus
 
 **Current focus:** Continue the Team/Agents trust pass one narrow step at a time. The highest-value work right now is making relationship, runtime, and permission surfaces say exactly what they mean without implying stronger org structure or orchestration than the product actually has.

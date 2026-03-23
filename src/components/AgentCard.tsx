@@ -339,32 +339,32 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Name"
+              placeholder="Profile name"
               style={inputStyle}
-              aria-label="Agent name"
+              aria-label="Team profile name"
             />
             <input
               type="text"
               value={emoji}
               onChange={(e) => setEmoji(e.target.value)}
-              placeholder="Emoji"
+              placeholder="Profile emoji"
               style={inputStyle}
-              aria-label="Agent emoji"
+              aria-label="Team profile emoji"
               maxLength={4}
             />
             <input
               type="text"
               value={role}
               onChange={(e) => setRole(e.target.value)}
-              placeholder="Role"
+              placeholder="Team role"
               style={inputStyle}
-              aria-label="Agent role"
+              aria-label="Team role"
             />
             <select
               value={tier}
               onChange={(e) => setTier(e.target.value as TeamTier)}
               style={inputStyle}
-              aria-label="Agent tier"
+              aria-label="Team tier"
             >
               <option value="leadership">Leadership</option>
               <option value="operations">Operations</option>
@@ -374,26 +374,26 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Description"
+              placeholder="Profile summary"
               rows={2}
               style={{ ...inputStyle, resize: "none" }}
-              aria-label="Agent description"
+              aria-label="Team profile summary"
             />
             <input
               type="text"
               value={specialBadge}
               onChange={(e) => setSpecialBadge(e.target.value)}
-              placeholder="Badge (optional)"
+              placeholder="Team badge (optional)"
               style={inputStyle}
-              aria-label="Agent badge"
+              aria-label="Team badge"
             />
             <select
               value={reportsTo}
               onChange={(e) => setReportsTo(e.target.value)}
               style={inputStyle}
-              aria-label="Agent manager"
+              aria-label="Reporting line"
             >
-              <option value="">Top-level / no manager</option>
+              <option value="">Top-level / no reporting line</option>
               {reportOptions.map((candidate) => (
                 <option key={candidate.id} value={candidate.id}>
                   {candidate.name}
@@ -402,7 +402,7 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
             </select>
             <div>
               <div className="text-[11px] mb-1" style={{ color: "var(--text-muted)" }}>
-                Can review for
+                Review coverage
               </div>
               <div
                 className="rounded-lg p-2 space-y-1.5"
@@ -435,7 +435,7 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
             </div>
             <div>
               <div className="text-[11px] mb-1" style={{ color: "var(--text-muted)" }}>
-                Can delegate to
+                Likely handoffs
               </div>
               <div
                 className="rounded-lg p-2 space-y-1.5"
@@ -469,10 +469,10 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
             <textarea
               value={tagsInput}
               onChange={(e) => setTagsInput(e.target.value)}
-              placeholder="Tags, comma separated"
+              placeholder="Profile tags, comma separated"
               rows={2}
               style={{ ...inputStyle, resize: "none" }}
-              aria-label="Agent tags"
+              aria-label="Team profile tags"
             />
             <p className="text-[11px] -mt-1" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
               Use tags for specialties, domain ownership, or collaboration context — for example: backend, product, infra.
@@ -515,7 +515,7 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
                 }}
               >
                 <Save className="w-3 h-3" />
-                {saving ? "Saving..." : "Save"}
+                {saving ? "Saving profile..." : "Save profile"}
               </button>
             </div>
           </div>
