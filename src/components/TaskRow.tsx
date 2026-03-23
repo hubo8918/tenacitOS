@@ -339,6 +339,7 @@ export function TaskRow({
       ? `/agents/projects?project=${encodeURIComponent(task.project.trim())}&task=${encodeURIComponent(task.id)}`
       : `/agents/projects?task=${encodeURIComponent(task.id)}`;
   const projectLabelMismatch = hasProjectLink === false;
+  const hasProjectLabel = Boolean((resolvedProjectLabel || task.project).trim());
 
   useEffect(() => {
     if (!showMenu) return;
@@ -876,32 +877,66 @@ export function TaskRow({
 
         <div className="flex-[1.5] min-w-0">
           <div className="flex flex-wrap items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => {
-                window.open(projectFocusHref, "_blank");
-              }}
-              className="text-xs truncate block text-left hover:underline hover:text-[var(--text-secondary)] transition-colors flex items-center gap-1.5 max-w-full"
-              style={{ color: projectLabelMismatch ? "#FF9F0A" : "var(--text-muted)" }}
-              title={projectLabelMismatch
-                ? `No live Projects record currently resolves from \"${task.project}\". Opening Projects will show the mismatch state for this task.`
-                : `Open linked project in Projects: ${resolvedProjectLabel || task.project}`}
-            >
-              <span className="truncate">{resolvedProjectLabel || "No project"}</span>
-              <ExternalLink className="w-3 h-3 opacity-60 flex-shrink-0" />
-            </button>
-            {projectLabelMismatch && (
+            {hasProjectLabel ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.open(projectFocusHref, "_blank");
+                  }}
+                  className="text-xs truncate block text-left hover:underline hover:text-[var(--text-secondary)] transition-colors flex items-center gap-1.5 max-w-full"
+                  style={{ color: projectLabelMismatch ? "#FF9F0A" : "var(--text-muted)" }}
+                  title={projectLabelMismatch
+                    ? `No live Projects record currently resolves from \"${task.project}\". Opening Projects will show the mismatch state for this task.`
+                    : `Open linked project in Projects: ${resolvedProjectLabel || task.project}`}
+                >
+                  <span className="truncate">{resolvedProjectLabel}</span>
+                  <ExternalLink className="w-3 h-3 opacity-60 flex-shrink-0" />
+                </button>
+                {projectLabelMismatch && (
+                  <>
+                    <span
+                      className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                      style={{
+                        color: "#FF9F0A",
+                        backgroundColor: "color-mix(in srgb, #FF9F0A 14%, transparent)",
+                        border: "1px solid color-mix(in srgb, #FF9F0A 28%, transparent)",
+                      }}
+                      title="This task does not currently resolve to a live project on the Projects board."
+                    >
+                      Link missing
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleOpenDetailsEditor();
+                      }}
+                      className="rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors"
+                      style={{
+                        color: "#FF9F0A",
+                        backgroundColor: "transparent",
+                        border: "1px solid color-mix(in srgb, #FF9F0A 30%, transparent)",
+                      }}
+                      title={`Edit this task's project field for ${task.title}`}
+                    >
+                      Fix project
+                    </button>
+                  </>
+                )}
+              </>
+            ) : (
               <>
                 <span
                   className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
                   style={{
-                    color: "#FF9F0A",
-                    backgroundColor: "color-mix(in srgb, #FF9F0A 14%, transparent)",
-                    border: "1px solid color-mix(in srgb, #FF9F0A 28%, transparent)",
+                    color: "var(--text-muted)",
+                    backgroundColor: "var(--surface-elevated)",
+                    border: "1px solid var(--border)",
                   }}
-                  title="This task does not currently resolve to a live project on the Projects board."
+                  title="This task is not currently linked to any project."
                 >
-                  Link missing
+                  No project
                 </span>
                 <button
                   type="button"
@@ -911,13 +946,13 @@ export function TaskRow({
                   }}
                   className="rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors"
                   style={{
-                    color: "#FF9F0A",
+                    color: "#0A84FF",
                     backgroundColor: "transparent",
-                    border: "1px solid color-mix(in srgb, #FF9F0A 30%, transparent)",
+                    border: "1px solid color-mix(in srgb, #0A84FF 30%, transparent)",
                   }}
-                  title={`Edit this task's project field for ${task.title}`}
+                  title={`Set a project link for ${task.title}`}
                 >
-                  Fix project
+                  Set project
                 </button>
               </>
             )}

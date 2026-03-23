@@ -2108,9 +2108,27 @@ Suggested template:
 - Next:
   - stay on `/agents/tasks`; the next best candidate is another narrow trust pass around how unset routing/review metadata or other row-level follow-up states are described.
 
+### 2026-03-23 12:xx
+- Step: Tasks no-project rows stop pretending to open Projects
+- Diagnosis:
+  - Fresh Tasks review showed rows with no saved project still rendered the Project column like an external project link, just labeled `No project`.
+  - That overstated the handoff: there was no linked project to inspect, but the UI still looked like Projects navigation rather than an unset-state that should be fixed in the existing task details editor.
+- Files:
+  - `src/components/TaskRow.tsx`
+  - `MISSION_CONTROL_PLAN.md`
+- Validation:
+  - `npx eslint "src/components/TaskRow.tsx"`
+  - `npm run build`
+- Commit: current checkpoint commit (`fix(tasks): clarify no-project row state`)
+- Result:
+  - Tasks rows with no saved project now show an explicit `No project` badge plus a `Set project` action into the existing details editor instead of pretending the Project column can still drill into Projects.
+  - Real linked-project and mismatch states still keep their existing navigation or repair affordances, so the Project column now distinguishes honest navigation from honest missing linkage.
+- Next:
+  - stay on `/agents/tasks`; the next best candidate is another narrow unset-state or handoff-copy pass where row metadata still sounds more configured or navigable than it really is.
+
 ## Current Focus
 
-**Current focus:** Continue the page sweep on Tasks one narrow trust-first step at a time. The current job is to keep `/agents/tasks` honest about what each row actually opens, what metadata is intentionally unset, and which follow-up belongs in details, routing, or project handoff surfaces.
+**Current focus:** Continue the page sweep on Tasks one narrow trust-first step at a time. The current job is to keep `/agents/tasks` honest about what each row actually opens, which metadata is intentionally unset, and which follow-up belongs in details, routing, or project handoff surfaces.
 
 **Do next:**
 1. keep Tasks steps limited to one trust or wayfinding problem per checkpoint
