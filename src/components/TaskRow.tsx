@@ -809,24 +809,24 @@ export function TaskRow({
             </button>
             {blockedByTaskIds.length > 0 && (
               <>
+                <span title={`Blocked by ${dependencyTitle}`}>
+                  Blocked by:{" "}
+                  <span style={{ color: blockerSummaryColor, fontWeight: 600 }}>
+                    {dependencyPreview}
+                    {blockedByTaskIds.length > 2 ? ` +${blockedByTaskIds.length - 2}` : ""}
+                  </span>
+                </span>
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    window.open("/agents/tasks", "_blank");
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleOpenOwnershipEditor();
                   }}
                   className="inline-flex items-center gap-1 hover:underline transition-colors"
-                  style={{ color: "var(--text-muted)" }}
-                  title={`Blocked by ${dependencyTitle}`}
+                  style={{ color: "#0A84FF" }}
+                  title={`Review blockers and dependency settings for ${task.title}`}
                 >
-                  <span>
-                    Blocked by:{" "}
-                    <span style={{ color: blockerSummaryColor, fontWeight: 600 }}>
-                      {dependencyPreview}
-                      {blockedByTaskIds.length > 2 ? ` +${blockedByTaskIds.length - 2}` : ""}
-                    </span>
-                  </span>
-                  <ExternalLink className="w-3 h-3 opacity-60 flex-shrink-0" />
+                  Edit blockers →
                 </button>
 
                 {staleBlockedByDetails.length > 0 && (

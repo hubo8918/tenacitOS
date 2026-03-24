@@ -2146,6 +2146,25 @@ Suggested template:
 - Next:
   - stay on `/agents/tasks`; the next best candidate is another tiny unset-state or action-copy pass where task row metadata still admits a missing state but hides the existing repair path.
 
+### 2026-03-23 17:xx
+- Step: Tasks blocker summaries stop pretending to hand off into the whole board
+- Diagnosis:
+  - Fresh Tasks review showed `Blocked by` still behaved like a vague board-level jump even though blocker follow-up really belongs in the existing routing/dependency editor for that task.
+  - That made blocker metadata less honest than the newly added `Open details →` and `Set/Edit routing →` row-level entrypoints: the row admitted there were blockers, but the visible action still dumped operators onto the full Tasks board instead of the surface that actually edits blocker state.
+- Files:
+  - `src/components/TaskRow.tsx`
+  - `MISSION_CONTROL_PLAN.md`
+- Validation:
+  - `npx eslint "src/components/TaskRow.tsx"`
+  - `npm run build`
+  - live `/api/agent-tasks` check confirmed the current board data has no active `blockedByTaskIds` rows available for a browser smoke click, so this checkpoint was validated by code-path review plus build rather than a live blocked-row interaction
+- Commit: current checkpoint commit (`fix(tasks): clarify blocker follow-up entrypoint`)
+- Result:
+  - `Blocked by` now reads as row metadata, while the follow-up action is an explicit `Edit blockers →` entrypoint into the existing routing/dependency editor.
+  - This keeps blocker cleanup aligned with the real editing surface instead of pretending the right next step is a generic jump to the full Tasks board.
+- Next:
+  - stay on `/agents/tasks`; the next best candidate is another tiny row-level trust pass where a visible summary still sounds actionable but the repair path is hidden or mislabeled.
+
 ## Current Focus
 
 **Current focus:** Continue the page sweep on Tasks one narrow trust-first step at a time. The current job is to keep `/agents/tasks` honest about what each row actually opens, which metadata is intentionally unset, and which follow-up belongs in details, routing, or project handoff surfaces.
