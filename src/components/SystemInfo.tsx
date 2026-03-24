@@ -14,6 +14,13 @@ interface SystemInfoProps {
       uptimeFormatted: string;
       nodeVersion: string;
       model: string;
+      modelPrimary: string;
+      configuredFallbackModels: string[];
+      recentSessionModels: Array<{
+        model: string;
+        provider: string | null;
+        count: number;
+      }>;
       workspacePath: string;
       platform: string;
       hostname: string;
@@ -29,6 +36,33 @@ interface SystemInfoProps {
 function formatBytes(bytes: number): string {
   const gb = bytes / (1024 * 1024 * 1024);
   return `${gb.toFixed(1)} GB`;
+}
+
+function formatPathLeaf(filePath: string): string {
+  const segments = filePath.split(/[\\/]/).filter(Boolean);
+  return segments[segments.length - 1] || filePath;
+}
+
+function formatModelLeaf(model: string): string {
+  return model.split("/").pop() || model;
+}
+
+function formatModelProvider(model: string): string {
+  return model.includes("/") ? model.split("/")[0] : "configured";
+}
+
+function formatRecentModelMix(
+  models: Array<{ model: string; provider: string | null; count: number }>
+): string {
+  if (models.length === 0) return "No recent session model data";
+
+  return `Recent agent mix: ${models
+    .map((entry) =>
+      entry.provider
+        ? `${entry.provider}/${entry.model} x${entry.count}`
+        : `${entry.model} x${entry.count}`
+    )
+    .join(", ")}`;
 }
 
 export function SystemInfo({ data }: SystemInfoProps) {
@@ -51,6 +85,17 @@ export function SystemInfo({ data }: SystemInfoProps) {
     );
   }
 
+  const configuredFallbacks =
+    data.system.configuredFallbackModels.length > 0
+      ? `Fallbacks: ${data.system.configuredFallbackModels.join(", ")}`
+      : "No fallbacks configured";
+  const modelSublabel =
+    data.system.recentSessionModels.length > 0
+      ? `${formatModelProvider(data.system.modelPrimary)} | ${formatRecentModelMix(
+          data.system.recentSessionModels
+        )}`
+      : `${formatModelProvider(data.system.modelPrimary)} | ${configuredFallbacks}`;
+
   const infoItems = [
     {
       icon: Server,
@@ -72,14 +117,14 @@ export function SystemInfo({ data }: SystemInfoProps) {
     },
     {
       icon: Brain,
-      label: "Current Model",
-      value: data.system.model.split("/").pop() || data.system.model,
-      sublabel: data.system.model.includes("/") ? data.system.model.split("/")[0] : "provider",
+      label: "Primary Model",
+      value: formatModelLeaf(data.system.modelPrimary || data.system.model),
+      sublabel: modelSublabel,
     },
     {
       icon: FolderOpen,
       label: "Workspace",
-      value: data.system.workspacePath.split("/").pop() || "workspace",
+      value: formatPathLeaf(data.system.workspacePath),
       sublabel: data.system.workspacePath,
     },
     {

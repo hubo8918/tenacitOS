@@ -17,6 +17,13 @@ interface SystemData {
     uptimeFormatted: string;
     nodeVersion: string;
     model: string;
+    modelPrimary: string;
+    configuredFallbackModels: string[];
+    recentSessionModels: Array<{
+      model: string;
+      provider: string | null;
+      count: number;
+    }>;
     workspacePath: string;
     platform: string;
     hostname: string;

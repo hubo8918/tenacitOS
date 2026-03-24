@@ -30,6 +30,16 @@ interface AgentActionResult {
   text: string;
   durationMs?: number | null;
   timestamp?: string | null;
+  model?: string | null;
+  sessionId?: string | null;
+  thinking?: string | null;
+  fields?: {
+    status?: string | null;
+    focus?: string | null;
+    next?: string | null;
+    blockers?: string | null;
+    needsFromHuman?: string | null;
+  } | null;
 }
 
 interface AgentCardProps {
@@ -95,6 +105,16 @@ function formatActionTime(timestamp?: string | null): string {
     minute: "2-digit",
     hour12: false,
   });
+}
+
+function formatModelLabel(model?: string | null): string {
+  if (!model) return "";
+  return model.split("/").pop() || model;
+}
+
+function formatShortSessionId(sessionId?: string | null): string {
+  if (!sessionId) return "";
+  return sessionId.slice(0, 8);
 }
 
 function getPresenceState(agent: TeamAgent): PresenceState {
@@ -270,6 +290,24 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
         text: typeof data.text === "string" ? data.text : "done",
         durationMs: typeof data.durationMs === "number" ? data.durationMs : null,
         timestamp: typeof data.timestamp === "string" ? data.timestamp : null,
+        model: typeof data.model === "string" ? data.model : null,
+        sessionId: typeof data.sessionId === "string" ? data.sessionId : null,
+        thinking: typeof data.thinking === "string" ? data.thinking : null,
+        fields:
+          data.fields && typeof data.fields === "object"
+            ? {
+                status:
+                  typeof data.fields.status === "string" ? data.fields.status : null,
+                focus: typeof data.fields.focus === "string" ? data.fields.focus : null,
+                next: typeof data.fields.next === "string" ? data.fields.next : null,
+                blockers:
+                  typeof data.fields.blockers === "string" ? data.fields.blockers : null,
+                needsFromHuman:
+                  typeof data.fields.needsFromHuman === "string"
+                    ? data.fields.needsFromHuman
+                    : null,
+              }
+            : null,
       });
       onUpdate?.();
     } catch (err) {
@@ -297,6 +335,17 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
   }
   const actionTime = formatActionTime(actionResult?.timestamp);
   if (actionTime) actionDetailParts.push(actionTime);
+  const actionModel = formatModelLabel(actionResult?.model);
+  if (actionModel) actionDetailParts.push(actionModel);
+  const actionSessionId = formatShortSessionId(actionResult?.sessionId);
+  if (actionSessionId) actionDetailParts.push(`session ${actionSessionId}`);
+  const actionFieldEntries = [
+    { label: "status", value: actionResult?.fields?.status || null },
+    { label: "focus", value: actionResult?.fields?.focus || null },
+    { label: "next", value: actionResult?.fields?.next || null },
+    { label: "blockers", value: actionResult?.fields?.blockers || null },
+    { label: "needs", value: actionResult?.fields?.needsFromHuman || null },
+  ].filter((entry): entry is { label: string; value: string } => Boolean(entry.value));
 
   return (
     <div
@@ -710,9 +759,19 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
 
             {actionResult && (
               <div className="text-[11px] max-w-[290px] text-right" style={{ color: "var(--text-muted)", lineHeight: 1.35 }}>
-                <p title={actionResult.text}>
-                  {actionLabel(actionResult.action)}: {actionResult.text}
+                <p className="font-semibold" style={{ color: "var(--text-secondary)" }}>
+                  {actionLabel(actionResult.action)}
                 </p>
+                {actionFieldEntries.length > 0 ? (
+                  actionFieldEntries.map((entry) => (
+                    <p key={entry.label}>
+                      <span className="uppercase tracking-[0.08em]">{entry.label}:</span>{" "}
+                      {entry.value}
+                    </p>
+                  ))
+                ) : (
+                  <p title={actionResult.text}>{actionResult.text}</p>
+                )}
                 {actionDetailParts.length > 0 && <p>{actionDetailParts.join(" · ")}</p>}
               </div>
             )}
