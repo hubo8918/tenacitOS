@@ -20,6 +20,9 @@ interface RecordProjectPhaseRunInput {
   phaseId: string;
   phaseTitle?: string;
   userAgent?: string;
+  phasePatch?: Partial<
+    Pick<ProjectPhase, "status" | "ownerAgentId" | "reviewerAgentId" | "handoffToAgentId">
+  >;
   run: Omit<ProjectPhaseLatestRun, "id" | "timestamp"> &
     Partial<Pick<ProjectPhaseLatestRun, "id" | "timestamp">>;
 }
@@ -54,7 +57,7 @@ function normalizeIntent(value: unknown): ProjectPhaseLatestRun["intent"] {
 }
 
 function normalizeAction(value: unknown): ProjectPhaseLatestRun["action"] {
-  return value === "check-in" || value === "wake" ? value : undefined;
+  return value === "check-in" || value === "wake" || value === "review" ? value : undefined;
 }
 
 function normalizeFields(value: unknown): ProjectPhaseLatestRun["fields"] {
@@ -67,6 +70,8 @@ function normalizeFields(value: unknown): ProjectPhaseLatestRun["fields"] {
     next: asString(fields.next),
     blockers: asString(fields.blockers),
     needsFromHuman: asString(fields.needsFromHuman),
+    decision: asString(fields.decision),
+    handoffTo: asString(fields.handoffTo),
   };
 
   return Object.values(normalized).some(Boolean) ? normalized : null;
@@ -171,6 +176,7 @@ export async function recordProjectPhaseRun({
   phaseId,
   phaseTitle,
   userAgent,
+  phasePatch,
   run,
 }: RecordProjectPhaseRunInput): Promise<{
   attempt: ProjectPhaseRunAttempt;
@@ -222,6 +228,7 @@ export async function recordProjectPhaseRun({
     phase.id === phaseId
       ? {
           ...phase,
+          ...phasePatch,
           latestRun: toPhaseLatestRun(attempt),
         }
       : phase

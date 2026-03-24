@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ReviewDecisionComposer,
+  type ReviewDecisionSubmitPayload,
+} from "@/components/ReviewDecisionComposer";
+import {
   priorityConfig,
   statusConfig,
   type Project,
@@ -178,6 +182,9 @@ interface ProjectPhaseRunAttempt extends NonNullable<ProjectPhase["latestRun"]> 
 }
 
 interface ProjectCardProps {
+  cardId?: string;
+  focusedPhaseId?: string | null;
+  isTemporarilyHighlighted?: boolean;
   project: Project;
   teamAgents: TeamAgent[];
   linkedTasks: Task[];
@@ -189,6 +196,9 @@ interface ProjectCardProps {
 }
 
 export function ProjectCard({
+  cardId,
+  focusedPhaseId,
+  isTemporarilyHighlighted = false,
   project,
   teamAgents,
   linkedTasks,
@@ -226,10 +236,17 @@ export function ProjectCard({
   const [editOwnerAgentId, setEditOwnerAgentId] = useState(project.ownerAgentId || "");
   const [editParticipatingAgentIds, setEditParticipatingAgentIds] = useState<string[]>([...project.participatingAgentIds]);
   const currentPhase = useMemo(() => getCurrentPhase(project), [project]);
-  const initialEditablePhase = currentPhase || project.phases[0] || null;
+  const initialEditablePhase =
+    project.phases.find((phase) => phase.id === focusedPhaseId) ||
+    currentPhase ||
+    project.phases[0] ||
+    null;
   const [selectedPhaseId, setSelectedPhaseId] = useState(initialEditablePhase?.id || "");
   const [editPhaseTitle, setEditPhaseTitle] = useState(initialEditablePhase?.title || "");
   const [editPhaseStatus, setEditPhaseStatus] = useState<ProjectPhase["status"]>(initialEditablePhase?.status || "pending");
+  const [editPhaseOwnerAgentId, setEditPhaseOwnerAgentId] = useState(initialEditablePhase?.ownerAgentId || "");
+  const [editPhaseReviewerAgentId, setEditPhaseReviewerAgentId] = useState(initialEditablePhase?.reviewerAgentId || "");
+  const [editPhaseHandoffToAgentId, setEditPhaseHandoffToAgentId] = useState(initialEditablePhase?.handoffToAgentId || "");
   const [editPhaseDependencyIds, setEditPhaseDependencyIds] = useState<string[]>(initialEditablePhase?.dependsOnPhaseIds || []);
   const [newPhaseTitle, setNewPhaseTitle] = useState("");
   const [newPhaseStatus, setNewPhaseStatus] = useState<ProjectPhase["status"]>("pending");
@@ -242,6 +259,8 @@ export function ProjectCard({
   const [phaseRunsLoading, setPhaseRunsLoading] = useState(false);
   const [phaseRunsError, setPhaseRunsError] = useState<string | null>(null);
   const [requestingPhasePacket, setRequestingPhasePacket] = useState(false);
+  const [requestingPhaseReview, setRequestingPhaseReview] = useState(false);
+  const [phaseDecisionPending, setPhaseDecisionPending] = useState<"approve" | "rework" | "block" | null>(null);
   const [phasePacketError, setPhasePacketError] = useState<string | null>(null);
 
   const status = statusConfig[project.status];
@@ -265,8 +284,8 @@ export function ProjectCard({
     () => project.phases.find((phase) => phase.id === selectedPhaseId) || currentPhase || project.phases[0] || null,
     [project.phases, selectedPhaseId, currentPhase]
   );
-  const currentPhaseDependencies = useMemo(() => {
-    if (!currentPhase) {
+  const selectedPhaseDependencies = useMemo(() => {
+    if (!editablePhase) {
       return { resolved: [] as ProjectPhase[], unresolvedIds: [] as string[] };
     }
 
@@ -274,7 +293,7 @@ export function ProjectCard({
     const resolved: ProjectPhase[] = [];
     const unresolvedIds: string[] = [];
 
-    for (const phaseId of currentPhase.dependsOnPhaseIds) {
+    for (const phaseId of editablePhase.dependsOnPhaseIds) {
       const phase = phaseById.get(phaseId);
       if (phase) {
         resolved.push(phase);
@@ -284,7 +303,7 @@ export function ProjectCard({
     }
 
     return { resolved, unresolvedIds };
-  }, [currentPhase, project.phases]);
+  }, [editablePhase, project.phases]);
   const editablePhaseDependencyOptions = useMemo(
     () => project.phases.filter((phase) => phase.id && phase.id !== editablePhase?.id),
     [project.phases, editablePhase?.id]
@@ -329,28 +348,54 @@ export function ProjectCard({
     [sortedLinkedTasks]
   );
   const linkedTaskAttention = useMemo(() => getLinkedTaskAttentionSummary(linkedTasks), [linkedTasks]);
-  const currentPhaseOwner = useMemo(
-    () => teamAgents.find((agent) => agent.id === currentPhase?.ownerAgentId) || null,
-    [teamAgents, currentPhase?.ownerAgentId]
+  const currentPhaseReviewer = useMemo(
+    () => teamAgents.find((agent) => agent.id === currentPhase?.reviewerAgentId) || null,
+    [teamAgents, currentPhase?.reviewerAgentId]
   );
-  const coordinationOwner = currentPhaseOwner || owner;
-  const coordinationAgentId = currentPhase?.ownerAgentId || currentPhaseOwner?.id || owner?.id || "";
+  const currentPhaseHandoff = useMemo(
+    () => teamAgents.find((agent) => agent.id === currentPhase?.handoffToAgentId) || null,
+    [teamAgents, currentPhase?.handoffToAgentId]
+  );
+  const editablePhaseOwner = useMemo(
+    () => teamAgents.find((agent) => agent.id === editablePhase?.ownerAgentId) || null,
+    [teamAgents, editablePhase?.ownerAgentId]
+  );
+  const editablePhaseReviewer = useMemo(
+    () => teamAgents.find((agent) => agent.id === editablePhase?.reviewerAgentId) || null,
+    [teamAgents, editablePhase?.reviewerAgentId]
+  );
+  const editablePhaseHandoff = useMemo(
+    () => teamAgents.find((agent) => agent.id === editablePhase?.handoffToAgentId) || null,
+    [teamAgents, editablePhase?.handoffToAgentId]
+  );
+  const coordinationOwner = editablePhaseOwner || owner;
+  const coordinationAgentId = editablePhase?.ownerAgentId || owner?.id || "";
   const coordinationOwnerLabel = coordinationOwner
     ? `${coordinationOwner.emoji} ${coordinationOwner.name}`
-    : currentPhase?.ownerAgentId
-      ? currentPhase.ownerAgentId
+    : editablePhase?.ownerAgentId
+      ? editablePhase.ownerAgentId
     : displayOwner.name !== "Unassigned"
       ? `${displayOwner.emoji} ${displayOwner.name}`
       : "phase owner";
+  const reviewOwner = editablePhaseReviewer;
+  const reviewAgentId = editablePhase?.reviewerAgentId || "";
+  const reviewOwnerLabel = reviewOwner
+    ? `${reviewOwner.emoji} ${reviewOwner.name}`
+    : editablePhase?.reviewerAgentId
+      ? editablePhase.reviewerAgentId
+      : "unassigned reviewer";
+  const handoffTargetLabel = editablePhaseHandoff
+    ? `${editablePhaseHandoff.emoji} ${editablePhaseHandoff.name}`
+    : editablePhase?.handoffToAgentId || "Not set";
   const phaseDependencyPromptSummary = useMemo(
     () => [
-      ...currentPhaseDependencies.resolved.map((phase) => {
+      ...selectedPhaseDependencies.resolved.map((phase) => {
         const config = phaseStatusConfig[phase.status];
         return `${phase.title} (${config.label})`;
       }),
-      ...currentPhaseDependencies.unresolvedIds.map((phaseId) => `unresolved:${phaseId}`),
+      ...selectedPhaseDependencies.unresolvedIds.map((phaseId) => `unresolved:${phaseId}`),
     ],
-    [currentPhaseDependencies]
+    [selectedPhaseDependencies]
   );
   const linkedTaskPromptSummary = linkedTasksUnavailable
     ? "linked tasks unavailable"
@@ -364,14 +409,28 @@ export function ProjectCard({
         ]
           .filter(Boolean)
           .join(", ");
-  const latestPhaseRun = currentPhase?.latestRun || null;
-  const latestPhaseRunSessionId = formatShortSessionId(latestPhaseRun?.sessionId);
-  const latestPhaseRunLabel = latestPhaseRun ? formatPhaseRunIntentLabel(latestPhaseRun.intent) : "";
+  const currentPhaseLatestRun = currentPhase?.latestRun || null;
+  const currentPhaseLatestRunSessionId = formatShortSessionId(currentPhaseLatestRun?.sessionId);
+  const currentPhaseLatestRunLabel = currentPhaseLatestRun ? formatPhaseRunIntentLabel(currentPhaseLatestRun.intent) : "";
   const projectTasksHref = getProjectTasksHref(project.title, project.id);
   const urgentOverflowTasksHref = getProjectTasksHref(project.title, project.id, firstHiddenUrgentLinkedTask?.id, "urgent-overflow");
 
+  const syncPhaseDraft = useCallback((phase: ProjectPhase | null) => {
+    setSelectedPhaseId(phase?.id || "");
+    setEditPhaseTitle(phase?.title || "");
+    setEditPhaseStatus(phase?.status || "pending");
+    setEditPhaseOwnerAgentId(phase?.ownerAgentId || "");
+    setEditPhaseReviewerAgentId(phase?.reviewerAgentId || "");
+    setEditPhaseHandoffToAgentId(phase?.handoffToAgentId || "");
+    setEditPhaseDependencyIds(phase?.dependsOnPhaseIds || []);
+  }, []);
+
   const resetDraft = () => {
-    const nextPhase = getCurrentPhase(project) || project.phases[0] || null;
+    const nextPhase =
+      project.phases.find((phase) => phase.id === focusedPhaseId) ||
+      getCurrentPhase(project) ||
+      project.phases[0] ||
+      null;
     setEditTitle(project.title);
     setEditDescription(project.description);
     setEditStatus(project.status);
@@ -379,10 +438,7 @@ export function ProjectCard({
     setEditProgress(project.progress);
     setEditOwnerAgentId(project.ownerAgentId || "");
     setEditParticipatingAgentIds([...project.participatingAgentIds]);
-    setSelectedPhaseId(nextPhase?.id || "");
-    setEditPhaseTitle(nextPhase?.title || "");
-    setEditPhaseStatus(nextPhase?.status || "pending");
-    setEditPhaseDependencyIds(nextPhase?.dependsOnPhaseIds || []);
+    syncPhaseDraft(nextPhase);
     setNewPhaseTitle("");
     setNewPhaseStatus("pending");
     setSaveError(null);
@@ -398,6 +454,8 @@ export function ProjectCard({
     setConfirmDelete(false);
     setConfirmPhaseDelete(false);
     setDetachLinkedTasksOnDelete(false);
+    setRequestingPhaseReview(false);
+    setPhaseDecisionPending(null);
   };
 
   const resetLinkedTaskCreateDraft = () => {
@@ -420,7 +478,7 @@ export function ProjectCard({
   };
 
   const fetchPhaseRunHistory = useCallback(
-    async (phaseId = currentPhase?.id || "") => {
+    async (phaseId = editablePhase?.id || "") => {
       if (!project.id || !phaseId) {
         setPhaseRuns([]);
         setPhaseRunsError(null);
@@ -451,11 +509,11 @@ export function ProjectCard({
         setPhaseRunsLoading(false);
       }
     },
-    [project.id, currentPhase?.id]
+    [editablePhase?.id, project.id]
   );
 
   async function handleRequestPhasePacket() {
-    if (!currentPhase || !coordinationAgentId || requestingPhasePacket) {
+    if (!editablePhase || !coordinationAgentId || requestingPhasePacket) {
       return;
     }
 
@@ -475,10 +533,12 @@ export function ProjectCard({
             projectStatus: project.status,
             projectPriority: project.priority,
             projectOwner: displayOwner.name !== "Unassigned" ? displayOwner.name : null,
-            phaseId: currentPhase.id,
-            phaseTitle: currentPhase.title,
-            phaseStatus: currentPhase.status,
-            phaseOwner: coordinationOwner?.name || null,
+            phaseId: editablePhase.id,
+            phaseTitle: editablePhase.title,
+            phaseStatus: editablePhase.status,
+            phaseOwner: coordinationOwner?.name || editablePhase.ownerAgentId || null,
+            phaseReviewer: editablePhaseReviewer?.name || editablePhase.reviewerAgentId || null,
+            phaseHandoff: editablePhaseHandoff?.name || editablePhase.handoffToAgentId || null,
             dependencies: phaseDependencyPromptSummary,
             linkedTaskSummary: linkedTaskPromptSummary || null,
           },
@@ -490,7 +550,7 @@ export function ProjectCard({
         throw new Error(payload?.error || "Failed to request coordination packet");
       }
 
-      await fetchPhaseRunHistory(currentPhase.id);
+      await fetchPhaseRunHistory(editablePhase.id);
       onUpdate?.();
     } catch (error) {
       setPhasePacketError(error instanceof Error ? error.message : "Failed to request coordination packet");
@@ -499,9 +559,121 @@ export function ProjectCard({
     }
   }
 
+  async function handleRequestPhaseReview() {
+    if (!editablePhase || !reviewAgentId || requestingPhaseReview) {
+      return;
+    }
+
+    setRequestingPhaseReview(true);
+    setPhasePacketError(null);
+
+    try {
+      const response = await fetch("/api/team/actions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: reviewAgentId,
+          action: "review",
+          projectPhase: {
+            projectId: project.id,
+            projectTitle: project.title,
+            projectStatus: project.status,
+            projectPriority: project.priority,
+            projectOwner: displayOwner.name !== "Unassigned" ? displayOwner.name : null,
+            phaseId: editablePhase.id,
+            phaseTitle: editablePhase.title,
+            phaseStatus: editablePhase.status,
+            phaseOwner: coordinationOwner?.name || editablePhase.ownerAgentId || null,
+            phaseReviewer: reviewOwner?.name || editablePhase.reviewerAgentId || null,
+            phaseHandoff: editablePhaseHandoff?.name || editablePhase.handoffToAgentId || null,
+            dependencies: phaseDependencyPromptSummary,
+            linkedTaskSummary: linkedTaskPromptSummary || null,
+          },
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to request review packet");
+      }
+
+      await fetchPhaseRunHistory(editablePhase.id);
+      onUpdate?.();
+    } catch (error) {
+      setPhasePacketError(error instanceof Error ? error.message : "Failed to request review packet");
+    } finally {
+      setRequestingPhaseReview(false);
+    }
+  }
+
+  async function handlePhaseDecision({
+    decision,
+    note,
+    handoffTo,
+  }: ReviewDecisionSubmitPayload) {
+    if (!editablePhase || phaseDecisionPending) {
+      return;
+    }
+
+    setPhaseDecisionPending(decision);
+    setPhasePacketError(null);
+
+    try {
+      const response = await fetch("/api/project-phase-runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: project.id,
+          phaseId: editablePhase.id,
+          decision,
+          note,
+          handoffTo: handoffTo || undefined,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to apply review decision");
+      }
+
+      await fetchPhaseRunHistory(editablePhase.id);
+      onUpdate?.();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to apply review decision";
+      setPhasePacketError(message);
+      throw error instanceof Error ? error : new Error(message);
+    } finally {
+      setPhaseDecisionPending(null);
+    }
+  }
+
   useEffect(() => {
     setPhasePacketError(null);
-  }, [project.id, currentPhase?.id]);
+    setRequestingPhasePacket(false);
+    setRequestingPhaseReview(false);
+    setPhaseDecisionPending(null);
+  }, [editablePhase?.id, project.id]);
+
+  useEffect(() => {
+    if (focusedPhaseId) {
+      const focusedPhase = project.phases.find((phase) => phase.id === focusedPhaseId) || null;
+      if (focusedPhase && focusedPhase.id !== selectedPhaseId) {
+        syncPhaseDraft(focusedPhase);
+      }
+      return;
+    }
+
+    if (!editing) {
+      const nextPhase =
+        project.phases.find((phase) => phase.id === selectedPhaseId) ||
+        getCurrentPhase(project) ||
+        project.phases[0] ||
+        null;
+      if ((nextPhase?.id || "") !== selectedPhaseId) {
+        syncPhaseDraft(nextPhase);
+      }
+    }
+  }, [editing, focusedPhaseId, project, project.phases, selectedPhaseId, syncPhaseDraft]);
 
   useEffect(() => {
     void fetchPhaseRunHistory();
@@ -525,10 +697,7 @@ export function ProjectCard({
 
   const handleSelectPhase = (phaseId: string) => {
     const nextPhase = project.phases.find((phase) => phase.id === phaseId) || null;
-    setSelectedPhaseId(phaseId);
-    setEditPhaseTitle(nextPhase?.title || "");
-    setEditPhaseStatus(nextPhase?.status || "pending");
-    setEditPhaseDependencyIds(nextPhase?.dependsOnPhaseIds || []);
+    syncPhaseDraft(nextPhase);
     setConfirmPhaseDelete(false);
     setSaveError(null);
   };
@@ -820,6 +989,24 @@ export function ProjectCard({
       return;
     }
 
+    if (
+      editPhaseOwnerAgentId &&
+      editPhaseReviewerAgentId &&
+      editPhaseOwnerAgentId === editPhaseReviewerAgentId
+    ) {
+      setSaveError("Phase reviewer must be different from the phase owner.");
+      return;
+    }
+
+    if (
+      editPhaseOwnerAgentId &&
+      editPhaseHandoffToAgentId &&
+      editPhaseOwnerAgentId === editPhaseHandoffToAgentId
+    ) {
+      setSaveError("Phase handoff target must be different from the phase owner.");
+      return;
+    }
+
     setSaving(true);
     setSaveError(null);
     setDeleteError(null);
@@ -835,7 +1022,9 @@ export function ProjectCard({
         id: editablePhase?.id || getUniquePhaseId(project.id, trimmedPhaseTitle, project.phases),
         title: trimmedPhaseTitle,
         status: editPhaseStatus,
-        ownerAgentId: editOwnerAgentId || undefined,
+        ownerAgentId: editPhaseOwnerAgentId || undefined,
+        reviewerAgentId: editPhaseReviewerAgentId || undefined,
+        handoffToAgentId: editPhaseHandoffToAgentId || undefined,
         dependsOnPhaseIds: nextPhaseDependencyIds,
       };
 
@@ -852,6 +1041,8 @@ export function ProjectCard({
           title: trimmedNewPhaseTitle,
           status: newPhaseStatus,
           ownerAgentId: editOwnerAgentId || undefined,
+          reviewerAgentId: undefined,
+          handoffToAgentId: undefined,
           dependsOnPhaseIds: [],
         },
       ];
@@ -930,18 +1121,28 @@ export function ProjectCard({
 
   return (
     <div
+      id={cardId}
       className="rounded-xl overflow-hidden transition-all duration-200 hover:scale-[1.02]"
       style={{
         backgroundColor: "var(--card)",
-        border: "1px solid var(--border)",
+        border: isTemporarilyHighlighted
+          ? "1px solid color-mix(in srgb, #0A84FF 42%, transparent)"
+          : "1px solid var(--border)",
+        boxShadow: isTemporarilyHighlighted ? "0 0 0 2px rgba(10, 132, 255, 0.18)" : "none",
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = "var(--border-strong)";
-        e.currentTarget.style.boxShadow = "0 4px 20px rgba(0,0,0,0.3)";
+        e.currentTarget.style.borderColor = isTemporarilyHighlighted ? "#0A84FF" : "var(--border-strong)";
+        e.currentTarget.style.boxShadow = isTemporarilyHighlighted
+          ? "0 0 0 2px rgba(10, 132, 255, 0.18), 0 4px 20px rgba(0,0,0,0.3)"
+          : "0 4px 20px rgba(0,0,0,0.3)";
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = "var(--border)";
-        e.currentTarget.style.boxShadow = "none";
+        e.currentTarget.style.borderColor = isTemporarilyHighlighted
+          ? "color-mix(in srgb, #0A84FF 42%, transparent)"
+          : "var(--border)";
+        e.currentTarget.style.boxShadow = isTemporarilyHighlighted
+          ? "0 0 0 2px rgba(10, 132, 255, 0.18)"
+          : "none";
       }}
     >
       <div className="p-4 md:p-5">
@@ -1137,6 +1338,76 @@ export function ProjectCard({
                   );
                 })}
               </div>
+            </div>
+
+            <div className="mb-3">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <label className="flex flex-col gap-1.5 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                  {editablePhase ? "Tracked phase owner" : "First phase owner"}
+                  <select
+                    value={editPhaseOwnerAgentId}
+                    onChange={(event) => setEditPhaseOwnerAgentId(event.target.value)}
+                    className="w-full rounded-lg px-3 py-2 text-sm"
+                    style={{
+                      backgroundColor: "var(--card)",
+                      color: "var(--text-primary)",
+                      border: "1px solid var(--border)",
+                    }}
+                  >
+                    <option value="">Unassigned</option>
+                    {teamAgents.map((agent) => (
+                      <option key={`phase-owner-${agent.id}`} value={agent.id}>
+                        {agent.emoji} {agent.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="flex flex-col gap-1.5 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                  {editablePhase ? "Tracked phase reviewer" : "First phase reviewer"}
+                  <select
+                    value={editPhaseReviewerAgentId}
+                    onChange={(event) => setEditPhaseReviewerAgentId(event.target.value)}
+                    className="w-full rounded-lg px-3 py-2 text-sm"
+                    style={{
+                      backgroundColor: "var(--card)",
+                      color: "var(--text-primary)",
+                      border: "1px solid var(--border)",
+                    }}
+                  >
+                    <option value="">No reviewer</option>
+                    {teamAgents.map((agent) => (
+                      <option key={`phase-reviewer-${agent.id}`} value={agent.id}>
+                        {agent.emoji} {agent.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="flex flex-col gap-1.5 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                  {editablePhase ? "Tracked phase handoff target" : "First phase handoff target"}
+                  <select
+                    value={editPhaseHandoffToAgentId}
+                    onChange={(event) => setEditPhaseHandoffToAgentId(event.target.value)}
+                    className="w-full rounded-lg px-3 py-2 text-sm"
+                    style={{
+                      backgroundColor: "var(--card)",
+                      color: "var(--text-primary)",
+                      border: "1px solid var(--border)",
+                    }}
+                  >
+                    <option value="">No handoff planned</option>
+                    {teamAgents.map((agent) => (
+                      <option key={`phase-handoff-${agent.id}`} value={agent.id}>
+                        {agent.emoji} {agent.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                Reviewer signs off or sends work back. Handoff target is the next explicit owner after review, and both should stay distinct from the selected phase owner.
+              </p>
             </div>
 
             <div className="mb-3">
@@ -2024,7 +2295,29 @@ export function ProjectCard({
                 <p className="mt-1 text-[10px]" style={{ color: "var(--text-muted)" }}>
                   {trackedPhaseCount} tracked phase{trackedPhaseCount === 1 ? "" : "s"}
                 </p>
-                {latestPhaseRun?.kind === "agent_packet" && (
+                <div className="mt-2 space-y-1 text-[10px]" style={{ color: "var(--text-muted)" }}>
+                  <p>
+                    Review:{" "}
+                    <span style={{ color: currentPhaseReviewer?.color || "var(--text-secondary)", fontWeight: 600 }}>
+                      {currentPhaseReviewer ? `${currentPhaseReviewer.emoji} ${currentPhaseReviewer.name}` : currentPhase?.reviewerAgentId || "Not set"}
+                    </span>
+                  </p>
+                  <p>
+                    Handoff:{" "}
+                    <span style={{ color: currentPhaseHandoff?.color || "var(--text-secondary)", fontWeight: 600 }}>
+                      {currentPhaseHandoff ? `${currentPhaseHandoff.emoji} ${currentPhaseHandoff.name}` : currentPhase?.handoffToAgentId || "Not set"}
+                    </span>
+                  </p>
+                  {currentPhaseLatestRun?.fields?.decision && (
+                    <p>
+                      Decision:{" "}
+                      <span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>
+                        {currentPhaseLatestRun.fields.decision}
+                      </span>
+                    </p>
+                  )}
+                </div>
+                {currentPhaseLatestRun?.kind === "agent_packet" && (
                   <span
                     className="inline-flex mt-2 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap"
                     style={{
@@ -2033,13 +2326,13 @@ export function ProjectCard({
                       border: "1px solid rgba(10, 132, 255, 0.22)",
                     }}
                     title={
-                      latestPhaseRunSessionId
-                        ? `Latest phase packet linked to session ${latestPhaseRunSessionId}.`
+                      currentPhaseLatestRunSessionId
+                        ? `Latest phase packet linked to session ${currentPhaseLatestRunSessionId}.`
                         : "Latest phase-linked agent packet recorded."
                     }
                 >
-                  {latestPhaseRunLabel}
-                  {latestPhaseRunSessionId ? ` ${latestPhaseRunSessionId}` : ""}
+                  {currentPhaseLatestRunLabel}
+                  {currentPhaseLatestRunSessionId ? ` ${currentPhaseLatestRunSessionId}` : ""}
                 </span>
                 )}
               </div>
@@ -2095,7 +2388,7 @@ export function ProjectCard({
           </div>
         )}
 
-        {currentPhase && currentPhase.dependsOnPhaseIds.length > 0 && (
+        {editablePhase && editablePhase.dependsOnPhaseIds.length > 0 && (
           <div
             className="mb-4 rounded-lg px-3 py-2"
             style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}
@@ -2105,12 +2398,12 @@ export function ProjectCard({
                 Phase dependencies
               </span>
               <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-                {currentPhase.dependsOnPhaseIds.length} tracked
+                {editablePhase.dependsOnPhaseIds.length} tracked
               </span>
             </div>
 
             <div className="flex flex-wrap gap-1.5">
-              {currentPhaseDependencies.resolved.map((phase) => {
+              {selectedPhaseDependencies.resolved.map((phase) => {
                 const config = phaseStatusConfig[phase.status];
                 return (
                   <span
@@ -2129,7 +2422,7 @@ export function ProjectCard({
                 );
               })}
 
-              {currentPhaseDependencies.unresolvedIds.length > 0 && (
+              {selectedPhaseDependencies.unresolvedIds.length > 0 && (
                 <span
                   className="inline-flex items-center rounded-full px-2 py-1 text-[10px] font-medium"
                   style={{
@@ -2137,14 +2430,14 @@ export function ProjectCard({
                     color: "var(--text-secondary)",
                     border: "1px solid var(--border)",
                   }}
-                  title={currentPhaseDependencies.unresolvedIds.join(", ")}
+                  title={selectedPhaseDependencies.unresolvedIds.join(", ")}
                 >
-                  {currentPhaseDependencies.unresolvedIds.length} unresolved
+                  {selectedPhaseDependencies.unresolvedIds.length} unresolved
                 </span>
               )}
             </div>
 
-            {currentPhaseDependencies.unresolvedIds.length > 0 && (
+            {selectedPhaseDependencies.unresolvedIds.length > 0 && (
               <p className="mt-2 text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
                 Some dependency IDs are still stored without a matching phase on this project. Use the project plan editor to clean them up or retarget them explicitly.
               </p>
@@ -2162,22 +2455,35 @@ export function ProjectCard({
                 Phase coordination
               </span>
               <p className="mt-1 text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
-                Uses the same structured run envelope as task packets, but anchors it to the current project phase.
+                Uses the same structured run envelope as task packets, then adds reviewer decision and explicit handoff context for the selected tracked phase.
               </p>
             </div>
             <div className="flex flex-col items-end gap-2">
               <button
                 type="button"
                 onClick={handleRequestPhasePacket}
-                disabled={!currentPhase || !coordinationAgentId || requestingPhasePacket}
+                disabled={!editablePhase || !coordinationAgentId || requestingPhasePacket}
                 className="text-[11px] font-medium px-3 py-1.5 rounded-lg transition-colors"
                 style={{
-                  color: currentPhase && coordinationAgentId ? "#0A84FF" : "var(--text-muted)",
+                  color: editablePhase && coordinationAgentId ? "#0A84FF" : "var(--text-muted)",
                   border: "1px solid var(--border)",
-                  opacity: !currentPhase || !coordinationAgentId || requestingPhasePacket ? 0.6 : 1,
+                  opacity: !editablePhase || !coordinationAgentId || requestingPhasePacket ? 0.6 : 1,
                 }}
               >
                 {requestingPhasePacket ? "Requesting packet..." : "Request coordination packet"}
+              </button>
+              <button
+                type="button"
+                onClick={handleRequestPhaseReview}
+                disabled={!editablePhase || !reviewAgentId || requestingPhaseReview}
+                className="text-[11px] font-medium px-3 py-1.5 rounded-lg transition-colors"
+                style={{
+                  color: editablePhase && reviewAgentId ? "#FF9F0A" : "var(--text-muted)",
+                  border: "1px solid var(--border)",
+                  opacity: !editablePhase || !reviewAgentId || requestingPhaseReview ? 0.6 : 1,
+                }}
+              >
+                {requestingPhaseReview ? "Requesting review..." : "Request review packet"}
               </button>
               {phaseRunsLoading && (
                 <span className="text-[11px] font-medium" style={{ color: "var(--text-secondary)" }}>
@@ -2188,12 +2494,28 @@ export function ProjectCard({
           </div>
 
           <p className="text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
-            {!currentPhase
-              ? "Add a tracked phase before requesting a phase-linked coordination packet."
-              : coordinationAgentId
-                ? `Requests the packet from ${coordinationOwnerLabel}.`
-                : "Assign a project owner or phase owner before requesting a coordination packet."}
+            {!editablePhase
+              ? "Add a tracked phase before requesting coordination or review packets."
+              : `Selected phase: ${editablePhase.title}. Coordination uses ${coordinationAgentId ? coordinationOwnerLabel : "an unassigned owner"}. Review uses ${reviewAgentId ? reviewOwnerLabel : "an unassigned reviewer"}. Handoff target is ${handoffTargetLabel}.`}
           </p>
+
+          {editablePhase && (
+            <div className="mt-3">
+              <ReviewDecisionComposer
+                agentOptions={teamAgents}
+                defaultHandoffToAgentId={editablePhase.handoffToAgentId || ""}
+                pendingDecision={phaseDecisionPending}
+                error={phasePacketError}
+                onSubmit={handlePhaseDecision}
+              />
+            </div>
+          )}
+
+          {editablePhase && (
+            <p className="mt-2 text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+              Approve completes the phase unless a handoff target is set. If a handoff target exists, approval moves ownership there and resets the phase to pending.
+            </p>
+          )}
 
           {phaseRunsError && (
             <p className="mt-2 text-[11px] font-medium" style={{ color: "var(--status-blocked)" }}>
@@ -2207,9 +2529,9 @@ export function ProjectCard({
             </p>
           )}
 
-          {!phaseRunsLoading && currentPhase && phaseRuns.length === 0 && !phaseRunsError && (
+          {!phaseRunsLoading && editablePhase && phaseRuns.length === 0 && !phaseRunsError && (
             <p className="mt-2 text-[11px]" style={{ color: "var(--text-muted)" }}>
-              No coordination packets recorded for this phase yet.
+              No coordination or review packets recorded for this phase yet.
             </p>
           )}
 
@@ -2298,6 +2620,22 @@ export function ProjectCard({
                             Needs:
                           </span>{" "}
                           {attempt.fields.needsFromHuman}
+                        </p>
+                      )}
+                      {attempt.fields.decision && (
+                        <p>
+                          <span className="font-semibold" style={{ color: "var(--text-secondary)" }}>
+                            Decision:
+                          </span>{" "}
+                          {attempt.fields.decision}
+                        </p>
+                      )}
+                      {attempt.fields.handoffTo && (
+                        <p>
+                          <span className="font-semibold" style={{ color: "var(--text-secondary)" }}>
+                            Handoff:
+                          </span>{" "}
+                          {attempt.fields.handoffTo}
                         </p>
                       )}
                     </div>

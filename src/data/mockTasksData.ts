@@ -18,7 +18,7 @@ export interface Task {
     id: string;
     kind: "manual" | "agent_packet";
     intent: "start" | "review" | "debug" | "agent_check_in" | "agent_wake";
-    action?: "check-in" | "wake";
+    action?: "check-in" | "wake" | "review";
     timestamp: string;
     runStatus?: "idle" | "queued" | "running" | "needs_review" | "done" | "failed";
     executionMode?: "manual" | "agent-run";
@@ -36,6 +36,8 @@ export interface Task {
       next?: string;
       blockers?: string;
       needsFromHuman?: string;
+      decision?: string;
+      handoffTo?: string;
     } | null;
   } | null;
 }

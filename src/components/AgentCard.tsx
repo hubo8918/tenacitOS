@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Edit3, X, Save } from "lucide-react";
 
 interface TeamAgent {
@@ -186,6 +186,20 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
   const [actionRunning, setActionRunning] = useState<"wake" | "check-in" | null>(null);
   const [actionResult, setActionResult] = useState<AgentActionResult | null>(null);
 
+  const resetDraftFromAgent = useCallback(() => {
+    setName(agent.name);
+    setEmoji(agent.emoji);
+    setRole(agent.role);
+    setDescription(agent.description);
+    setTier(agent.tier as TeamTier);
+    setSpecialBadge(agent.specialBadge || "");
+    setReportsTo(agent.reportsTo || "");
+    setCanReviewFor(agent.canReviewFor || []);
+    setCanDelegateTo(agent.canDelegateTo || []);
+    setTagsInput(agent.tags.map((tag) => tag.label).join(", "));
+    setSaveError(null);
+  }, [agent]);
+
   const presence = getPresenceMeta(getPresenceState(agent));
   const relationshipOptions = allAgents.filter((candidate) => candidate.id !== agent.id);
   const reportOptions = relationshipOptions;
@@ -215,7 +229,23 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
     );
   };
 
+  useEffect(() => {
+    if (!editing) {
+      resetDraftFromAgent();
+    }
+  }, [editing, resetDraftFromAgent]);
+
   const handleSave = async () => {
+    const trimmedName = name.trim();
+    const trimmedEmoji = emoji.trim();
+    const trimmedRole = role.trim();
+    const trimmedDescription = description.trim();
+
+    if (!trimmedName || !trimmedEmoji || !trimmedRole || !trimmedDescription) {
+      setSaveError("Name, emoji, role, and description are required.");
+      return;
+    }
+
     setSaving(true);
     setSaveError(null);
     try {
@@ -224,10 +254,10 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: agent.id,
-          name,
-          emoji,
-          role,
-          description,
+          name: trimmedName,
+          emoji: trimmedEmoji,
+          role: trimmedRole,
+          description: trimmedDescription,
           tier,
           specialBadge: specialBadge.trim() || null,
           reportsTo: reportsTo || null,
@@ -254,17 +284,7 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
   };
 
   const handleCancel = () => {
-    setName(agent.name);
-    setEmoji(agent.emoji);
-    setRole(agent.role);
-    setDescription(agent.description);
-    setTier(agent.tier as TeamTier);
-    setSpecialBadge(agent.specialBadge || "");
-    setReportsTo(agent.reportsTo || "");
-    setCanReviewFor(agent.canReviewFor || []);
-    setCanDelegateTo(agent.canDelegateTo || []);
-    setTagsInput(agent.tags.map((tag) => tag.label).join(", "));
-    setSaveError(null);
+    resetDraftFromAgent();
     setEditing(false);
   };
 
@@ -738,7 +758,10 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
               </button>
 
               <button
-                onClick={() => setEditing(true)}
+                onClick={() => {
+                  resetDraftFromAgent();
+                  setEditing(true);
+                }}
                 className="flex items-center gap-1 text-xs transition-colors"
                 style={{ color: "var(--text-muted)" }}
                 onMouseEnter={(e) => {

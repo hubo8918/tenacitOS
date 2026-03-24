@@ -3,6 +3,10 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import type { CSSProperties } from "react";
 import { MoreHorizontal, ExternalLink, Play, CheckSquare, AlertCircle } from "lucide-react";
+import {
+  ReviewDecisionComposer,
+  type ReviewDecisionSubmitPayload,
+} from "@/components/ReviewDecisionComposer";
 import { taskPriorityConfig, taskStatusConfig, type Task } from "@/data/mockTasksData";
 
 function parseLocalDate(dateString: string) {
@@ -135,12 +139,13 @@ export function TaskRow({
   const [confirmingStatus, setConfirmingStatus] = useState<Task["status"] | null>(null);
   const [confirmingExecution, setConfirmingExecution] = useState<"start" | "review" | "debug" | null>(null);
   const [requestingTaskPacket, setRequestingTaskPacket] = useState(false);
+  const [taskDecisionPending, setTaskDecisionPending] = useState<"approve" | "rework" | "block" | null>(null);
   const [taskPacketError, setTaskPacketError] = useState<string | null>(null);
   const [executionAttempts, setExecutionAttempts] = useState<Array<{
     id: string;
     kind: "manual" | "agent_packet";
     intent: "start" | "review" | "debug" | "agent_check_in" | "agent_wake";
-    action?: "check-in" | "wake";
+    action?: "check-in" | "wake" | "review";
     timestamp: string;
     userAgent?: string;
     runStatus?: "idle" | "queued" | "running" | "needs_review" | "done" | "failed";
@@ -159,6 +164,8 @@ export function TaskRow({
       next?: string;
       blockers?: string;
       needsFromHuman?: string;
+      decision?: string;
+      handoffTo?: string;
     } | null;
   }>>([]);
   const [loadingExecutionHistory, setLoadingExecutionHistory] = useState(false);
@@ -371,6 +378,8 @@ export function TaskRow({
     : displayOwner.name !== "Unassigned"
       ? `${displayOwner.emoji} ${displayOwner.name}`
       : "owner";
+  const reviewOwnerLabel = reviewerOption ? `${reviewerOption.emoji} ${reviewerOption.name}` : ownerPacketLabel;
+  const handoffTargetLabel = handoffOption ? `${handoffOption.emoji} ${handoffOption.name}` : "not set";
   const projectFocusHref = linkedProjectId
     ? `/agents/projects?project=${encodeURIComponent(linkedProjectTitle || task.project)}&projectId=${encodeURIComponent(linkedProjectId)}&task=${encodeURIComponent(task.id)}`
     : task.project.trim()
@@ -426,6 +435,7 @@ export function TaskRow({
     setConfirmingDelete(false);
     setConfirmingStatus(null);
     setRequestingTaskPacket(false);
+    setTaskDecisionPending(null);
     setTaskPacketError(null);
   }, [resolvedProjectLabel, task.id, task.status, task.title, task.dueDate, task.priority]);
 
@@ -793,6 +803,48 @@ export function TaskRow({
       );
     } finally {
       setRequestingTaskPacket(false);
+    }
+  };
+
+  const handleTaskDecision = async ({
+    decision,
+    note,
+    handoffTo,
+  }: ReviewDecisionSubmitPayload) => {
+    if (taskDecisionPending) {
+      return;
+    }
+
+    setTaskDecisionPending(decision);
+    setTaskPacketError(null);
+
+    try {
+      const response = await fetch("/api/execution-attempts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          taskId: task.id,
+          intent: "review",
+          decision,
+          note,
+          handoffTo: handoffTo || undefined,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to record task review decision");
+      }
+
+      await fetchExecutionHistory();
+      onUpdate?.();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to record task review decision";
+      setTaskPacketError(message);
+      throw error instanceof Error ? error : new Error(message);
+    } finally {
+      setTaskDecisionPending(null);
     }
   };
 
@@ -1512,8 +1564,22 @@ export function TaskRow({
 
                 <p className="mt-2 text-[11px]" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
                   {canRequestOwnerPacket
-                    ? `Uses the current owner packet path for ${ownerPacketLabel}.`
+                    ? `Uses the current owner packet path for ${ownerPacketLabel}. Review currently routes through ${reviewOwnerLabel}. Handoff target is ${handoffTargetLabel}.`
                     : "Assign an owner before requesting a task-linked agent packet."}
+                </p>
+
+                <div className="mt-3">
+                  <ReviewDecisionComposer
+                    agentOptions={agentOptions}
+                    defaultHandoffToAgentId={task.handoffToAgentId || ""}
+                    pendingDecision={taskDecisionPending}
+                    error={taskPacketError}
+                    onSubmit={handleTaskDecision}
+                  />
+                </div>
+
+                <p className="mt-2 text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                  Approve completes the task unless a handoff target is set. If a handoff target exists, approval moves ownership there and resets the task to pending.
                 </p>
 
                 {executionHistoryError && (
@@ -1619,6 +1685,22 @@ export function TaskRow({
                                   Needs:
                                 </span>{" "}
                                 {attempt.fields.needsFromHuman}
+                              </p>
+                            )}
+                            {attempt.fields.decision && (
+                              <p>
+                                <span className="font-semibold" style={{ color: "var(--text-secondary)" }}>
+                                  Decision:
+                                </span>{" "}
+                                {attempt.fields.decision}
+                              </p>
+                            )}
+                            {attempt.fields.handoffTo && (
+                              <p>
+                                <span className="font-semibold" style={{ color: "var(--text-secondary)" }}>
+                                  Handoff:
+                                </span>{" "}
+                                {attempt.fields.handoffTo}
                               </p>
                             )}
                           </div>

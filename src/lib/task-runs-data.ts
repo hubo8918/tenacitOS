@@ -6,6 +6,7 @@ import {
   normalizeAgentTask,
   saveAgentTasks,
   type AgentTask,
+  type TaskAgentRef,
   type TaskExecutionMode,
   type TaskLatestRun,
   type TaskRunIntent,
@@ -24,6 +25,12 @@ interface RecordTaskRunInput {
   taskId: string;
   taskTitle?: string;
   userAgent?: string;
+  taskPatch?: Partial<
+    Pick<
+      AgentTask,
+      "status" | "assigneeAgentId" | "reviewerAgentId" | "handoffToAgentId" | "agent"
+    >
+  >;
   run: Omit<TaskLatestRun, "id" | "timestamp"> &
     Partial<Pick<TaskLatestRun, "id" | "timestamp">>;
 }
@@ -57,8 +64,8 @@ function normalizeIntent(value: unknown): TaskRunIntent {
     : "start";
 }
 
-function normalizeAction(value: unknown): "check-in" | "wake" | undefined {
-  return value === "check-in" || value === "wake" ? value : undefined;
+function normalizeAction(value: unknown): "check-in" | "wake" | "review" | undefined {
+  return value === "check-in" || value === "wake" || value === "review" ? value : undefined;
 }
 
 function normalizeFields(value: unknown): TaskLatestRun["fields"] {
@@ -71,6 +78,8 @@ function normalizeFields(value: unknown): TaskLatestRun["fields"] {
     next: asString(fields.next),
     blockers: asString(fields.blockers),
     needsFromHuman: asString(fields.needsFromHuman),
+    decision: asString(fields.decision),
+    handoffTo: asString(fields.handoffTo),
   };
 
   return Object.values(normalized).some(Boolean) ? normalized : null;
@@ -168,6 +177,7 @@ export async function recordTaskRun({
   taskId,
   taskTitle,
   userAgent,
+  taskPatch,
   run,
 }: RecordTaskRunInput): Promise<{ attempt: TaskRunAttempt; task: AgentTask | null }> {
   const timestamp = run.timestamp || new Date().toISOString();
@@ -204,8 +214,11 @@ export async function recordTaskRun({
   }
 
   const currentTask = tasks[taskIndex];
+  const nextAgent = taskPatch?.agent as TaskAgentRef | undefined;
   const updatedTask = normalizeAgentTask({
     ...currentTask,
+    ...taskPatch,
+    agent: nextAgent || currentTask.agent,
     runStatus: run.runStatus ?? currentTask.runStatus,
     executionMode: run.executionMode ?? currentTask.executionMode,
     deliverable: run.deliverable ?? currentTask.deliverable,

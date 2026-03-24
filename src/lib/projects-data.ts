@@ -76,6 +76,8 @@ function normalizeProjectPhaseRunFields(value: unknown): ProjectPhaseRunFields |
   if (asNonEmptyString(fields.needsFromHuman)) {
     normalized.needsFromHuman = asNonEmptyString(fields.needsFromHuman);
   }
+  if (asNonEmptyString(fields.decision)) normalized.decision = asNonEmptyString(fields.decision);
+  if (asNonEmptyString(fields.handoffTo)) normalized.handoffTo = asNonEmptyString(fields.handoffTo);
 
   return Object.keys(normalized).length > 0 ? normalized : null;
 }
@@ -92,7 +94,10 @@ function normalizeProjectPhaseLatestRun(runLike: unknown): ProjectPhaseLatestRun
     id,
     kind: normalizeProjectPhaseRunKind(run.kind),
     intent: normalizeProjectPhaseRunIntent(run.intent),
-    action: run.action === "check-in" || run.action === "wake" ? run.action : undefined,
+    action:
+      run.action === "check-in" || run.action === "wake" || run.action === "review"
+        ? run.action
+        : undefined,
     timestamp,
     runStatus: normalizeProjectPhaseRunStatus(run.runStatus),
     executionMode: normalizeProjectPhaseExecutionMode(run.executionMode),
@@ -118,6 +123,8 @@ function normalizeProjectPhase(phaseLike: unknown): ProjectPhase {
         ? phase.status
         : "pending",
     ownerAgentId: asString(phase.ownerAgentId),
+    reviewerAgentId: asString(phase.reviewerAgentId),
+    handoffToAgentId: asString(phase.handoffToAgentId),
     dependsOnPhaseIds: asStringArray(phase.dependsOnPhaseIds),
     latestRun: normalizeProjectPhaseLatestRun(phase.latestRun),
   };

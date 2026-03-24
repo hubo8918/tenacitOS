@@ -24,7 +24,7 @@ const CLI_NOISE_PREFIXES = [
   "Bind:",
 ];
 
-type ActionName = "check-in" | "wake";
+type ActionName = "check-in" | "wake" | "review";
 type ThinkingLevel = "minimal" | "low";
 
 interface TeamOverlayEntry {
@@ -57,6 +57,8 @@ interface StructuredActionFields {
   next: string | null;
   blockers: string | null;
   needsFromHuman: string | null;
+  decision: string | null;
+  handoffTo: string | null;
 }
 
 interface TaskPromptContext {
@@ -82,6 +84,8 @@ interface ProjectPhasePromptContext {
   phaseTitle: string;
   phaseStatus: string | null;
   phaseOwner: string | null;
+  phaseReviewer: string | null;
+  phaseHandoff: string | null;
   dependencies: string[];
   linkedTaskSummary: string | null;
 }
@@ -229,6 +233,10 @@ function sanitizeAgentId(value: unknown): string | null {
   return value;
 }
 
+function parseActionName(value: unknown): ActionName {
+  return value === "wake" || value === "review" ? value : "check-in";
+}
+
 function parseTaskPromptContext(value: unknown): TaskPromptContext | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
 
@@ -326,6 +334,14 @@ function parseProjectPhasePromptContext(value: unknown): ProjectPhasePromptConte
     phaseOwner:
       typeof phase.phaseOwner === "string" && phase.phaseOwner.trim().length > 0
         ? phase.phaseOwner.trim()
+        : null,
+    phaseReviewer:
+      typeof phase.phaseReviewer === "string" && phase.phaseReviewer.trim().length > 0
+        ? phase.phaseReviewer.trim()
+        : null,
+    phaseHandoff:
+      typeof phase.phaseHandoff === "string" && phase.phaseHandoff.trim().length > 0
+        ? phase.phaseHandoff.trim()
         : null,
     dependencies: Array.isArray(phase.dependencies)
       ? phase.dependencies.filter(
@@ -500,7 +516,7 @@ function formatListForPrompt(values: string[]): string {
 }
 
 function thinkingLevelForAction(action: ActionName): ThinkingLevel {
-  return action === "check-in" ? "low" : "minimal";
+  return action === "wake" ? "minimal" : "low";
 }
 
 function buildPrompt(
@@ -512,14 +528,20 @@ function buildPrompt(
   const requestLine =
     action === "check-in"
       ? "Mission Control needs a structured operator check-in."
+      : action === "review"
+      ? "Mission Control needs a structured review decision."
       : "Mission Control needs a structured readiness ping.";
   const statusInstruction =
     action === "check-in"
       ? "STATUS: one short sentence about your current state."
+      : action === "review"
+      ? "STATUS: one short sentence about review confidence or risk."
       : "STATUS: start with READY or BLOCKED, then add one short sentence.";
   const focusInstruction =
     action === "check-in"
       ? "FOCUS: current work or repo area you own right now."
+      : action === "review"
+      ? "FOCUS: the deliverable, risk, or handoff boundary you reviewed."
       : "FOCUS: first repo area you will pick up next if ready.";
   const packetLines = taskContext
     ? [
@@ -548,13 +570,24 @@ function buildPrompt(
         `PHASE_TITLE: ${projectPhaseContext.phaseTitle}`,
         `PHASE_STATUS: ${projectPhaseContext.phaseStatus || "UNKNOWN"}`,
         `PHASE_OWNER: ${projectPhaseContext.phaseOwner || "NONE"}`,
+        `PHASE_REVIEWER: ${projectPhaseContext.phaseReviewer || "NONE"}`,
+        `PHASE_HANDOFF: ${projectPhaseContext.phaseHandoff || "NONE"}`,
         `PHASE_DEPENDENCIES: ${formatListForPrompt(projectPhaseContext.dependencies)}`,
         `LINKED_TASKS: ${projectPhaseContext.linkedTaskSummary || "NONE"}`,
-        "Anchor your reply to this phase first. If you mention work, make it the next concrete coordination or implementation step for this phase.",
+        action === "review"
+          ? "Anchor your reply to this phase first. Provide a review decision and make the next handoff explicit."
+          : "Anchor your reply to this phase first. If you mention work, make it the next concrete coordination or implementation step for this phase.",
       ]
     : [
         "If you do not have an active concrete task, say what you would inspect next based on your role.",
       ];
+  const extraFieldLines =
+    action === "review"
+      ? [
+          "DECISION: APPROVED, CHANGES_REQUESTED, BLOCKED, or NOT_READY.",
+          "HANDOFF_TO: next owner after review, or NONE.",
+        ]
+      : [];
 
   return [
     `You are agent ${context.id} (${context.name}).`,
@@ -575,6 +608,7 @@ function buildPrompt(
     "NEXT: next concrete step inside this workspace.",
     "BLOCKERS: comma-separated blockers, or NONE.",
     "NEEDS_FROM_HUMAN: one concrete ask, or NONE.",
+    ...extraFieldLines,
     "Keep every value short and specific.",
   ].join("\n");
 }
@@ -592,6 +626,8 @@ function parseStructuredActionFields(text: string): StructuredActionFields | nul
     next: null,
     blockers: null,
     needsFromHuman: null,
+    decision: null,
+    handoffTo: null,
   };
 
   let foundStructuredField = false;
@@ -624,6 +660,14 @@ function parseStructuredActionFields(text: string): StructuredActionFields | nul
         parsed.needsFromHuman = value;
         foundStructuredField = true;
         break;
+      case "DECISION":
+        parsed.decision = value;
+        foundStructuredField = true;
+        break;
+      case "HANDOFF_TO":
+        parsed.handoffTo = value;
+        foundStructuredField = true;
+        break;
       default:
         break;
     }
@@ -636,15 +680,34 @@ function derivePacketRunStatus(
   action: ActionName,
   fields: StructuredActionFields | null,
   text: string
-): "queued" | "running" | "needs_review" {
+): "queued" | "running" | "needs_review" | "done" | "failed" {
   const signalText = [
     fields?.status || "",
     fields?.blockers || "",
     fields?.needsFromHuman || "",
+    fields?.decision || "",
     text,
   ]
     .join(" ")
     .toLowerCase();
+
+  if (action === "review") {
+    const decisionText = (fields?.decision || "").toLowerCase();
+
+    if (decisionText.includes("approved")) {
+      return "done";
+    }
+
+    if (decisionText.includes("block") || decisionText.includes("not_ready") || signalText.includes("blocked")) {
+      return "failed";
+    }
+
+    if (fields?.blockers || fields?.needsFromHuman || decisionText.includes("change") || decisionText.includes("rework")) {
+      return "running";
+    }
+
+    return "running";
+  }
 
   if (fields?.blockers || fields?.needsFromHuman || signalText.includes("blocked")) {
     return "needs_review";
@@ -662,6 +725,8 @@ function buildPacketDeliverableSummary(
     fields?.next ? `Next: ${fields.next}` : null,
     fields?.blockers ? `Blockers: ${fields.blockers}` : null,
     fields?.needsFromHuman ? `Needs: ${fields.needsFromHuman}` : null,
+    fields?.decision ? `Decision: ${fields.decision}` : null,
+    fields?.handoffTo ? `Handoff: ${fields.handoffTo}` : null,
   ].filter((entry): entry is string => Boolean(entry));
 
   const summary = parts.length > 0 ? parts.join(" | ") : fallbackText;
@@ -677,6 +742,8 @@ function toStoredActionFields(fields: StructuredActionFields | null) {
     next: fields.next || undefined,
     blockers: fields.blockers || undefined,
     needsFromHuman: fields.needsFromHuman || undefined,
+    decision: fields.decision || undefined,
+    handoffTo: fields.handoffTo || undefined,
   };
 
   return Object.values(normalized).some(Boolean) ? normalized : null;
@@ -686,7 +753,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
     const id = sanitizeAgentId(body.id);
-    const action = body.action === "wake" ? "wake" : "check-in";
+    const action = parseActionName(body.action);
     const taskContext = parseTaskPromptContext(body.task);
     const projectPhaseContext = parseProjectPhasePromptContext(body.projectPhase);
 
@@ -734,7 +801,7 @@ export async function POST(request: NextRequest) {
         userAgent: request.headers.get("user-agent") || undefined,
         run: {
           kind: "agent_packet",
-          intent: action === "check-in" ? "agent_check_in" : "agent_wake",
+          intent: action === "check-in" ? "agent_check_in" : action === "wake" ? "agent_wake" : "review",
           action,
           timestamp,
           runStatus: derivePacketRunStatus(action, fields, summary.text),
@@ -761,7 +828,7 @@ export async function POST(request: NextRequest) {
         userAgent: request.headers.get("user-agent") || undefined,
         run: {
           kind: "agent_packet",
-          intent: action === "check-in" ? "agent_check_in" : "agent_wake",
+          intent: action === "check-in" ? "agent_check_in" : action === "wake" ? "agent_wake" : "review",
           action,
           timestamp,
           runStatus: derivePacketRunStatus(action, fields, summary.text),

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { FolderKanban, Plus } from "lucide-react";
 import { ProjectCard } from "@/components/ProjectCard";
@@ -32,6 +32,8 @@ export default function ProjectsPageClient({
   const searchParams = useSearchParams();
   const projectFocus = searchParams.get("project")?.trim() || "";
   const projectIdFocus = searchParams.get("projectId")?.trim() || "";
+  const requestedPhaseId = searchParams.get("phaseId")?.trim() || "";
+  const reviewOnlyRequested = searchParams.get("review") === "1";
   const requestedTaskId = searchParams.get("task")?.trim() || "";
   const projectFocusSource = searchParams.get("source")?.trim() || (requestedTaskId ? "tasks" : "");
   const normalizedProjectFocus = normalizeProjectLabel(projectFocus);
@@ -49,8 +51,8 @@ export default function ProjectsPageClient({
     initialData: initialTasksAvailable ? { tasks: initialTasks } : null,
     fetchOnMount: !initialTasksAvailable,
   });
-  const projects = data?.projects || [];
-  const tasks = tasksData?.tasks || [];
+  const projects = useMemo(() => data?.projects || [], [data]);
+  const tasks = useMemo(() => tasksData?.tasks || [], [tasksData]);
   const linkedTasksLoading = tasksLoading && !tasksData && !tasksError;
   const linkedTasksUnavailable = Boolean(tasksError) && !tasksData && !tasksLoading;
   const focusedProject = projectIdFocus ? projects.find((project) => project.id === projectIdFocus) || null : null;
@@ -69,11 +71,15 @@ export default function ProjectsPageClient({
           ? `/agents/tasks?project=${encodeURIComponent(requestedTask.project.trim())}&task=${encodeURIComponent(requestedTask.id)}`
           : `/agents/tasks?task=${encodeURIComponent(requestedTask.id)}`
     : "/agents/tasks";
-  const visibleProjects = focusedProject
-    ? [focusedProject]
-    : normalizedProjectFocus
-      ? projects.filter((project) => normalizeProjectLabel(project.title) === normalizedProjectFocus)
-      : projects;
+  const scopedProjects = useMemo(
+    () =>
+      focusedProject
+        ? [focusedProject]
+        : normalizedProjectFocus
+          ? projects.filter((project) => normalizeProjectLabel(project.title) === normalizedProjectFocus)
+          : projects,
+    [focusedProject, normalizedProjectFocus, projects]
+  );
   const taskProjectLabelMismatchTasks = tasks.filter((task) => taskHasProjectMismatch(task, projects));
   const taskProjectLabelMismatchPreview = (() => {
     if (taskProjectLabelMismatchTasks.length === 0) {
@@ -99,7 +105,23 @@ export default function ProjectsPageClient({
     ? `/agents/tasks?mismatch=1&task=${encodeURIComponent(firstMismatchTaskId)}`
     : "/agents/tasks?mismatch=1";
   const showTaskProjectMismatchSummary = !effectiveProjectFocus && !linkedTasksLoading && !linkedTasksUnavailable && taskProjectLabelMismatchTasks.length > 0;
+  const reviewNeededProjects = useMemo(
+    () => scopedProjects.filter((project) => project.phases.some((phase) => phase.latestRun?.runStatus === "needs_review")),
+    [scopedProjects]
+  );
+  const reviewNeededProjectCount = reviewNeededProjects.length;
+  const reviewNeededPhasePreview = useMemo(() => {
+    const phaseLabels = reviewNeededProjects.flatMap((project) =>
+      project.phases
+        .filter((phase) => phase.latestRun?.runStatus === "needs_review")
+        .map((phase) => `${project.title}: ${phase.title}`)
+    );
 
+    return phaseLabels.slice(0, 2).join(", ");
+  }, [reviewNeededProjects]);
+
+  const [showReviewQueueOnly, setShowReviewQueueOnly] = useState(reviewOnlyRequested);
+  const visibleProjects = showReviewQueueOnly ? reviewNeededProjects : scopedProjects;
   const activeCount = visibleProjects.filter((p) => p.status === "active").length;
   const planningCount = visibleProjects.filter((p) => p.status === "planning").length;
   const projectFocusSourceNote =
@@ -112,11 +134,62 @@ export default function ProjectsPageClient({
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [pendingTargetProjectId, setPendingTargetProjectId] = useState<string | null>(
+    projectIdFocus || null
+  );
+  const [highlightedProjectId, setHighlightedProjectId] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newStatus, setNewStatus] = useState<Project["status"]>("planning");
   const [newPriority, setNewPriority] = useState<Project["priority"]>("medium");
   const [newOwnerAgentId, setNewOwnerAgentId] = useState("");
+
+  useEffect(() => {
+    setShowReviewQueueOnly(reviewOnlyRequested);
+    setPendingTargetProjectId(projectIdFocus || null);
+  }, [projectIdFocus, requestedPhaseId, requestedTaskId, normalizedProjectFocus, reviewOnlyRequested]);
+
+  useEffect(() => {
+    if (showReviewQueueOnly && reviewNeededProjectCount === 0) {
+      setShowReviewQueueOnly(false);
+    }
+  }, [reviewNeededProjectCount, showReviewQueueOnly]);
+
+  useEffect(() => {
+    if (!pendingTargetProjectId) {
+      return;
+    }
+
+    const requestedProject = visibleProjects.find((project) => project.id === pendingTargetProjectId);
+    if (!requestedProject) {
+      return;
+    }
+
+    const card = document.getElementById(`project-card-${requestedProject.id}`);
+    if (!card) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      card.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightedProjectId(requestedProject.id);
+    });
+    setPendingTargetProjectId(null);
+  }, [pendingTargetProjectId, visibleProjects]);
+
+  useEffect(() => {
+    if (!highlightedProjectId) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setHighlightedProjectId((current) =>
+        current === highlightedProjectId ? null : current
+      );
+    }, 3200);
+
+    return () => window.clearTimeout(timeout);
+  }, [highlightedProjectId]);
 
   const resetCreateForm = () => {
     setNewTitle("");
@@ -174,14 +247,21 @@ export default function ProjectsPageClient({
         }),
       });
 
-      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      const payload = (await response.json().catch(() => null)) as
+        | ({ error?: string } & Partial<Project>)
+        | null;
       if (!response.ok) {
         throw new Error(payload?.error || "Failed to create project");
       }
 
+      const createdProjectId = typeof payload?.id === "string" ? payload.id : null;
       resetCreateForm();
       setShowCreateForm(false);
+      setShowReviewQueueOnly(false);
+      setHighlightedProjectId(null);
+      setPendingTargetProjectId(createdProjectId);
       refetch();
+      refetchTasks();
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : "Failed to create project");
     } finally {
@@ -243,7 +323,7 @@ export default function ProjectsPageClient({
             Projects
           </h1>
           <p style={{ color: "var(--text-secondary)", fontSize: "14px" }}>
-            {visibleProjects.length} {effectiveProjectFocus ? "in focus" : "total"} &bull; {activeCount} active &bull; {planningCount} planning
+            {visibleProjects.length} {showReviewQueueOnly ? "in review queue" : effectiveProjectFocus ? "in focus" : "total"} &bull; {activeCount} active &bull; {planningCount} planning
           </p>
         </div>
 
@@ -431,7 +511,39 @@ export default function ProjectsPageClient({
         </div>
       )}
 
-      {effectiveProjectFocus && visibleProjects.length === 0 ? (
+      {reviewNeededProjectCount > 0 && (
+        <div
+          className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2 text-xs"
+          style={{
+            backgroundColor: "color-mix(in srgb, #FF9F0A 10%, var(--surface-elevated))",
+            border: "1px solid color-mix(in srgb, #FF9F0A 30%, transparent)",
+          }}
+        >
+          <div className="space-y-1">
+            <p className="font-semibold" style={{ color: "#FF9F0A" }}>
+              {showReviewQueueOnly ? "Project review queue active" : "Project review queue ready"}
+            </p>
+            <p style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
+              {reviewNeededProjectCount} project{reviewNeededProjectCount === 1 ? "" : "s"} currently have at least one phase waiting on review
+              {reviewNeededPhasePreview ? ` (${reviewNeededPhasePreview}${reviewNeededProjectCount > 2 ? "..." : ""})` : ""}.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowReviewQueueOnly((current) => !current)}
+            className="rounded-full px-3 py-1 font-semibold transition-colors"
+            style={{
+              color: showReviewQueueOnly ? "#111" : "#FF9F0A",
+              backgroundColor: showReviewQueueOnly ? "#FF9F0A" : "transparent",
+              border: "1px solid color-mix(in srgb, #FF9F0A 36%, transparent)",
+            }}
+          >
+            {showReviewQueueOnly ? "Show all visible projects" : "Show review queue only"}
+          </button>
+        </div>
+      )}
+
+      {effectiveProjectFocus && scopedProjects.length === 0 ? (
         <div
           className="rounded-2xl p-6 text-center"
           style={{
@@ -481,6 +593,92 @@ export default function ProjectsPageClient({
             </div>
           </div>
         </div>
+      ) : showReviewQueueOnly && visibleProjects.length === 0 ? (
+        <div
+          className="rounded-2xl p-6 text-center"
+          style={{
+            backgroundColor: "var(--card)",
+            border: "1px solid var(--border)",
+          }}
+        >
+          <div className="mx-auto max-w-lg space-y-3">
+            <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+              No projects in the review queue right now
+            </p>
+            <p className="text-sm" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+              {effectiveProjectFocus
+                ? `The ${effectiveProjectFocus} focus still has tracked projects, but none of their phases currently carry a latest run with needs_review status.`
+                : "Tracked projects still exist here, but none of their phases currently carry a latest run with needs_review status."}
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowReviewQueueOnly(false)}
+                className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
+                style={{
+                  backgroundColor: "transparent",
+                  color: "#FF9F0A",
+                  border: "1px solid color-mix(in srgb, #FF9F0A 30%, transparent)",
+                }}
+              >
+                Show all visible projects
+              </button>
+              {effectiveProjectFocus && (
+                <a
+                  href="/agents/projects"
+                  className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
+                  style={{
+                    backgroundColor: "var(--surface-elevated)",
+                    color: "var(--text-primary)",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  Clear focus
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : visibleProjects.length === 0 ? (
+        <div
+          className="rounded-2xl p-6 text-center"
+          style={{
+            backgroundColor: "var(--card)",
+            border: "1px solid var(--border)",
+          }}
+        >
+          <div className="mx-auto max-w-lg space-y-3">
+            <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+              No tracked projects yet
+            </p>
+            <p className="text-sm" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+              Create the first project to start tracking ownership, phases, review routing, and linked task handoffs from Mission Control instead of editing JSON by hand.
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+              <button
+                onClick={() => setShowCreateForm(true)}
+                className="px-4 py-2 text-sm font-semibold rounded-lg transition-colors"
+                style={{
+                  backgroundColor: "var(--accent)",
+                  color: "#000",
+                }}
+              >
+                Create first project
+              </button>
+              <button
+                onClick={refetch}
+                className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
+                style={{
+                  backgroundColor: "var(--surface-elevated)",
+                  color: "var(--text-primary)",
+                  border: "1px solid var(--border)",
+                }}
+              >
+                Refresh board
+              </button>
+            </div>
+          </div>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
         {visibleProjects.map((project) => {
@@ -508,6 +706,9 @@ export default function ProjectsPageClient({
           return (
             <ProjectCard
               key={project.id}
+              cardId={`project-card-${project.id}`}
+              focusedPhaseId={project.id === projectIdFocus ? requestedPhaseId : undefined}
+              isTemporarilyHighlighted={project.id === highlightedProjectId}
               project={project}
               teamAgents={initialTeam}
               linkedTasks={linkedTasks}

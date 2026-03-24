@@ -94,6 +94,7 @@ export default function TasksPageClient({
   const projectFocus = searchParams.get("project")?.trim() || "";
   const projectIdFocus = searchParams.get("projectId")?.trim() || "";
   const mismatchOnlyRequested = searchParams.get("mismatch") === "1";
+  const reviewOnlyRequested = searchParams.get("review") === "1";
   const requestedTaskId = searchParams.get("task")?.trim() || "";
   const requestedTaskSource = searchParams.get("taskSource")?.trim() || "";
   const hasInitialTasks = initialTasks.length > 0;
@@ -153,6 +154,7 @@ export default function TasksPageClient({
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [showMismatchOnly, setShowMismatchOnly] = useState(mismatchOnlyRequested);
+  const [showReviewQueueOnly, setShowReviewQueueOnly] = useState(reviewOnlyRequested);
   const [pendingTargetTaskId, setPendingTargetTaskId] = useState<string | null>(requestedTaskId || null);
   const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>("status");
@@ -280,13 +282,25 @@ export default function TasksPageClient({
   const showMissingTargetedTaskNotice = requestedTaskOutsideFocus || requestedTaskMissingFromBoard;
 
   const focusedProjectTaskCount = scopedTasks.length;
+  const reviewNeededTasks = useMemo(
+    () => scopedTasks.filter((task) => task.runStatus === "needs_review"),
+    [scopedTasks]
+  );
+  const reviewNeededTaskCount = reviewNeededTasks.length;
+  const reviewNeededTaskPreview = reviewNeededTasks
+    .slice(0, 2)
+    .map((task) => task.title)
+    .join(", ");
 
   const filteredTasks = useMemo(() => {
     const filtered = (statusFilter === "all" ? [...scopedTasks] : scopedTasks.filter((task) => task.status === statusFilter)).filter(
       (task) => !showMismatchOnly || projectLabelMismatchTaskIds.has(task.id)
     );
+    const reviewFiltered = showReviewQueueOnly
+      ? filtered.filter((task) => task.runStatus === "needs_review")
+      : filtered;
 
-    filtered.sort((a, b) => {
+    reviewFiltered.sort((a, b) => {
       let cmp = 0;
       switch (sortField) {
         case "title":
@@ -309,8 +323,8 @@ export default function TasksPageClient({
       return sortDir === "asc" ? cmp : -cmp;
     });
 
-    return filtered;
-  }, [projectLabelMismatchTaskIds, scopedTasks, showMismatchOnly, sortDir, sortField, statusFilter]);
+    return reviewFiltered;
+  }, [projectLabelMismatchTaskIds, scopedTasks, showMismatchOnly, showReviewQueueOnly, sortDir, sortField, statusFilter]);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
@@ -326,6 +340,20 @@ export default function TasksPageClient({
       const next = !current;
       if (next) {
         setStatusFilter("all");
+        setShowReviewQueueOnly(false);
+      }
+      return next;
+    });
+    setPendingTargetTaskId(null);
+    setHighlightedTaskId(null);
+  };
+
+  const handleToggleReviewQueueOnly = () => {
+    setShowReviewQueueOnly((current) => {
+      const next = !current;
+      if (next) {
+        setStatusFilter("all");
+        setShowMismatchOnly(false);
       }
       return next;
     });
@@ -340,8 +368,21 @@ export default function TasksPageClient({
 
     setStatusFilter("all");
     setShowMismatchOnly(true);
+    setShowReviewQueueOnly(false);
     setHighlightedTaskId(null);
     setPendingTargetTaskId(projectLabelMismatchTasks[0]?.id || null);
+  };
+
+  const handleJumpToFirstReviewNeededTask = () => {
+    if (reviewNeededTaskCount === 0) {
+      return;
+    }
+
+    setStatusFilter("all");
+    setShowMismatchOnly(false);
+    setShowReviewQueueOnly(true);
+    setHighlightedTaskId(null);
+    setPendingTargetTaskId(reviewNeededTasks[0]?.id || null);
   };
 
   const handleJumpToRequestedMismatch = () => {
@@ -351,6 +392,7 @@ export default function TasksPageClient({
 
     setStatusFilter("all");
     setShowMismatchOnly(true);
+    setShowReviewQueueOnly(false);
     setHighlightedTaskId(null);
     setPendingTargetTaskId(requestedMismatchTask.id);
   };
@@ -362,6 +404,7 @@ export default function TasksPageClient({
 
     setStatusFilter("all");
     setShowMismatchOnly(false);
+    setShowReviewQueueOnly(false);
     setHighlightedTaskId(null);
     setPendingTargetTaskId(requestedTask.id);
   };
@@ -373,23 +416,31 @@ export default function TasksPageClient({
 
     setStatusFilter("all");
     setShowMismatchOnly(false);
+    setShowReviewQueueOnly(false);
     setHighlightedTaskId(null);
     setPendingTargetTaskId(replacementUrgentOverflowTask.id);
   };
 
   useEffect(() => {
     setShowMismatchOnly(mismatchOnlyRequested);
+    setShowReviewQueueOnly(reviewOnlyRequested);
     setPendingTargetTaskId(requestedTaskId || null);
-    if (mismatchOnlyRequested) {
+    if (mismatchOnlyRequested || reviewOnlyRequested) {
       setStatusFilter("all");
     }
-  }, [mismatchOnlyRequested, normalizedProjectFocus, requestedTaskId]);
+  }, [mismatchOnlyRequested, normalizedProjectFocus, requestedTaskId, reviewOnlyRequested]);
 
   useEffect(() => {
     if (showMismatchOnly && projectLabelMismatchCount === 0) {
       setShowMismatchOnly(false);
     }
   }, [projectLabelMismatchCount, showMismatchOnly]);
+
+  useEffect(() => {
+    if (showReviewQueueOnly && reviewNeededTaskCount === 0) {
+      setShowReviewQueueOnly(false);
+    }
+  }, [reviewNeededTaskCount, showReviewQueueOnly]);
 
   useEffect(() => {
     if (!pendingTargetTaskId) {
@@ -513,13 +564,21 @@ export default function TasksPageClient({
         }),
       });
 
-      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      const payload = (await response.json().catch(() => null)) as
+        | ({ error?: string } & Partial<Task>)
+        | null;
       if (!response.ok) {
         throw new Error(payload?.error || "Failed to create task");
       }
 
+      const createdTaskId = typeof payload?.id === "string" ? payload.id : null;
       resetCreateForm();
       setShowCreateForm(false);
+      setStatusFilter("all");
+      setShowMismatchOnly(false);
+      setShowReviewQueueOnly(false);
+      setHighlightedTaskId(null);
+      setPendingTargetTaskId(createdTaskId);
       refetch();
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : "Failed to create task");
@@ -660,6 +719,52 @@ export default function TasksPageClient({
           >
             Clear focus
           </a>
+        </div>
+      )}
+
+      {reviewNeededTaskCount > 0 && (
+        <div
+          className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2 text-xs"
+          style={{
+            backgroundColor: "color-mix(in srgb, #FF9F0A 10%, var(--surface-elevated))",
+            border: "1px solid color-mix(in srgb, #FF9F0A 28%, transparent)",
+          }}
+        >
+          <div className="space-y-1">
+            <p className="font-semibold" style={{ color: "#FF9F0A" }}>
+              {showReviewQueueOnly ? "Review queue active" : "Review queue ready"}
+            </p>
+            <p style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
+              {reviewNeededTaskCount} task{reviewNeededTaskCount === 1 ? "" : "s"} currently need review
+              {reviewNeededTaskPreview ? ` (${reviewNeededTaskPreview}${reviewNeededTaskCount > 2 ? "..." : ""})` : ""}.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleJumpToFirstReviewNeededTask}
+              className="rounded-full px-3 py-1 font-semibold transition-colors"
+              style={{
+                color: "#FF9F0A",
+                backgroundColor: "transparent",
+                border: "1px solid color-mix(in srgb, #FF9F0A 36%, transparent)",
+              }}
+            >
+              Jump to first review
+            </button>
+            <button
+              type="button"
+              onClick={handleToggleReviewQueueOnly}
+              className="rounded-full px-3 py-1 font-semibold transition-colors"
+              style={{
+                color: showReviewQueueOnly ? "#111" : "#FF9F0A",
+                backgroundColor: showReviewQueueOnly ? "#FF9F0A" : "transparent",
+                border: "1px solid color-mix(in srgb, #FF9F0A 36%, transparent)",
+              }}
+            >
+              {showReviewQueueOnly ? "Show all visible tasks" : "Show review queue only"}
+            </button>
+          </div>
         </div>
       )}
 
@@ -1032,7 +1137,7 @@ export default function TasksPageClient({
         </div>
       )}
 
-      {(blockedCount > 0 || overdueCount > 0 || projectLabelMismatchCount > 0) && (
+      {(blockedCount > 0 || overdueCount > 0 || projectLabelMismatchCount > 0 || reviewNeededTaskCount > 0) && (
         <div
           className="mb-6 flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
           style={{
@@ -1108,6 +1213,51 @@ export default function TasksPageClient({
               </button>
             </>
           )}
+          {reviewNeededTaskCount > 0 && (
+            <>
+              <span
+                className="rounded-full px-2 py-1 font-semibold"
+                style={{
+                  color: "#FF9F0A",
+                  backgroundColor: "color-mix(in srgb, #FF9F0A 16%, transparent)",
+                  border: "1px solid color-mix(in srgb, #FF9F0A 30%, transparent)",
+                }}
+              >
+                {reviewNeededTaskCount} in review queue
+              </span>
+              <span style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                {showReviewQueueOnly
+                  ? "Showing only tasks that still need reviewer action."
+                  : reviewNeededTaskPreview
+                    ? `Reviewer attention is currently queued on ${reviewNeededTaskPreview}${reviewNeededTaskCount > 2 ? " and more." : "."}`
+                    : "Reviewer attention is currently queued on one or more tasks."}
+              </span>
+              <button
+                type="button"
+                onClick={handleJumpToFirstReviewNeededTask}
+                className="rounded-full px-3 py-1 font-semibold transition-colors"
+                style={{
+                  color: "#FF9F0A",
+                  backgroundColor: "transparent",
+                  border: "1px solid color-mix(in srgb, #FF9F0A 36%, transparent)",
+                }}
+              >
+                Jump to first review
+              </button>
+              <button
+                type="button"
+                onClick={handleToggleReviewQueueOnly}
+                className="rounded-full px-3 py-1 font-semibold transition-colors"
+                style={{
+                  color: showReviewQueueOnly ? "#111" : "#FF9F0A",
+                  backgroundColor: showReviewQueueOnly ? "#FF9F0A" : "transparent",
+                  border: "1px solid color-mix(in srgb, #FF9F0A 36%, transparent)",
+                }}
+              >
+                {showReviewQueueOnly ? `Review queue (${reviewNeededTaskCount})` : `Needs review (${reviewNeededTaskCount})`}
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -1152,6 +1302,20 @@ export default function TasksPageClient({
                 }}
               >
                 Mismatches only ({projectLabelMismatchCount})
+              </button>
+            )}
+            {showReviewQueueOnly && (
+              <button
+                type="button"
+                onClick={handleToggleReviewQueueOnly}
+                className="text-xs font-semibold px-3 py-1.5 rounded-full transition-all duration-150"
+                style={{
+                  backgroundColor: "color-mix(in srgb, #FF9F0A 18%, transparent)",
+                  color: "#FF9F0A",
+                  border: "1px solid color-mix(in srgb, #FF9F0A 34%, transparent)",
+                }}
+              >
+                Review queue ({reviewNeededTaskCount})
               </button>
             )}
           </div>
@@ -1218,6 +1382,10 @@ export default function TasksPageClient({
                   <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                     {showMismatchOnly
                       ? "No project link mismatches in this view"
+                      : showReviewQueueOnly
+                        ? effectiveProjectFocus
+                          ? `No review-needed tasks in ${effectiveProjectFocus}`
+                          : "No review-needed tasks in this view"
                       : effectiveProjectFocus && !hasFocusedTasks
                         ? `No tasks linked to ${effectiveProjectFocus} yet`
                         : `No ${activeFilterLabel.toLowerCase()} tasks right now`}
@@ -1227,6 +1395,12 @@ export default function TasksPageClient({
                       ? effectiveProjectFocus
                         ? `Every visible task in the ${effectiveProjectFocus} focus currently resolves to a live Projects record, so there is no linkage cleanup to do here.`
                         : "Every visible task currently resolves to a live Projects record, so the mismatch-only filter has nothing left to show."
+                      : showReviewQueueOnly
+                        ? effectiveProjectFocus
+                          ? hasFocusedTasks
+                            ? `The ${effectiveProjectFocus} focus still has ${focusedProjectTaskCount} linked task${focusedProjectTaskCount === 1 ? "" : "s"}, but none currently carry a latest run that still needs review.`
+                            : `This project focus does not have any linked tasks yet, so there is no review queue to show here.`
+                          : `The board still has ${tasks.length} tracked task${tasks.length === 1 ? "" : "s"}, but none currently carry a latest run that still needs review.`
                       : effectiveProjectFocus
                         ? hasFocusedTasks
                           ? `The ${effectiveProjectFocus} focus is active, and the current status filter is not showing any matching tasks.`
@@ -1255,6 +1429,20 @@ export default function TasksPageClient({
                         backgroundColor: "transparent",
                         color: "#FFD60A",
                         border: "1px solid color-mix(in srgb, #FFD60A 34%, transparent)",
+                      }}
+                    >
+                      Show all visible tasks
+                    </button>
+                  )}
+                  {showReviewQueueOnly && (
+                    <button
+                      type="button"
+                      onClick={handleToggleReviewQueueOnly}
+                      className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
+                      style={{
+                        backgroundColor: "transparent",
+                        color: "#FF9F0A",
+                        border: "1px solid color-mix(in srgb, #FF9F0A 34%, transparent)",
                       }}
                     >
                       Show all visible tasks

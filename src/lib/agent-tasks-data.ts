@@ -23,13 +23,15 @@ export interface TaskRunFields {
   next?: string;
   blockers?: string;
   needsFromHuman?: string;
+  decision?: string;
+  handoffTo?: string;
 }
 
 export interface TaskLatestRun {
   id: string;
   kind: TaskRunKind;
   intent: TaskRunIntent;
-  action?: "check-in" | "wake";
+  action?: "check-in" | "wake" | "review";
   timestamp: string;
   runStatus?: TaskRunStatus;
   executionMode?: TaskExecutionMode;
@@ -116,8 +118,8 @@ function normalizeRunIntent(value: unknown): TaskRunIntent {
     : "start";
 }
 
-function normalizeRunAction(value: unknown): "check-in" | "wake" | undefined {
-  return value === "check-in" || value === "wake" ? value : undefined;
+function normalizeRunAction(value: unknown): "check-in" | "wake" | "review" | undefined {
+  return value === "check-in" || value === "wake" || value === "review" ? value : undefined;
 }
 
 function normalizeRunFields(value: unknown): TaskRunFields | null {
@@ -133,6 +135,8 @@ function normalizeRunFields(value: unknown): TaskRunFields | null {
   if (asNonEmptyString(fields.needsFromHuman)) {
     normalized.needsFromHuman = asNonEmptyString(fields.needsFromHuman);
   }
+  if (asNonEmptyString(fields.decision)) normalized.decision = asNonEmptyString(fields.decision);
+  if (asNonEmptyString(fields.handoffTo)) normalized.handoffTo = asNonEmptyString(fields.handoffTo);
 
   return Object.keys(normalized).length > 0 ? normalized : null;
 }

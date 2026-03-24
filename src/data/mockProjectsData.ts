@@ -9,13 +9,15 @@ export interface ProjectPhaseRunFields {
   next?: string;
   blockers?: string;
   needsFromHuman?: string;
+  decision?: string;
+  handoffTo?: string;
 }
 
 export interface ProjectPhaseLatestRun {
   id: string;
   kind: ProjectPhaseRunKind;
   intent: ProjectPhaseRunIntent;
-  action?: "check-in" | "wake";
+  action?: "check-in" | "wake" | "review";
   timestamp: string;
   runStatus?: ProjectPhaseRunStatus;
   executionMode?: ProjectPhaseExecutionMode;
@@ -35,6 +37,8 @@ export interface ProjectPhase {
   title: string;
   status: "pending" | "in_progress" | "blocked" | "completed";
   ownerAgentId?: string;
+  reviewerAgentId?: string;
+  handoffToAgentId?: string;
   dependsOnPhaseIds: string[];
   latestRun?: ProjectPhaseLatestRun | null;
 }
