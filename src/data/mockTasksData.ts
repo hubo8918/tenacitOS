@@ -11,6 +11,33 @@ export interface Task {
   reviewerAgentId?: string;
   handoffToAgentId?: string;
   blockedByTaskIds?: string[];
+  runStatus?: "idle" | "queued" | "running" | "needs_review" | "done" | "failed";
+  executionMode?: "manual" | "agent-run";
+  deliverable?: string;
+  latestRun?: {
+    id: string;
+    kind: "manual" | "agent_packet";
+    intent: "start" | "review" | "debug" | "agent_check_in" | "agent_wake";
+    action?: "check-in" | "wake";
+    timestamp: string;
+    runStatus?: "idle" | "queued" | "running" | "needs_review" | "done" | "failed";
+    executionMode?: "manual" | "agent-run";
+    deliverable?: string;
+    text?: string;
+    agentId?: string;
+    agentName?: string;
+    model?: string;
+    sessionId?: string;
+    runId?: string;
+    thinking?: string;
+    fields?: {
+      status?: string;
+      focus?: string;
+      next?: string;
+      blockers?: string;
+      needsFromHuman?: string;
+    } | null;
+  } | null;
 }
 
 export const taskStatusConfig: Record<string, { label: string; color: string }> = {

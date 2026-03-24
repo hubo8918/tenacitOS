@@ -1,9 +1,42 @@
+export type ProjectPhaseExecutionMode = "manual" | "agent-run";
+export type ProjectPhaseRunStatus = "idle" | "queued" | "running" | "needs_review" | "done" | "failed";
+export type ProjectPhaseRunKind = "manual" | "agent_packet";
+export type ProjectPhaseRunIntent = "start" | "review" | "debug" | "agent_check_in" | "agent_wake";
+
+export interface ProjectPhaseRunFields {
+  status?: string;
+  focus?: string;
+  next?: string;
+  blockers?: string;
+  needsFromHuman?: string;
+}
+
+export interface ProjectPhaseLatestRun {
+  id: string;
+  kind: ProjectPhaseRunKind;
+  intent: ProjectPhaseRunIntent;
+  action?: "check-in" | "wake";
+  timestamp: string;
+  runStatus?: ProjectPhaseRunStatus;
+  executionMode?: ProjectPhaseExecutionMode;
+  deliverable?: string;
+  text?: string;
+  agentId?: string;
+  agentName?: string;
+  model?: string;
+  sessionId?: string;
+  runId?: string;
+  thinking?: string;
+  fields?: ProjectPhaseRunFields | null;
+}
+
 export interface ProjectPhase {
   id: string;
   title: string;
   status: "pending" | "in_progress" | "blocked" | "completed";
   ownerAgentId?: string;
   dependsOnPhaseIds: string[];
+  latestRun?: ProjectPhaseLatestRun | null;
 }
 
 export interface Project {

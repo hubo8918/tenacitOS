@@ -22,12 +22,12 @@ Mission Control should let Bo run real multi-agent work from one surface:
 - Tasks and Projects support real create and edit flows plus first-pass routing metadata.
 - Files supports real CRUD inside the workspace.
 - Calendar is still a workload and handoff view, not a full editing surface.
-- Team action prompts are still operator-driven one-off turns, not task-linked execution yet.
+- Team action prompts now support task-linked and phase-linked operator packets, but they are still explicit one-off turns rather than background automation.
 
 ## Active Milestones
 
 ### 1. Task to Agent Run Contract
-Status: In progress
+Status: Complete
 
 Why now:
 - This is the shortest path from dashboard polish to real operations.
@@ -37,9 +37,9 @@ Done when:
 - the run captures agent, model, session, status, and summary
 - the task can link to its latest run without fake "fully autonomous" claims
 
-Next checkpoint:
-- persist a first run envelope for Mission Control team actions
-- attach structured action output to task or task-like context instead of raw free text only
+Completed:
+- persisted a first task-linked run envelope for Mission Control team actions
+- attached structured action output to task context instead of raw free text only
 
 Not now:
 - hidden auto-delegation
@@ -47,7 +47,7 @@ Not now:
 - bulk scheduling
 
 ### 2. Project Phase Coordination
-Status: Next
+Status: In progress
 
 Done when:
 - each project phase has an explicit owner, dependency set, and next handoff
@@ -56,6 +56,10 @@ Done when:
 Depends on:
 - milestone 1 run envelope
 - stable project to task linkage
+
+Next checkpoint:
+- extend the phase packet into Henry review and handoff flow
+- keep phase owner, dependency, and linked-task context visible from Projects without opening Tasks first
 
 ### 3. Review and Handoff Workflow
 Status: Queued
@@ -70,9 +74,9 @@ Done when:
 Move Mission Control out of the row-polish loop and into real execution semantics.
 
 Priority now:
-1. make agent interactions return structured operator packets
-2. show the actual configured and recently used OpenClaw model story in Settings
-3. wire the next task-facing run contract off that packet shape
+1. keep project phases on the same structured run envelope as tasks
+2. turn phase packets into Henry review and handoff workflow instead of standalone status pings
+3. surface review-needed work without reading raw packet text
 
 ## Rules
 
@@ -89,6 +93,9 @@ Priority now:
 - reset the planning docs into active plan, backlog, and log files
 - upgraded team action prompts from loose chat to structured operator packets
 - fixed Settings to read the real OpenClaw model configuration instead of an unrelated fallback
+- wired task-linked owner packets into execution history with session, model, and structured field capture
+- fixed execution history so task rows read the real task data source and only show attempts for the current task
+- added phase-linked coordination packets, history, and current-phase packet badges to Projects
 
 ## References
 

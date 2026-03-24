@@ -27,6 +27,7 @@ This file holds checkpoint summaries. Keep the active plan in `MISSION_CONTROL_P
 - real project intake and editing flows landed
 - linked task attach, move, and detach flows now exist
 - tracked phase dependencies are visible and editable
+- phase-linked coordination packets now persist against current project phases
 
 ### Phase 5. Platform and Trust Passes
 
@@ -41,6 +42,10 @@ This file holds checkpoint summaries. Keep the active plan in `MISSION_CONTROL_P
 - reset planning docs into plan, backlog, and log split
 - upgraded team action prompts to structured operator packets
 - fixed Settings model reporting to follow real OpenClaw config and recent session usage
+- added the first task-linked owner packet flow from Tasks into persisted run history
+- fixed execution history so task rows no longer read from the wrong task file or show unfiltered global attempts
+- added the first phase-linked coordination packet flow from Projects into persisted phase run history
+- Project cards now show current-phase packet badges plus recent phase packet history with model and session metadata
 - recent Tasks and Calendar trust passes are now complete maintenance work, not the active milestone
 
 ### 2026-03-22

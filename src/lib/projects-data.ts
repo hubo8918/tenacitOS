@@ -1,6 +1,15 @@
 import fs from "fs/promises";
 import path from "path";
-import type { Project, ProjectPhase } from "@/data/mockProjectsData";
+import type {
+  Project,
+  ProjectPhase,
+  ProjectPhaseExecutionMode,
+  ProjectPhaseLatestRun,
+  ProjectPhaseRunFields,
+  ProjectPhaseRunIntent,
+  ProjectPhaseRunKind,
+  ProjectPhaseRunStatus,
+} from "@/data/mockProjectsData";
 
 const DATA_PATH = path.join(process.cwd(), "data", "projects.json");
 
@@ -25,6 +34,80 @@ function normalizeProjectPriority(value: unknown): Project["priority"] {
   return value === "high" || value === "low" ? value : "medium";
 }
 
+function asNonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+}
+
+function normalizeProjectPhaseRunStatus(value: unknown): ProjectPhaseRunStatus | undefined {
+  return value === "idle" ||
+    value === "queued" ||
+    value === "running" ||
+    value === "needs_review" ||
+    value === "done" ||
+    value === "failed"
+    ? value
+    : undefined;
+}
+
+function normalizeProjectPhaseRunKind(value: unknown): ProjectPhaseRunKind {
+  return value === "agent_packet" ? "agent_packet" : "manual";
+}
+
+function normalizeProjectPhaseRunIntent(value: unknown): ProjectPhaseRunIntent {
+  return value === "review" || value === "debug" || value === "agent_check_in" || value === "agent_wake"
+    ? value
+    : "start";
+}
+
+function normalizeProjectPhaseExecutionMode(value: unknown): ProjectPhaseExecutionMode | undefined {
+  return value === "manual" || value === "agent-run" ? value : undefined;
+}
+
+function normalizeProjectPhaseRunFields(value: unknown): ProjectPhaseRunFields | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+
+  const fields = value as Record<string, unknown>;
+  const normalized: ProjectPhaseRunFields = {};
+
+  if (asNonEmptyString(fields.status)) normalized.status = asNonEmptyString(fields.status);
+  if (asNonEmptyString(fields.focus)) normalized.focus = asNonEmptyString(fields.focus);
+  if (asNonEmptyString(fields.next)) normalized.next = asNonEmptyString(fields.next);
+  if (asNonEmptyString(fields.blockers)) normalized.blockers = asNonEmptyString(fields.blockers);
+  if (asNonEmptyString(fields.needsFromHuman)) {
+    normalized.needsFromHuman = asNonEmptyString(fields.needsFromHuman);
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : null;
+}
+
+function normalizeProjectPhaseLatestRun(runLike: unknown): ProjectPhaseLatestRun | null {
+  if (!runLike || typeof runLike !== "object" || Array.isArray(runLike)) return null;
+
+  const run = asRecord(runLike);
+  const id = asNonEmptyString(run.id);
+  const timestamp = asNonEmptyString(run.timestamp);
+  if (!id || !timestamp) return null;
+
+  return {
+    id,
+    kind: normalizeProjectPhaseRunKind(run.kind),
+    intent: normalizeProjectPhaseRunIntent(run.intent),
+    action: run.action === "check-in" || run.action === "wake" ? run.action : undefined,
+    timestamp,
+    runStatus: normalizeProjectPhaseRunStatus(run.runStatus),
+    executionMode: normalizeProjectPhaseExecutionMode(run.executionMode),
+    deliverable: asString(run.deliverable),
+    text: asString(run.text),
+    agentId: asString(run.agentId),
+    agentName: asString(run.agentName),
+    model: asString(run.model),
+    sessionId: asString(run.sessionId),
+    runId: asString(run.runId),
+    thinking: asString(run.thinking),
+    fields: normalizeProjectPhaseRunFields(run.fields),
+  };
+}
+
 function normalizeProjectPhase(phaseLike: unknown): ProjectPhase {
   const phase = asRecord(phaseLike);
   return {
@@ -36,6 +119,7 @@ function normalizeProjectPhase(phaseLike: unknown): ProjectPhase {
         : "pending",
     ownerAgentId: asString(phase.ownerAgentId),
     dependsOnPhaseIds: asStringArray(phase.dependsOnPhaseIds),
+    latestRun: normalizeProjectPhaseLatestRun(phase.latestRun),
   };
 }
 

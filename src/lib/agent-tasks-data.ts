@@ -7,12 +7,41 @@ export type AgentTaskStatus = "pending" | "in_progress" | "completed" | "blocked
 export type AgentTaskPriority = "high" | "medium" | "low";
 export type TaskExecutionMode = "manual" | "agent-run";
 export type TaskRunStatus = "idle" | "queued" | "running" | "needs_review" | "done" | "failed";
+export type TaskRunKind = "manual" | "agent_packet";
+export type TaskRunIntent = "start" | "review" | "debug" | "agent_check_in" | "agent_wake";
 
 export interface TaskAgentRef {
   id?: string;
   emoji: string;
   name: string;
   color: string;
+}
+
+export interface TaskRunFields {
+  status?: string;
+  focus?: string;
+  next?: string;
+  blockers?: string;
+  needsFromHuman?: string;
+}
+
+export interface TaskLatestRun {
+  id: string;
+  kind: TaskRunKind;
+  intent: TaskRunIntent;
+  action?: "check-in" | "wake";
+  timestamp: string;
+  runStatus?: TaskRunStatus;
+  executionMode?: TaskExecutionMode;
+  deliverable?: string;
+  text?: string;
+  agentId?: string;
+  agentName?: string;
+  model?: string;
+  sessionId?: string;
+  runId?: string;
+  thinking?: string;
+  fields?: TaskRunFields | null;
 }
 
 export interface AgentTask {
@@ -31,6 +60,7 @@ export interface AgentTask {
   executionMode: TaskExecutionMode;
   runStatus: TaskRunStatus;
   deliverable: string;
+  latestRun?: TaskLatestRun | null;
 }
 
 const DATA_PATH = path.join(process.cwd(), "data", "agent-tasks.json");
@@ -41,6 +71,10 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function asString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
+}
+
+function asNonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
 }
 
 function asStringArray(value: unknown): string[] {
@@ -64,6 +98,74 @@ function normalizeRunStatus(value: unknown): TaskRunStatus {
   return value === "queued" || value === "running" || value === "needs_review" || value === "done" || value === "failed"
     ? value
     : "idle";
+}
+
+function normalizeRunStatusOptional(value: unknown): TaskRunStatus | undefined {
+  return value === "idle" || value === "queued" || value === "running" || value === "needs_review" || value === "done" || value === "failed"
+    ? value
+    : undefined;
+}
+
+function normalizeRunKind(value: unknown): TaskRunKind {
+  return value === "agent_packet" ? "agent_packet" : "manual";
+}
+
+function normalizeRunIntent(value: unknown): TaskRunIntent {
+  return value === "review" || value === "debug" || value === "agent_check_in" || value === "agent_wake"
+    ? value
+    : "start";
+}
+
+function normalizeRunAction(value: unknown): "check-in" | "wake" | undefined {
+  return value === "check-in" || value === "wake" ? value : undefined;
+}
+
+function normalizeRunFields(value: unknown): TaskRunFields | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+
+  const fields = value as Record<string, unknown>;
+  const normalized: TaskRunFields = {};
+
+  if (asNonEmptyString(fields.status)) normalized.status = asNonEmptyString(fields.status);
+  if (asNonEmptyString(fields.focus)) normalized.focus = asNonEmptyString(fields.focus);
+  if (asNonEmptyString(fields.next)) normalized.next = asNonEmptyString(fields.next);
+  if (asNonEmptyString(fields.blockers)) normalized.blockers = asNonEmptyString(fields.blockers);
+  if (asNonEmptyString(fields.needsFromHuman)) {
+    normalized.needsFromHuman = asNonEmptyString(fields.needsFromHuman);
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : null;
+}
+
+function normalizeLatestRun(runLike: unknown): TaskLatestRun | null {
+  if (!runLike || typeof runLike !== "object" || Array.isArray(runLike)) return null;
+
+  const run = asRecord(runLike);
+  const id = asNonEmptyString(run.id);
+  const timestamp = asNonEmptyString(run.timestamp);
+  if (!id || !timestamp) return null;
+
+  return {
+    id,
+    kind: normalizeRunKind(run.kind),
+    intent: normalizeRunIntent(run.intent),
+    action: normalizeRunAction(run.action),
+    timestamp,
+    runStatus: normalizeRunStatusOptional(run.runStatus),
+    executionMode:
+      run.executionMode === "manual" || run.executionMode === "agent-run"
+        ? run.executionMode
+        : undefined,
+    deliverable: asString(run.deliverable),
+    text: asString(run.text),
+    agentId: asString(run.agentId),
+    agentName: asString(run.agentName),
+    model: asString(run.model),
+    sessionId: asString(run.sessionId),
+    runId: asString(run.runId),
+    thinking: asString(run.thinking),
+    fields: normalizeRunFields(run.fields),
+  };
 }
 
 function normalizeAgent(agentLike: unknown): TaskAgentRef {
@@ -96,6 +198,7 @@ export function normalizeAgentTask(taskLike: unknown): AgentTask {
     executionMode: normalizeExecutionMode(task.executionMode),
     runStatus: normalizeRunStatus(task.runStatus),
     deliverable: asString(task.deliverable) || "",
+    latestRun: normalizeLatestRun(task.latestRun),
   };
 }
 

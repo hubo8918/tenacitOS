@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import type { CSSProperties } from "react";
 import { MoreHorizontal, ExternalLink, Play, CheckSquare, AlertCircle } from "lucide-react";
 import { taskPriorityConfig, taskStatusConfig, type Task } from "@/data/mockTasksData";
@@ -51,6 +51,19 @@ function getExecutionStatusConfig(runStatus?: "idle" | "queued" | "running" | "n
   }
 }
 
+function formatShortSessionId(sessionId?: string | null): string {
+  if (!sessionId) return "";
+  return sessionId.slice(0, 8);
+}
+
+function formatTaskRunIntentLabel(intent: "start" | "review" | "debug" | "agent_check_in" | "agent_wake"): string {
+  if (intent === "agent_check_in") return "Owner check-in";
+  if (intent === "agent_wake") return "Owner readiness ping";
+  if (intent === "start") return "Start working";
+  if (intent === "review") return "Review";
+  return "Debug";
+}
+
 interface TaskAgentOption {
   id: string;
   name: string;
@@ -85,11 +98,7 @@ interface DependencyOption {
 
 interface TaskRowProps {
   rowId?: string;
-  task: Task & {
-    runStatus?: "idle" | "queued" | "running" | "needs_review" | "done" | "failed";
-    executionMode?: "manual" | "agent-run";
-    deliverable?: string;
-  };
+  task: Task;
   agentOptions: TaskAgentOption[];
   projectOptions: TaskProjectOption[];
   allTasks: Task[];
@@ -125,14 +134,32 @@ export function TaskRow({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [confirmingStatus, setConfirmingStatus] = useState<Task["status"] | null>(null);
   const [confirmingExecution, setConfirmingExecution] = useState<"start" | "review" | "debug" | null>(null);
+  const [requestingTaskPacket, setRequestingTaskPacket] = useState(false);
+  const [taskPacketError, setTaskPacketError] = useState<string | null>(null);
   const [executionAttempts, setExecutionAttempts] = useState<Array<{
     id: string;
-    intent: "start" | "review" | "debug";
+    kind: "manual" | "agent_packet";
+    intent: "start" | "review" | "debug" | "agent_check_in" | "agent_wake";
+    action?: "check-in" | "wake";
     timestamp: string;
     userAgent?: string;
-    runStatus?: string;
-    executionMode?: string;
+    runStatus?: "idle" | "queued" | "running" | "needs_review" | "done" | "failed";
+    executionMode?: "manual" | "agent-run";
     deliverable?: string;
+    text?: string;
+    agentId?: string;
+    agentName?: string;
+    model?: string;
+    sessionId?: string;
+    runId?: string;
+    thinking?: string;
+    fields?: {
+      status?: string;
+      focus?: string;
+      next?: string;
+      blockers?: string;
+      needsFromHuman?: string;
+    } | null;
   }>>([]);
   const [loadingExecutionHistory, setLoadingExecutionHistory] = useState(false);
   const [executionHistoryError, setExecutionHistoryError] = useState<string | null>(null);
@@ -333,6 +360,17 @@ export function TaskRow({
     name: task.agent.name,
     color: task.agent.color,
   });
+  const latestTaskRun = task.latestRun || null;
+  const latestTaskRunSessionId = formatShortSessionId(latestTaskRun?.sessionId);
+  const latestTaskRunLabel = latestTaskRun
+    ? formatTaskRunIntentLabel(latestTaskRun.intent)
+    : "";
+  const canRequestOwnerPacket = Boolean(inferredAssigneeAgentId);
+  const ownerPacketLabel = assigneeOption
+    ? `${assigneeOption.emoji} ${assigneeOption.name}`
+    : displayOwner.name !== "Unassigned"
+      ? `${displayOwner.emoji} ${displayOwner.name}`
+      : "owner";
   const projectFocusHref = linkedProjectId
     ? `/agents/projects?project=${encodeURIComponent(linkedProjectTitle || task.project)}&projectId=${encodeURIComponent(linkedProjectId)}&task=${encodeURIComponent(task.id)}`
     : task.project.trim()
@@ -387,32 +425,36 @@ export function TaskRow({
     setPendingStatusLabel(null);
     setConfirmingDelete(false);
     setConfirmingStatus(null);
+    setRequestingTaskPacket(false);
+    setTaskPacketError(null);
   }, [resolvedProjectLabel, task.id, task.status, task.title, task.dueDate, task.priority]);
 
-  useEffect(() => {
-    // Fetch execution attempts when task id changes
-    const fetchExecutionHistory = async () => {
-      if (!task.id) return;
-      setLoadingExecutionHistory(true);
-      setExecutionHistoryError(null);
-      setExecutionAttempts([]);
+  const fetchExecutionHistory = useCallback(async () => {
+    if (!task.id) return;
 
-      try {
-        const response = await fetch(`/api/execution-attempts?id=${task.id}`);
-        if (!response.ok) {
-          throw new Error("Failed to fetch execution history");
-        }
-        const data = await response.json();
-        setExecutionAttempts(data.attempts || []);
-      } catch (err) {
-        setExecutionHistoryError(err instanceof Error ? err.message : "Failed to fetch execution history");
-      } finally {
-        setLoadingExecutionHistory(false);
+    setLoadingExecutionHistory(true);
+    setExecutionHistoryError(null);
+    setExecutionAttempts([]);
+
+    try {
+      const response = await fetch(`/api/execution-attempts?taskId=${encodeURIComponent(task.id)}`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch execution history");
       }
-    };
-
-    fetchExecutionHistory();
+      const data = await response.json();
+      setExecutionAttempts(data.attempts || []);
+    } catch (err) {
+      setExecutionHistoryError(
+        err instanceof Error ? err.message : "Failed to fetch execution history"
+      );
+    } finally {
+      setLoadingExecutionHistory(false);
+    }
   }, [task.id]);
+
+  useEffect(() => {
+    fetchExecutionHistory();
+  }, [fetchExecutionHistory]);
 
   const resetDetailsDraft = () => {
     setTitle(task.title);
@@ -707,6 +749,53 @@ export function TaskRow({
     }
   };
 
+  const handleRequestTaskPacket = async () => {
+    if (!inferredAssigneeAgentId) {
+      setTaskPacketError("Assign an owner before requesting a task packet.");
+      return;
+    }
+
+    setRequestingTaskPacket(true);
+    setTaskPacketError(null);
+
+    try {
+      const response = await fetch("/api/team/actions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: inferredAssigneeAgentId,
+          action: "check-in",
+          task: {
+            id: task.id,
+            title: task.title,
+            project: resolvedProjectLabel || task.project,
+            status: task.status,
+            priority: task.priority,
+            dueDate: task.dueDate,
+            owner: displayOwner.name !== "Unassigned" ? displayOwner.name : null,
+            reviewer: reviewerOption?.name || null,
+            handoff: handoffOption?.name || null,
+            blockers: blockedByLabels,
+          },
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to request task packet");
+      }
+
+      await fetchExecutionHistory();
+      onUpdate?.();
+    } catch (error) {
+      setTaskPacketError(
+        error instanceof Error ? error.message : "Failed to request task packet"
+      );
+    } finally {
+      setRequestingTaskPacket(false);
+    }
+  };
+
   const menuItemStyle: CSSProperties = {
     padding: "0.375rem 0.75rem",
     fontSize: "0.75rem",
@@ -779,6 +868,24 @@ export function TaskRow({
               >
                 <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: executionStatus.color }} />
                 {executionStatus.label}
+              </span>
+            )}
+            {latestTaskRun?.kind === "agent_packet" && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap"
+                style={{
+                  backgroundColor: "rgba(10, 132, 255, 0.08)",
+                  color: "#0A84FF",
+                  border: "1px solid rgba(10, 132, 255, 0.22)",
+                }}
+                title={
+                  latestTaskRunSessionId
+                    ? `Latest packet linked to session ${latestTaskRunSessionId}.`
+                    : "Latest task-linked agent packet recorded."
+                }
+              >
+                {latestTaskRunLabel}
+                {latestTaskRunSessionId ? ` ${latestTaskRunSessionId}` : ""}
               </span>
             )}
           </div>
@@ -1378,19 +1485,46 @@ export function TaskRow({
                       Execution history
                     </p>
                     <p className="mt-1 text-[11px]" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
-                      Shows manual execution attempts recorded for this task. No fake agent execution - just what you&apos;ve chosen to attempt.
+                      Shows task-linked manual intents and agent packets recorded for this task. Session and model metadata only appear when Mission Control actually captured them.
                     </p>
                   </div>
-                  {loadingExecutionHistory && (
-                    <span className="text-[11px] font-medium" style={{ color: "var(--text-secondary)" }}>
-                      Loading...
-                    </span>
-                  )}
+                  <div className="flex flex-col items-end gap-2">
+                    <button
+                      type="button"
+                      onClick={handleRequestTaskPacket}
+                      disabled={!canRequestOwnerPacket || requestingTaskPacket}
+                      className="text-[11px] font-medium px-3 py-1.5 rounded-lg transition-colors"
+                      style={{
+                        color: canRequestOwnerPacket ? "#0A84FF" : "var(--text-muted)",
+                        border: "1px solid var(--border)",
+                        opacity: !canRequestOwnerPacket || requestingTaskPacket ? 0.6 : 1,
+                      }}
+                    >
+                      {requestingTaskPacket ? "Requesting packet..." : `Request owner packet`}
+                    </button>
+                    {loadingExecutionHistory && (
+                      <span className="text-[11px] font-medium" style={{ color: "var(--text-secondary)" }}>
+                        Loading...
+                      </span>
+                    )}
+                  </div>
                 </div>
+
+                <p className="mt-2 text-[11px]" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+                  {canRequestOwnerPacket
+                    ? `Uses the current owner packet path for ${ownerPacketLabel}.`
+                    : "Assign an owner before requesting a task-linked agent packet."}
+                </p>
 
                 {executionHistoryError && (
                   <p className="mt-2 text-[11px] font-medium" style={{ color: "var(--status-blocked)" }}>
                     {executionHistoryError}
+                  </p>
+                )}
+
+                {taskPacketError && (
+                  <p className="mt-2 text-[11px] font-medium" style={{ color: "var(--status-blocked)" }}>
+                    {taskPacketError}
                   </p>
                 )}
 
@@ -1414,9 +1548,8 @@ export function TaskRow({
                         <div className="flex items-start justify-between gap-2">
                           <div>
                             <p className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>
-                              {attempt.intent === "start" && "Start working"}
-                              {attempt.intent === "review" && "Review"}
-                              {attempt.intent === "debug" && "Debug"}
+                              {formatTaskRunIntentLabel(attempt.intent)}
+                              {attempt.agentName ? ` · ${attempt.agentName}` : ""}
                             </p>
                             <p className="mt-0.5 text-[11px]" style={{ color: "var(--text-secondary)" }}>
                               {new Date(attempt.timestamp).toLocaleString("en-US", {
@@ -1426,29 +1559,84 @@ export function TaskRow({
                                 minute: "numeric",
                               })}
                             </p>
+                            <div className="mt-1 flex flex-wrap gap-1.5 text-[10px]" style={{ color: "var(--text-muted)" }}>
+                              {attempt.action && <span>{attempt.action}</span>}
+                              {attempt.model && <span>{attempt.model.split("/").pop() || attempt.model}</span>}
+                              {attempt.sessionId && <span>session {formatShortSessionId(attempt.sessionId)}</span>}
+                              {attempt.thinking && <span>thinking {attempt.thinking}</span>}
+                            </div>
                           </div>
                           {attempt.runStatus && (
                             <span
                               className="text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap"
                               style={{
-                                backgroundColor: `color-mix(in srgb, var(--accent) 15%, transparent)`,
-                                color: "var(--accent)",
-                                border: `1px solid color-mix(in srgb, var(--accent) 30%, transparent)`,
+                                backgroundColor: `color-mix(in srgb, ${getExecutionStatusConfig(attempt.runStatus).color} 15%, transparent)`,
+                                color: getExecutionStatusConfig(attempt.runStatus).color,
+                                border: `1px solid color-mix(in srgb, ${getExecutionStatusConfig(attempt.runStatus).color} 30%, transparent)`,
                               }}
                             >
-                              {attempt.runStatus}
+                              {getExecutionStatusConfig(attempt.runStatus).label}
                             </span>
                           )}
                         </div>
+                        {attempt.fields && (
+                          <div className="mt-2 space-y-1 text-[11px]" style={{ color: "var(--text-muted)" }}>
+                            {attempt.fields.status && (
+                              <p>
+                                <span className="font-semibold" style={{ color: "var(--text-secondary)" }}>
+                                  Status:
+                                </span>{" "}
+                                {attempt.fields.status}
+                              </p>
+                            )}
+                            {attempt.fields.focus && (
+                              <p>
+                                <span className="font-semibold" style={{ color: "var(--text-secondary)" }}>
+                                  Focus:
+                                </span>{" "}
+                                {attempt.fields.focus}
+                              </p>
+                            )}
+                            {attempt.fields.next && (
+                              <p>
+                                <span className="font-semibold" style={{ color: "var(--text-secondary)" }}>
+                                  Next:
+                                </span>{" "}
+                                {attempt.fields.next}
+                              </p>
+                            )}
+                            {attempt.fields.blockers && (
+                              <p>
+                                <span className="font-semibold" style={{ color: "var(--text-secondary)" }}>
+                                  Blockers:
+                                </span>{" "}
+                                {attempt.fields.blockers}
+                              </p>
+                            )}
+                            {attempt.fields.needsFromHuman && (
+                              <p>
+                                <span className="font-semibold" style={{ color: "var(--text-secondary)" }}>
+                                  Needs:
+                                </span>{" "}
+                                {attempt.fields.needsFromHuman}
+                              </p>
+                            )}
+                          </div>
+                        )}
                         {attempt.deliverable && (
                           <div className="mt-2">
                             <p className="text-[11px] font-semibold mb-1" style={{ color: "var(--text-secondary)" }}>
-                              Result:
+                              Summary:
                             </p>
                             <p className="text-[11px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
                               {attempt.deliverable}
                             </p>
                           </div>
+                        )}
+                        {!attempt.deliverable && attempt.text && (
+                          <p className="mt-2 text-[11px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                            {attempt.text}
+                          </p>
                         )}
                       </div>
                     ))}

@@ -1,7 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { priorityConfig, statusConfig, type Project, type ProjectPhase } from "@/data/mockProjectsData";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  priorityConfig,
+  statusConfig,
+  type Project,
+  type ProjectPhase,
+  type ProjectPhaseLatestRun,
+} from "@/data/mockProjectsData";
 import { taskPriorityConfig, taskStatusConfig, type Task } from "@/data/mockTasksData";
 import type { TeamAgent } from "@/data/mockTeamData";
 
@@ -106,6 +112,38 @@ function getUniquePhaseId(projectId: string, title: string, phases: ProjectPhase
   return candidateId;
 }
 
+function getExecutionStatusConfig(
+  runStatus?: "idle" | "queued" | "running" | "needs_review" | "done" | "failed"
+) {
+  switch (runStatus) {
+    case "queued":
+      return { label: "Queued", color: "#64D2FF" };
+    case "running":
+      return { label: "Running", color: "#0A84FF" };
+    case "needs_review":
+      return { label: "Needs Review", color: "#FF9F0A" };
+    case "done":
+      return { label: "Done", color: "#32D74B" };
+    case "failed":
+      return { label: "Failed", color: "#FF453A" };
+    default:
+      return { label: "Idle", color: "#8E8E93" };
+  }
+}
+
+function formatPhaseRunIntentLabel(intent: ProjectPhaseLatestRun["intent"]): string {
+  if (intent === "agent_check_in") return "Phase check-in";
+  if (intent === "agent_wake") return "Phase readiness ping";
+  if (intent === "review") return "Phase review";
+  if (intent === "debug") return "Phase debug";
+  return "Phase start";
+}
+
+function formatShortSessionId(sessionId?: string | null) {
+  if (!sessionId) return "";
+  return sessionId.length > 8 ? `${sessionId.slice(0, 8)}...` : sessionId;
+}
+
 function getProjectTasksHref(
   projectTitle: string,
   projectId?: string,
@@ -129,6 +167,14 @@ interface ReassignableProjectTask {
   task: Task;
   sourceProjectTitle: string;
   sourceLinkMode: "stable" | "label";
+}
+
+interface ProjectPhaseRunAttempt extends NonNullable<ProjectPhase["latestRun"]> {
+  projectId: string;
+  projectTitle?: string;
+  phaseId: string;
+  phaseTitle?: string;
+  userAgent?: string;
 }
 
 interface ProjectCardProps {
@@ -192,6 +238,11 @@ export function ProjectCard({
   const [newLinkedTaskStatus, setNewLinkedTaskStatus] = useState<Task["status"]>("pending");
   const [newLinkedTaskPriority, setNewLinkedTaskPriority] = useState<Task["priority"]>("medium");
   const [newLinkedTaskOwnerAgentId, setNewLinkedTaskOwnerAgentId] = useState("");
+  const [phaseRuns, setPhaseRuns] = useState<ProjectPhaseRunAttempt[]>([]);
+  const [phaseRunsLoading, setPhaseRunsLoading] = useState(false);
+  const [phaseRunsError, setPhaseRunsError] = useState<string | null>(null);
+  const [requestingPhasePacket, setRequestingPhasePacket] = useState(false);
+  const [phasePacketError, setPhasePacketError] = useState<string | null>(null);
 
   const status = statusConfig[project.status];
   const priority = priorityConfig[project.priority];
@@ -278,6 +329,44 @@ export function ProjectCard({
     [sortedLinkedTasks]
   );
   const linkedTaskAttention = useMemo(() => getLinkedTaskAttentionSummary(linkedTasks), [linkedTasks]);
+  const currentPhaseOwner = useMemo(
+    () => teamAgents.find((agent) => agent.id === currentPhase?.ownerAgentId) || null,
+    [teamAgents, currentPhase?.ownerAgentId]
+  );
+  const coordinationOwner = currentPhaseOwner || owner;
+  const coordinationAgentId = currentPhase?.ownerAgentId || currentPhaseOwner?.id || owner?.id || "";
+  const coordinationOwnerLabel = coordinationOwner
+    ? `${coordinationOwner.emoji} ${coordinationOwner.name}`
+    : currentPhase?.ownerAgentId
+      ? currentPhase.ownerAgentId
+    : displayOwner.name !== "Unassigned"
+      ? `${displayOwner.emoji} ${displayOwner.name}`
+      : "phase owner";
+  const phaseDependencyPromptSummary = useMemo(
+    () => [
+      ...currentPhaseDependencies.resolved.map((phase) => {
+        const config = phaseStatusConfig[phase.status];
+        return `${phase.title} (${config.label})`;
+      }),
+      ...currentPhaseDependencies.unresolvedIds.map((phaseId) => `unresolved:${phaseId}`),
+    ],
+    [currentPhaseDependencies]
+  );
+  const linkedTaskPromptSummary = linkedTasksUnavailable
+    ? "linked tasks unavailable"
+    : linkedTasksLoading
+      ? "linked tasks loading"
+      : [
+          `${linkedTasks.length} total`,
+          `${linkedTaskAttention.openCount} open`,
+          linkedTaskAttention.blockedCount > 0 ? `${linkedTaskAttention.blockedCount} blocked` : null,
+          linkedTaskAttention.overdueCount > 0 ? `${linkedTaskAttention.overdueCount} overdue` : null,
+        ]
+          .filter(Boolean)
+          .join(", ");
+  const latestPhaseRun = currentPhase?.latestRun || null;
+  const latestPhaseRunSessionId = formatShortSessionId(latestPhaseRun?.sessionId);
+  const latestPhaseRunLabel = latestPhaseRun ? formatPhaseRunIntentLabel(latestPhaseRun.intent) : "";
   const projectTasksHref = getProjectTasksHref(project.title, project.id);
   const urgentOverflowTasksHref = getProjectTasksHref(project.title, project.id, firstHiddenUrgentLinkedTask?.id, "urgent-overflow");
 
@@ -329,6 +418,94 @@ export function ProjectCard({
     setSelectedReassignTaskId(reassignableTasksSorted[0]?.task.id || "");
     setLinkedTaskManageError(null);
   };
+
+  const fetchPhaseRunHistory = useCallback(
+    async (phaseId = currentPhase?.id || "") => {
+      if (!project.id || !phaseId) {
+        setPhaseRuns([]);
+        setPhaseRunsError(null);
+        setPhaseRunsLoading(false);
+        return;
+      }
+
+      setPhaseRunsLoading(true);
+      setPhaseRunsError(null);
+
+      try {
+        const response = await fetch(
+          `/api/project-phase-runs?projectId=${encodeURIComponent(project.id)}&phaseId=${encodeURIComponent(phaseId)}`
+        );
+        const payload = (await response.json().catch(() => null)) as
+          | { error?: string; runs?: ProjectPhaseRunAttempt[] }
+          | null;
+
+        if (!response.ok) {
+          throw new Error(payload?.error || "Failed to load phase run history");
+        }
+
+        setPhaseRuns(Array.isArray(payload?.runs) ? payload.runs : []);
+      } catch (error) {
+        setPhaseRuns([]);
+        setPhaseRunsError(error instanceof Error ? error.message : "Failed to load phase run history");
+      } finally {
+        setPhaseRunsLoading(false);
+      }
+    },
+    [project.id, currentPhase?.id]
+  );
+
+  async function handleRequestPhasePacket() {
+    if (!currentPhase || !coordinationAgentId || requestingPhasePacket) {
+      return;
+    }
+
+    setRequestingPhasePacket(true);
+    setPhasePacketError(null);
+
+    try {
+      const response = await fetch("/api/team/actions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: coordinationAgentId,
+          action: "check-in",
+          projectPhase: {
+            projectId: project.id,
+            projectTitle: project.title,
+            projectStatus: project.status,
+            projectPriority: project.priority,
+            projectOwner: displayOwner.name !== "Unassigned" ? displayOwner.name : null,
+            phaseId: currentPhase.id,
+            phaseTitle: currentPhase.title,
+            phaseStatus: currentPhase.status,
+            phaseOwner: coordinationOwner?.name || null,
+            dependencies: phaseDependencyPromptSummary,
+            linkedTaskSummary: linkedTaskPromptSummary || null,
+          },
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to request coordination packet");
+      }
+
+      await fetchPhaseRunHistory(currentPhase.id);
+      onUpdate?.();
+    } catch (error) {
+      setPhasePacketError(error instanceof Error ? error.message : "Failed to request coordination packet");
+    } finally {
+      setRequestingPhasePacket(false);
+    }
+  }
+
+  useEffect(() => {
+    setPhasePacketError(null);
+  }, [project.id, currentPhase?.id]);
+
+  useEffect(() => {
+    void fetchPhaseRunHistory();
+  }, [fetchPhaseRunHistory]);
 
   const toggleParticipatingAgent = (agentId: string) => {
     setEditParticipatingAgentIds((current) =>
@@ -1847,6 +2024,24 @@ export function ProjectCard({
                 <p className="mt-1 text-[10px]" style={{ color: "var(--text-muted)" }}>
                   {trackedPhaseCount} tracked phase{trackedPhaseCount === 1 ? "" : "s"}
                 </p>
+                {latestPhaseRun?.kind === "agent_packet" && (
+                  <span
+                    className="inline-flex mt-2 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap"
+                    style={{
+                      backgroundColor: "rgba(10, 132, 255, 0.08)",
+                      color: "#0A84FF",
+                      border: "1px solid rgba(10, 132, 255, 0.22)",
+                    }}
+                    title={
+                      latestPhaseRunSessionId
+                        ? `Latest phase packet linked to session ${latestPhaseRunSessionId}.`
+                        : "Latest phase-linked agent packet recorded."
+                    }
+                >
+                  {latestPhaseRunLabel}
+                  {latestPhaseRunSessionId ? ` ${latestPhaseRunSessionId}` : ""}
+                </span>
+                )}
               </div>
             ) : (
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>
@@ -1956,6 +2151,177 @@ export function ProjectCard({
             )}
           </div>
         )}
+
+        <div
+          className="mb-4 rounded-lg px-3 py-2"
+          style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}
+        >
+          <div className="flex items-start justify-between gap-3 mb-1.5">
+            <div>
+              <span className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
+                Phase coordination
+              </span>
+              <p className="mt-1 text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
+                Uses the same structured run envelope as task packets, but anchors it to the current project phase.
+              </p>
+            </div>
+            <div className="flex flex-col items-end gap-2">
+              <button
+                type="button"
+                onClick={handleRequestPhasePacket}
+                disabled={!currentPhase || !coordinationAgentId || requestingPhasePacket}
+                className="text-[11px] font-medium px-3 py-1.5 rounded-lg transition-colors"
+                style={{
+                  color: currentPhase && coordinationAgentId ? "#0A84FF" : "var(--text-muted)",
+                  border: "1px solid var(--border)",
+                  opacity: !currentPhase || !coordinationAgentId || requestingPhasePacket ? 0.6 : 1,
+                }}
+              >
+                {requestingPhasePacket ? "Requesting packet..." : "Request coordination packet"}
+              </button>
+              {phaseRunsLoading && (
+                <span className="text-[11px] font-medium" style={{ color: "var(--text-secondary)" }}>
+                  Loading...
+                </span>
+              )}
+            </div>
+          </div>
+
+          <p className="text-[10px]" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+            {!currentPhase
+              ? "Add a tracked phase before requesting a phase-linked coordination packet."
+              : coordinationAgentId
+                ? `Requests the packet from ${coordinationOwnerLabel}.`
+                : "Assign a project owner or phase owner before requesting a coordination packet."}
+          </p>
+
+          {phaseRunsError && (
+            <p className="mt-2 text-[11px] font-medium" style={{ color: "var(--status-blocked)" }}>
+              {phaseRunsError}
+            </p>
+          )}
+
+          {phasePacketError && (
+            <p className="mt-2 text-[11px] font-medium" style={{ color: "var(--status-blocked)" }}>
+              {phasePacketError}
+            </p>
+          )}
+
+          {!phaseRunsLoading && currentPhase && phaseRuns.length === 0 && !phaseRunsError && (
+            <p className="mt-2 text-[11px]" style={{ color: "var(--text-muted)" }}>
+              No coordination packets recorded for this phase yet.
+            </p>
+          )}
+
+          {!phaseRunsLoading && phaseRuns.length > 0 && (
+            <div className="mt-2 space-y-2">
+              {phaseRuns.slice(0, 3).map((attempt) => (
+                <div
+                  key={attempt.id}
+                  className="rounded-lg p-2"
+                  style={{
+                    backgroundColor: "var(--surface-hover)",
+                    border: "1px solid color-mix(in srgb, var(--border) 30%, transparent)",
+                  }}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>
+                        {formatPhaseRunIntentLabel(attempt.intent)}
+                        {attempt.agentName ? ` · ${attempt.agentName}` : ""}
+                      </p>
+                      <p className="mt-0.5 text-[11px]" style={{ color: "var(--text-secondary)" }}>
+                        {new Date(attempt.timestamp).toLocaleString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          hour: "numeric",
+                          minute: "numeric",
+                        })}
+                      </p>
+                      <div className="mt-1 flex flex-wrap gap-1.5 text-[10px]" style={{ color: "var(--text-muted)" }}>
+                        {attempt.action && <span>{attempt.action}</span>}
+                        {attempt.model && <span>{attempt.model.split("/").pop() || attempt.model}</span>}
+                        {attempt.sessionId && <span>session {formatShortSessionId(attempt.sessionId)}</span>}
+                        {attempt.thinking && <span>thinking {attempt.thinking}</span>}
+                      </div>
+                    </div>
+                    {attempt.runStatus && (
+                      <span
+                        className="text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap"
+                        style={{
+                          backgroundColor: `color-mix(in srgb, ${getExecutionStatusConfig(attempt.runStatus).color} 15%, transparent)`,
+                          color: getExecutionStatusConfig(attempt.runStatus).color,
+                          border: `1px solid color-mix(in srgb, ${getExecutionStatusConfig(attempt.runStatus).color} 30%, transparent)`,
+                        }}
+                      >
+                        {getExecutionStatusConfig(attempt.runStatus).label}
+                      </span>
+                    )}
+                  </div>
+                  {attempt.fields && (
+                    <div className="mt-2 space-y-1 text-[11px]" style={{ color: "var(--text-muted)" }}>
+                      {attempt.fields.status && (
+                        <p>
+                          <span className="font-semibold" style={{ color: "var(--text-secondary)" }}>
+                            Status:
+                          </span>{" "}
+                          {attempt.fields.status}
+                        </p>
+                      )}
+                      {attempt.fields.focus && (
+                        <p>
+                          <span className="font-semibold" style={{ color: "var(--text-secondary)" }}>
+                            Focus:
+                          </span>{" "}
+                          {attempt.fields.focus}
+                        </p>
+                      )}
+                      {attempt.fields.next && (
+                        <p>
+                          <span className="font-semibold" style={{ color: "var(--text-secondary)" }}>
+                            Next:
+                          </span>{" "}
+                          {attempt.fields.next}
+                        </p>
+                      )}
+                      {attempt.fields.blockers && (
+                        <p>
+                          <span className="font-semibold" style={{ color: "var(--text-secondary)" }}>
+                            Blockers:
+                          </span>{" "}
+                          {attempt.fields.blockers}
+                        </p>
+                      )}
+                      {attempt.fields.needsFromHuman && (
+                        <p>
+                          <span className="font-semibold" style={{ color: "var(--text-secondary)" }}>
+                            Needs:
+                          </span>{" "}
+                          {attempt.fields.needsFromHuman}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {attempt.deliverable && (
+                    <div className="mt-2">
+                      <p className="text-[11px] font-semibold mb-1" style={{ color: "var(--text-secondary)" }}>
+                        Summary:
+                      </p>
+                      <p className="text-[11px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                        {attempt.deliverable}
+                      </p>
+                    </div>
+                  )}
+                  {!attempt.deliverable && attempt.text && (
+                    <p className="mt-2 text-[11px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                      {attempt.text}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div
           className="mb-4 rounded-lg px-3 py-2"
