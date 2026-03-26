@@ -1,23 +1,39 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { Eye, Edit3, RefreshCw, Brain } from "lucide-react";
-import { FileTree, FileNode } from "@/components/FileTree";
+import { useCallback, useEffect, useState } from "react";
+import { Brain, Edit3, Eye, RefreshCw } from "lucide-react";
+
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { FileTree, type FileNode } from "@/components/FileTree";
 import { MarkdownEditor } from "@/components/MarkdownEditor";
 import { MarkdownPreview } from "@/components/MarkdownPreview";
+import {
+  loadMemoryTree,
+  loadWorkspaces,
+  readFile,
+  saveFile,
+} from "@/lib/files-client";
+import type { WorkspaceDescriptor } from "@/lib/workspace-files";
 
 type ViewMode = "edit" | "preview";
+type PendingSelection =
+  | { kind: "workspace"; workspaceId: string }
+  | { kind: "file"; path: string }
+  | null;
 
-interface Workspace {
-  id: string;
-  name: string;
-  emoji: string;
-  path: string;
-  agentName?: string;
+function findFirstFile(nodes: FileNode[]): FileNode | null {
+  for (const node of nodes) {
+    if (node.type === "file") return node;
+    if (node.children?.length) {
+      const nested = findFirstFile(node.children);
+      if (nested) return nested;
+    }
+  }
+  return null;
 }
 
 export default function MemoryPage() {
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [workspaces, setWorkspaces] = useState<WorkspaceDescriptor[]>([]);
   const [selectedWorkspace, setSelectedWorkspace] = useState<string | null>(null);
   const [files, setFiles] = useState<FileNode[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
@@ -26,104 +42,119 @@ export default function MemoryPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("preview");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [pendingSelection, setPendingSelection] = useState<PendingSelection>(null);
 
   const hasUnsavedChanges = content !== originalContent;
+  const selectedWorkspaceData = workspaces.find((workspace) => workspace.id === selectedWorkspace);
 
-  // Load workspaces
   useEffect(() => {
-    fetch("/api/files/workspaces")
-      .then((res) => res.json())
-      .then((data) => {
-        setWorkspaces(data.workspaces || []);
-        if (data.workspaces.length > 0) {
-          setSelectedWorkspace(data.workspaces[0].id);
+    loadWorkspaces()
+      .then((nextWorkspaces) => {
+        setWorkspaces(nextWorkspaces);
+        if (nextWorkspaces.length > 0) {
+          setSelectedWorkspace((current) => current || nextWorkspaces[0].id);
         }
+        setError(null);
       })
-      .catch(() => setWorkspaces([]));
+      .catch((loadError) => {
+        setWorkspaces([]);
+        setError(loadError instanceof Error ? loadError.message : "Failed to load workspaces.");
+      });
   }, []);
 
   const loadFileTree = useCallback(async (workspace: string) => {
     try {
       setIsLoading(true);
-      const res = await fetch(`/api/files?workspace=${encodeURIComponent(workspace)}`);
-      if (!res.ok) throw new Error("Failed to load files");
-      const data = await res.json();
-      setFiles(data);
-    } catch (err) {
-      setError("Failed to load file tree");
-      console.error(err);
+      const nextFiles = await loadMemoryTree(workspace);
+      setFiles(nextFiles);
+      setError(null);
+    } catch (loadError) {
+      setFiles([]);
+      setError(loadError instanceof Error ? loadError.message : "Failed to load memory files.");
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  const loadFile = useCallback(async (workspace: string, path: string) => {
+  const loadMemoryFile = useCallback(async (workspace: string, filePath: string) => {
     try {
+      const payload = await readFile(workspace, filePath, "memory");
+      if (!("content" in payload)) {
+        throw new Error("Failed to load file.");
+      }
+      setContent(payload.content);
+      setOriginalContent(payload.content);
+      setSelectedPath(filePath);
       setError(null);
-      const res = await fetch(
-        `/api/files?workspace=${encodeURIComponent(workspace)}&path=${encodeURIComponent(path)}`
-      );
-      if (!res.ok) throw new Error("Failed to load file");
-      const data = await res.json();
-      setContent(data.content);
-      setOriginalContent(data.content);
-    } catch (err) {
-      setError("Failed to load file");
-      console.error(err);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Failed to load file.");
     }
   }, []);
 
-  const saveFile = useCallback(async () => {
+  const saveMemoryFile = useCallback(async () => {
     if (!selectedWorkspace || !selectedPath) return;
-    const res = await fetch("/api/files", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workspace: selectedWorkspace, path: selectedPath, content }),
-    });
-    if (!res.ok) throw new Error("Failed to save file");
-    setOriginalContent(content);
-  }, [selectedWorkspace, selectedPath, content]);
 
-  const handleSelectFile = useCallback(
-    async (path: string) => {
-      if (hasUnsavedChanges) {
-        const confirmed = window.confirm("You have unsaved changes. Discard them?");
-        if (!confirmed) return;
+    setIsSaving(true);
+    try {
+      await saveFile(selectedWorkspace, selectedPath, content, "memory");
+      setOriginalContent(content);
+      setError(null);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Failed to save file.");
+      throw saveError;
+    } finally {
+      setIsSaving(false);
+    }
+  }, [content, selectedPath, selectedWorkspace]);
+
+  const applySelection = useCallback(
+    async (next: Exclude<PendingSelection, null>) => {
+      if (next.kind === "workspace") {
+        setSelectedWorkspace(next.workspaceId);
+        setSelectedPath(null);
+        setContent("");
+        setOriginalContent("");
+        return;
       }
-      setSelectedPath(path);
-      if (selectedWorkspace) await loadFile(selectedWorkspace, path);
+
+      if (selectedWorkspace) {
+        await loadMemoryFile(selectedWorkspace, next.path);
+      }
     },
-    [hasUnsavedChanges, selectedWorkspace, loadFile]
+    [loadMemoryFile, selectedWorkspace]
   );
 
-  const handleWorkspaceSelect = (workspaceId: string) => {
-    if (hasUnsavedChanges) {
-      const confirmed = window.confirm("You have unsaved changes. Discard them?");
-      if (!confirmed) return;
-    }
-    setSelectedWorkspace(workspaceId);
-    setSelectedPath(null);
-    setContent("");
-    setOriginalContent("");
-  };
+  const requestSelection = useCallback(
+    async (next: Exclude<PendingSelection, null>) => {
+      if (hasUnsavedChanges) {
+        setPendingSelection(next);
+        return;
+      }
+
+      await applySelection(next);
+    },
+    [applySelection, hasUnsavedChanges]
+  );
 
   useEffect(() => {
-    if (selectedWorkspace) loadFileTree(selectedWorkspace);
+    if (selectedWorkspace) {
+      void loadFileTree(selectedWorkspace);
+    }
   }, [selectedWorkspace, loadFileTree]);
 
   useEffect(() => {
-    if (files.length > 0 && !selectedPath) {
-      const memoryMd = files.find((f) => f.name === "MEMORY.md" && f.type === "file");
-      const firstFile = memoryMd || files.find((f) => f.type === "file");
-      if (firstFile) handleSelectFile(firstFile.path);
-    }
-  }, [files, selectedPath, handleSelectFile]);
+    if (files.length === 0 || selectedPath) return;
 
-  const selectedWorkspaceData = workspaces.find((w) => w.id === selectedWorkspace);
+    const memoryMd = files.find((file) => file.name === "MEMORY.md" && file.type === "file");
+    const firstFile = memoryMd || findFirstFile(files);
+    if (firstFile) {
+      void requestSelection({ kind: "file", path: firstFile.path });
+    }
+  }, [files, requestSelection, selectedPath]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      {/* Page header */}
       <div style={{ padding: "24px 24px 16px 24px", flexShrink: 0 }}>
         <h1
           style={{
@@ -138,11 +169,26 @@ export default function MemoryPage() {
           Memory Browser
         </h1>
         <p style={{ fontFamily: "var(--font-body)", fontSize: "13px", color: "var(--text-secondary)" }}>
-          Ver y editar archivos de memoria de los agentes
+          Review and edit agent memory documents with the same workspace registry and safety rules as Files.
         </p>
       </div>
 
-      {/* Two-column layout */}
+      {error && (
+        <div
+          style={{
+            margin: "0 24px 16px",
+            padding: "12px 14px",
+            borderRadius: "12px",
+            border: "1px solid color-mix(in srgb, var(--status-blocked) 35%, var(--border))",
+            backgroundColor: "color-mix(in srgb, var(--status-blocked) 10%, transparent)",
+            color: "var(--status-blocked)",
+            fontSize: "13px",
+          }}
+        >
+          {error}
+        </div>
+      )}
+
       <div
         style={{
           display: "flex",
@@ -151,7 +197,6 @@ export default function MemoryPage() {
           borderTop: "1px solid var(--border)",
         }}
       >
-        {/* ── LEFT SIDEBAR: Workspace list ────────────────────────────────── */}
         <aside
           style={{
             width: "220px",
@@ -180,7 +225,8 @@ export default function MemoryPage() {
             return (
               <button
                 key={workspace.id}
-                onClick={() => handleWorkspaceSelect(workspace.id)}
+                type="button"
+                onClick={() => void requestSelection({ kind: "workspace", workspaceId: workspace.id })}
                 style={{
                   width: "100%",
                   display: "flex",
@@ -194,11 +240,11 @@ export default function MemoryPage() {
                   textAlign: "left",
                   transition: "all 120ms ease",
                 }}
-                onMouseEnter={(e) => {
-                  if (!isSelected) e.currentTarget.style.background = "var(--surface-hover, rgba(255,255,255,0.05))";
+                onMouseEnter={(event) => {
+                  if (!isSelected) event.currentTarget.style.background = "var(--surface-hover, rgba(255,255,255,0.05))";
                 }}
-                onMouseLeave={(e) => {
-                  if (!isSelected) e.currentTarget.style.background = "transparent";
+                onMouseLeave={(event) => {
+                  if (!isSelected) event.currentTarget.style.background = "transparent";
                 }}
               >
                 <span style={{ fontSize: "18px", lineHeight: 1, flexShrink: 0 }}>{workspace.emoji}</span>
@@ -235,11 +281,9 @@ export default function MemoryPage() {
           })}
         </aside>
 
-        {/* ── RIGHT PANEL ──────────────────────────────────────────────────── */}
         <main style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           {selectedWorkspace && selectedWorkspaceData ? (
             <>
-              {/* Toolbar bar */}
               <div
                 style={{
                   display: "flex",
@@ -285,9 +329,9 @@ export default function MemoryPage() {
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
-                  {/* Refresh */}
                   <button
-                    onClick={() => selectedWorkspace && loadFileTree(selectedWorkspace)}
+                    type="button"
+                    onClick={() => selectedWorkspace && void loadFileTree(selectedWorkspace)}
                     title="Refresh"
                     style={{
                       padding: "5px 7px",
@@ -300,13 +344,16 @@ export default function MemoryPage() {
                       alignItems: "center",
                       transition: "all 120ms ease",
                     }}
-                    onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
+                    onMouseEnter={(event) => {
+                      event.currentTarget.style.color = "var(--text-primary)";
+                    }}
+                    onMouseLeave={(event) => {
+                      event.currentTarget.style.color = "var(--text-muted)";
+                    }}
                   >
                     <RefreshCw size={14} />
                   </button>
 
-                  {/* View toggle */}
                   <div
                     style={{
                       display: "flex",
@@ -317,6 +364,7 @@ export default function MemoryPage() {
                     }}
                   >
                     <button
+                      type="button"
                       onClick={() => setViewMode("preview")}
                       style={{
                         display: "flex",
@@ -337,6 +385,7 @@ export default function MemoryPage() {
                       Preview
                     </button>
                     <button
+                      type="button"
                       onClick={() => setViewMode("edit")}
                       style={{
                         display: "flex",
@@ -360,9 +409,7 @@ export default function MemoryPage() {
                 </div>
               </div>
 
-              {/* File tree + editor */}
               <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-                {/* File tree */}
                 <div
                   style={{
                     width: "230px",
@@ -375,16 +422,15 @@ export default function MemoryPage() {
                     <div style={{ padding: "24px", textAlign: "center", color: "var(--text-secondary)" }}>
                       Loading...
                     </div>
-                  ) : error && files.length === 0 ? (
-                    <div style={{ padding: "24px", textAlign: "center", color: "var(--negative)" }}>
-                      {error}
-                    </div>
                   ) : (
-                    <FileTree files={files} selectedPath={selectedPath} onSelect={handleSelectFile} />
+                    <FileTree
+                      files={files}
+                      selectedPath={selectedPath}
+                      onSelect={(path) => void requestSelection({ kind: "file", path })}
+                    />
                   )}
                 </div>
 
-                {/* Editor / Preview */}
                 <div
                   style={{
                     flex: 1,
@@ -401,8 +447,9 @@ export default function MemoryPage() {
                         <MarkdownEditor
                           content={content}
                           onChange={setContent}
-                          onSave={saveFile}
+                          onSave={saveMemoryFile}
                           hasUnsavedChanges={hasUnsavedChanges}
+                          disabled={isSaving}
                         />
                       ) : (
                         <MarkdownPreview content={content} />
@@ -420,7 +467,7 @@ export default function MemoryPage() {
                     >
                       <div style={{ textAlign: "center" }}>
                         <Brain style={{ width: "64px", height: "64px", margin: "0 auto 16px", opacity: 0.3 }} />
-                        <p style={{ fontSize: "14px" }}>Selecciona un archivo para ver o editar</p>
+                        <p style={{ fontSize: "14px" }}>Select a memory document to inspect or edit.</p>
                       </div>
                     </div>
                   )}
@@ -438,11 +485,28 @@ export default function MemoryPage() {
                 fontSize: "14px",
               }}
             >
-              Selecciona un workspace
+              Select a workspace.
             </div>
           )}
         </main>
       </div>
+
+      <ConfirmDialog
+        open={Boolean(pendingSelection)}
+        title="Discard unsaved memory edits?"
+        description="You have unsaved changes in the current memory document. Switching now will discard them."
+        confirmLabel="Discard changes"
+        confirmTone="danger"
+        onCancel={() => setPendingSelection(null)}
+        onConfirm={() => {
+          const next = pendingSelection;
+          setPendingSelection(null);
+          setOriginalContent(content);
+          if (next) {
+            void applySelection(next);
+          }
+        }}
+      />
     </div>
   );
 }

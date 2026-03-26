@@ -246,3 +246,10 @@ export function getActivityStats(): {
 
   return { total, today, byType, byStatus };
 }
+
+export function closeActivitiesDb(): void {
+  if (_db) {
+    _db.close();
+    _db = null;
+  }
+}

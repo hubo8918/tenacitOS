@@ -1,15 +1,22 @@
-import { NextRequest, NextResponse } from "next/server";
-import { promises as fs } from "fs";
 import path from "path";
 
-import { getWorkspaceBase, resolveWorkspaceFilePath } from "@/lib/workspace-files";
+import { NextRequest, NextResponse } from "next/server";
 
-interface FileEntry {
-  name: string;
-  type: "file" | "folder";
-  size: number;
-  modified: string;
-}
+import {
+  downloadFile,
+  listDirectory,
+  readFileContent,
+  toFileSystemErrorResponse,
+} from "@/lib/file-system";
+
+const RAW_IMAGE_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "image/svg+xml",
+  "image/x-icon",
+]);
 
 export async function GET(request: NextRequest) {
   try {
@@ -19,121 +26,56 @@ export async function GET(request: NextRequest) {
     const fileContent = searchParams.get("content") === "true";
     const rawMode = searchParams.get("raw") === "true";
 
-    const workspaceEntry = getWorkspaceBase(workspace);
-    if (!workspaceEntry) {
-      return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
-    }
-
-    try {
-      await fs.access(workspaceEntry.base);
-    } catch {
-      return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
-    }
-
-    const resolved = requestedPath
-      ? resolveWorkspaceFilePath({ workspace, filePath: requestedPath })
-      : {
-          workspace,
-          base: workspaceEntry.base,
-          fullPath: workspaceEntry.base,
-          relativePath: "",
-        };
-
-    if (!resolved) {
-      return NextResponse.json(
-        { error: "Invalid path. Path must stay inside a known workspace." },
-        { status: 400 }
-      );
-    }
-
-    const stats = await fs.stat(resolved.fullPath);
-
-    if (rawMode && stats.isFile()) {
-      const ext = path.extname(resolved.fullPath).toLowerCase().slice(1);
-      const mimeTypes: Record<string, string> = {
-        png: "image/png",
-        jpg: "image/jpeg",
-        jpeg: "image/jpeg",
-        gif: "image/gif",
-        webp: "image/webp",
-        svg: "image/svg+xml",
-        ico: "image/x-icon",
-      };
-      const contentType = mimeTypes[ext];
-      if (!contentType) {
+    if (rawMode) {
+      const download = await downloadFile({ workspace, path: requestedPath });
+      if (!RAW_IMAGE_TYPES.has(download.mimeType)) {
         return NextResponse.json(
-          { error: "Raw mode only supports image files" },
+          { error: "Raw mode only supports image files.", code: "invalid_path" },
           { status: 400 }
         );
       }
-      const buffer = await fs.readFile(resolved.fullPath);
-      return new NextResponse(buffer, {
+
+      return new NextResponse(new Uint8Array(download.content), {
         headers: {
-          "Content-Type": contentType,
-          "Content-Length": buffer.length.toString(),
+          "Content-Type": download.mimeType,
+          "Content-Length": download.size.toString(),
           "Cache-Control": "public, max-age=3600",
         },
       });
     }
 
-    if (fileContent && stats.isFile()) {
-      const content = await fs.readFile(resolved.fullPath, "utf-8");
-      return NextResponse.json({
-        name: path.basename(resolved.fullPath),
-        path: resolved.relativePath,
-        workspace: resolved.workspace,
-        content,
-        size: stats.size,
-        modified: stats.mtime.toISOString(),
-      });
+    if (fileContent) {
+      const file = await readFileContent({ workspace, path: requestedPath });
+      return NextResponse.json(file);
     }
 
-    if (stats.isDirectory()) {
-      const entries = await fs.readdir(resolved.fullPath, { withFileTypes: true });
-
-      const items: FileEntry[] = await Promise.all(
-        entries
-          .filter((entry) => !entry.name.startsWith("."))
-          .map(async (entry) => {
-            const entryPath = path.join(resolved.fullPath, entry.name);
-            const entryStats = await fs.stat(entryPath).catch(() => null);
-
-            return {
-              name: entry.name,
-              type: entry.isDirectory() ? "folder" : "file",
-              size: entryStats?.size || 0,
-              modified: entryStats?.mtime.toISOString() || new Date().toISOString(),
-            } as FileEntry;
-          })
-      );
-
-      items.sort((a, b) => {
-        if (a.type !== b.type) {
-          return a.type === "folder" ? -1 : 1;
+    if (requestedPath) {
+      try {
+        const file = await readFileContent({ workspace, path: requestedPath });
+        return NextResponse.json({
+          name: path.basename(file.path),
+          path: file.path,
+          workspace: file.workspace,
+          type: "file",
+          size: file.size,
+          modified: file.modified,
+        });
+      } catch (error) {
+        const normalized = toFileSystemErrorResponse(error, "Failed to browse path.");
+        if (normalized.code !== "invalid_path") {
+          throw error;
         }
-        return a.name.localeCompare(b.name);
-      });
-
-      return NextResponse.json({
-        path: resolved.relativePath,
-        workspace: resolved.workspace,
-        items,
-      });
+      }
     }
 
-    return NextResponse.json({
-      name: path.basename(resolved.fullPath),
-      path: resolved.relativePath,
-      workspace: resolved.workspace,
-      type: "file",
-      size: stats.size,
-      modified: stats.mtime.toISOString(),
-    });
+    const directory = await listDirectory({ workspace, path: requestedPath });
+    return NextResponse.json(directory);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return NextResponse.json({ error: "Path not found" }, { status: 404 });
-    }
+    const normalized = toFileSystemErrorResponse(error, "Failed to browse path.");
     console.error("Browse API error:", error);
-    return NextResponse.json({ error: "Failed to browse path" }, { status: 500 });
+    return NextResponse.json(
+      { error: normalized.error, code: normalized.code },
+      { status: normalized.status }
+    );
   }
 }

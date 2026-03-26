@@ -1,35 +1,55 @@
-import { headers } from "next/headers";
 import TeamPageClient from "./TeamPageClient";
 import type { TeamAgent } from "@/data/mockTeamData";
+import { getTeamForDisplay } from "@/app/api/team/route";
+import { getWorkItemDashboardData } from "@/lib/work-items";
+import type { WorkItemDashboardData } from "@/lib/work-item-types";
 
 export const dynamic = "force-dynamic";
 
+const REVIEW_FOCUS_ALL = "__all__";
+
 async function getInitialTeam(): Promise<TeamAgent[]> {
   try {
-    const requestHeaders = await headers();
-    const host = requestHeaders.get("host");
-    if (!host) return [];
-
-    const protocol = requestHeaders.get("x-forwarded-proto") || (host.includes("localhost") ? "http" : "https");
-    const cookie = requestHeaders.get("cookie") || "";
-
-    const response = await fetch(`${protocol}://${host}/api/team`, {
-      headers: cookie ? { cookie } : undefined,
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      return [];
-    }
-
-    const data = (await response.json()) as { team?: TeamAgent[] };
-    return Array.isArray(data.team) ? data.team : [];
+    return await getTeamForDisplay();
   } catch {
     return [];
   }
 }
 
+function getDefaultReviewFocus(team: TeamAgent[]): string {
+  return team.find((agent) => agent.id === "henry")?.id || team[0]?.id || REVIEW_FOCUS_ALL;
+}
+
+async function getInitialDashboard(reviewer: string): Promise<WorkItemDashboardData> {
+  try {
+    return await getWorkItemDashboardData({
+      reviewer,
+      decisionsLimit: 6,
+    });
+  } catch {
+    return {
+      items: [],
+      counts: {
+        total: 0,
+        task: 0,
+        phase: 0,
+        unassigned: 0,
+      },
+      decisions: [],
+    };
+  }
+}
+
 export default async function TeamPage() {
   const initialTeam = await getInitialTeam();
-  return <TeamPageClient initialTeam={initialTeam} />;
+  const initialReviewFocus = getDefaultReviewFocus(initialTeam);
+  const initialDashboard = await getInitialDashboard(initialReviewFocus);
+
+  return (
+    <TeamPageClient
+      initialTeam={initialTeam}
+      initialDashboard={initialDashboard}
+      initialReviewFocus={initialReviewFocus}
+    />
+  );
 }

@@ -2,75 +2,25 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ListTodo, ArrowUpDown, Plus } from "lucide-react";
+import { ArrowUpDown, Plus } from "lucide-react";
+
+import type { ReviewDecisionSubmitPayload } from "@/components/ReviewDecisionComposer";
 import { TaskRow } from "@/components/TaskRow";
-import { taskPriorityConfig, taskStatusConfig } from "@/data/mockTasksData";
-import type { Task } from "@/data/mockTasksData";
+import { WorkItemInspector } from "@/components/WorkItemInspector";
 import type { Project } from "@/data/mockProjectsData";
-import { taskHasProjectMismatch, taskLinksToProject, resolveProjectForTask, normalizeProjectLabel } from "@/lib/project-task-linkage";
+import type { Task } from "@/data/mockTasksData";
+import { taskPriorityConfig, taskStatusConfig } from "@/data/mockTasksData";
+import {
+  normalizeProjectLabel,
+  resolveProjectForTask,
+  taskHasProjectMismatch,
+  taskLinksToProject,
+} from "@/lib/project-task-linkage";
 import { useFetch } from "@/lib/useFetch";
 
-type StatusFilter = "all" | "in_progress" | "completed" | "pending" | "blocked";
-type SortField = "title" | "status" | "priority" | "dueDate";
-type SortDir = "asc" | "desc";
-
-const priorityOrder = { high: 0, medium: 1, low: 2 };
-const statusOrder = { blocked: 0, in_progress: 1, pending: 2, completed: 3 };
-const unassignedAgent = {
-  id: "",
-  name: "Unassigned",
-  emoji: "👤",
-  color: "#8E8E93",
-};
+type StatusFilter = "all" | Task["status"];
 
 const customProjectSentinel = "__custom__";
-
-function parseLocalDate(dateString: string) {
-  const [year, month, day] = dateString.split("-").map(Number);
-  return new Date(year, month - 1, day);
-}
-
-function isTaskOverdue(task: Task) {
-  if (task.status === "completed") return false;
-  const dueDate = parseLocalDate(task.dueDate);
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
-  return dueDate < startOfToday;
-}
-
-function isUrgentLinkedTask(task: Task) {
-  return task.status === "blocked" || isTaskOverdue(task);
-}
-
-function compareLinkedTaskPreviewPriority(a: Task, b: Task) {
-  const getRank = (task: Task) => {
-    if (task.status === "blocked") return 0;
-    if (isTaskOverdue(task)) return 1;
-    if (task.status !== "completed") return 2;
-    return 3;
-  };
-
-  const rankDiff = getRank(a) - getRank(b);
-  if (rankDiff !== 0) {
-    return rankDiff;
-  }
-
-  const dueDateDiff = parseLocalDate(a.dueDate).getTime() - parseLocalDate(b.dueDate).getTime();
-  if (dueDateDiff !== 0) {
-    return dueDateDiff;
-  }
-
-  return a.title.localeCompare(b.title);
-}
-
-function getLocalDateInputValue(offsetDays = 0) {
-  const date = new Date();
-  date.setDate(date.getDate() + offsetDays);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
 
 interface TaskAgentOption {
   id: string;
@@ -85,451 +35,435 @@ interface TasksPageClientProps {
   initialProjects: Project[];
 }
 
+function getLocalDateInputValue(offsetDays = 0) {
+  const date = new Date();
+  date.setDate(date.getDate() + offsetDays);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function sameStringList(left: string[], right: string[]) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
 export default function TasksPageClient({
   initialTasks,
   initialTaskAgents,
   initialProjects,
 }: TasksPageClientProps) {
   const searchParams = useSearchParams();
-  const projectFocus = searchParams.get("project")?.trim() || "";
-  const projectIdFocus = searchParams.get("projectId")?.trim() || "";
+  const requestedTaskId = searchParams.get("taskId")?.trim() || searchParams.get("task")?.trim() || "";
+  const focusedProjectId = searchParams.get("projectId")?.trim() || "";
+  const focusedProjectLabel = searchParams.get("project")?.trim() || "";
   const mismatchOnlyRequested = searchParams.get("mismatch") === "1";
-  const reviewOnlyRequested = searchParams.get("review") === "1";
-  const requestedTaskId = searchParams.get("task")?.trim() || "";
-  const requestedTaskSource = searchParams.get("taskSource")?.trim() || "";
-  const hasInitialTasks = initialTasks.length > 0;
+
   const { data, loading, error, refetch } = useFetch<{ tasks: Task[] }>("/api/agent-tasks", {
-    initialData: hasInitialTasks ? { tasks: initialTasks } : null,
-    fetchOnMount: !hasInitialTasks,
+    initialData: initialTasks.length > 0 ? { tasks: initialTasks } : null,
+    fetchOnMount: initialTasks.length === 0,
   });
-  const hasInitialProjects = initialProjects.length > 0;
   const { data: projectsData } = useFetch<{ projects: Project[] }>("/api/projects", {
-    initialData: hasInitialProjects ? { projects: initialProjects } : null,
-    fetchOnMount: !hasInitialProjects,
+    initialData: initialProjects.length > 0 ? { projects: initialProjects } : null,
+    fetchOnMount: initialProjects.length === 0,
   });
+
   const tasks = useMemo(() => data?.tasks || [], [data]);
   const projects = useMemo(() => projectsData?.projects || initialProjects, [initialProjects, projectsData]);
+  const taskAgents = useMemo(
+    () => [...initialTaskAgents].sort((left, right) => left.name.localeCompare(right.name)),
+    [initialTaskAgents]
+  );
   const projectOptions = useMemo(
-    () => [...projects].map((project) => ({ id: project.id, title: project.title })).sort((a, b) => a.title.localeCompare(b.title)),
+    () =>
+      [...projects]
+        .map((project) => ({ id: project.id, title: project.title }))
+        .sort((left, right) => left.title.localeCompare(right.title)),
     [projects]
   );
-  const focusedProject = useMemo(
-    () => (projectIdFocus ? projects.find((project) => project.id === projectIdFocus) || null : null),
-    [projectIdFocus, projects]
+  const selectedFocusedProject = useMemo(
+    () => projects.find((project) => project.id === focusedProjectId) || null,
+    [focusedProjectId, projects]
   );
-  const effectiveProjectFocus = focusedProject?.title || projectFocus;
-  const normalizedProjectFocus = normalizeProjectLabel(effectiveProjectFocus);
-  const canCheckProjectMatches = projects.length > 0;
-  const defaultCreateProjectDraft = useMemo(() => {
-    if (focusedProject) {
-      return {
-        projectLabel: focusedProject.title,
-        projectLinkMode: focusedProject.id,
-      };
-    }
+  const normalizedFocusedProjectLabel = normalizeProjectLabel(
+    selectedFocusedProject?.title || focusedProjectLabel
+  );
 
-    if (!effectiveProjectFocus.trim()) {
-      return {
-        projectLabel: "",
-        projectLinkMode: "",
-      };
-    }
-
-    const matchedProject = projectOptions.find(
-      (option) => normalizeProjectLabel(option.title) === normalizedProjectFocus
-    );
-
-    if (matchedProject) {
-      return {
-        projectLabel: matchedProject.title,
-        projectLinkMode: matchedProject.id,
-      };
-    }
-
-    return {
-      projectLabel: effectiveProjectFocus,
-      projectLinkMode: customProjectSentinel,
-    };
-  }, [effectiveProjectFocus, focusedProject, normalizedProjectFocus, projectOptions]);
-
+  const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [showMismatchOnly, setShowMismatchOnly] = useState(mismatchOnlyRequested);
-  const [showReviewQueueOnly, setShowReviewQueueOnly] = useState(reviewOnlyRequested);
-  const [pendingTargetTaskId, setPendingTargetTaskId] = useState<string | null>(requestedTaskId || null);
+  const [selectedTaskId, setSelectedTaskId] = useState(requestedTaskId);
   const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
-  const [sortField, setSortField] = useState<SortField>("status");
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [pendingSelectionTaskId, setPendingSelectionTaskId] = useState<string | null>(null);
+  const [selectionBlockMessage, setSelectionBlockMessage] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [creatingTask, setCreatingTask] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
-  const [newProjectLabel, setNewProjectLabel] = useState(defaultCreateProjectDraft.projectLabel);
-  const [newProjectLinkMode, setNewProjectLinkMode] = useState(defaultCreateProjectDraft.projectLinkMode);
+  const [newProjectLabel, setNewProjectLabel] = useState(selectedFocusedProject?.title || focusedProjectLabel || "");
+  const [newProjectLinkMode, setNewProjectLinkMode] = useState(selectedFocusedProject?.id || "");
   const [newDueDate, setNewDueDate] = useState(() => getLocalDateInputValue(7));
   const [newStatus, setNewStatus] = useState<Task["status"]>("pending");
   const [newPriority, setNewPriority] = useState<Task["priority"]>("medium");
   const [newAssigneeAgentId, setNewAssigneeAgentId] = useState("");
-  const selectedCreateTrackedProject = useMemo(
-    () => projectOptions.find((option) => option.id === newProjectLinkMode) || null,
-    [newProjectLinkMode, projectOptions]
-  );
+
+  const [detailTitle, setDetailTitle] = useState("");
+  const [detailProjectLabel, setDetailProjectLabel] = useState("");
+  const [detailProjectLinkMode, setDetailProjectLinkMode] = useState("");
+  const [detailDueDate, setDetailDueDate] = useState("");
+  const [detailStatus, setDetailStatus] = useState<Task["status"]>("pending");
+  const [detailPriority, setDetailPriority] = useState<Task["priority"]>("medium");
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [savingDetails, setSavingDetails] = useState(false);
+  const [deletingTask, setDeletingTask] = useState(false);
+
+  const [routingOwnerAgentId, setRoutingOwnerAgentId] = useState("");
+  const [routingReviewerAgentId, setRoutingReviewerAgentId] = useState("");
+  const [routingHandoffToAgentId, setRoutingHandoffToAgentId] = useState("");
+  const [routingBlockedByIds, setRoutingBlockedByIds] = useState<string[]>([]);
+  const [routingError, setRoutingError] = useState<string | null>(null);
+  const [savingRouting, setSavingRouting] = useState(false);
+
+  const [requestingPacket, setRequestingPacket] = useState(false);
+  const [taskReviewPending, setTaskReviewPending] = useState<"approve" | "rework" | "block" | null>(null);
+  const [workItemError, setWorkItemError] = useState<string | null>(null);
+  const [inspectorRefreshNonce, setInspectorRefreshNonce] = useState(0);
 
   const scopedTasks = useMemo(() => {
-    if (focusedProject) {
-      return tasks.filter((task) => taskLinksToProject(task, focusedProject));
+    if (selectedFocusedProject) {
+      return tasks.filter((task) => taskLinksToProject(task, selectedFocusedProject));
     }
 
-    if (normalizedProjectFocus) {
-      return tasks.filter((task) => normalizeProjectLabel(task.project) === normalizedProjectFocus);
+    if (normalizedFocusedProjectLabel) {
+      return tasks.filter((task) => normalizeProjectLabel(task.project) === normalizedFocusedProjectLabel);
     }
 
     return tasks;
-  }, [focusedProject, normalizedProjectFocus, tasks]);
-  const projectLabelMismatchTasks = useMemo(() => {
-    if (!canCheckProjectMatches) {
-      return [];
-    }
+  }, [normalizedFocusedProjectLabel, selectedFocusedProject, tasks]);
 
-    return scopedTasks.filter((task) => taskHasProjectMismatch(task, projects));
-  }, [canCheckProjectMatches, projects, scopedTasks]);
-  const projectLabelMismatchCount = projectLabelMismatchTasks.length;
-  const projectLabelMismatchTaskIds = useMemo(
-    () => new Set(projectLabelMismatchTasks.map((task) => task.id)),
-    [projectLabelMismatchTasks]
+  const mismatchTaskIds = useMemo(
+    () => new Set(scopedTasks.filter((task) => taskHasProjectMismatch(task, projects)).map((task) => task.id)),
+    [projects, scopedTasks]
   );
-  const projectLabelMismatchPreview = useMemo(() => {
-    if (projectLabelMismatchTasks.length === 0) {
-      return "";
-    }
 
-    const labelCounts = new Map<string, number>();
-    projectLabelMismatchTasks.forEach((task) => {
-      const trimmedProject = task.project.trim();
-      labelCounts.set(trimmedProject, (labelCounts.get(trimmedProject) || 0) + 1);
-    });
+  const visibleTasks = useMemo(() => {
+    const loweredQuery = query.trim().toLowerCase();
 
-    const topLabels = Array.from(labelCounts.entries())
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-      .slice(0, 2)
-      .map(([label]) => label);
-    const remainingLabelCount = labelCounts.size - topLabels.length;
+    return scopedTasks
+      .filter((task) => (showMismatchOnly ? mismatchTaskIds.has(task.id) : true))
+      .filter((task) => (statusFilter === "all" ? true : task.status === statusFilter))
+      .filter((task) => {
+        if (!loweredQuery) return true;
+        return [task.title, task.project, task.agent.name, task.assigneeAgentId || "", task.reviewerAgentId || ""]
+          .join(" ")
+          .toLowerCase()
+          .includes(loweredQuery);
+      })
+      .sort((left, right) => {
+        const leftNeedsReview = left.runStatus === "needs_review" ? 0 : 1;
+        const rightNeedsReview = right.runStatus === "needs_review" ? 0 : 1;
+        if (leftNeedsReview !== rightNeedsReview) return leftNeedsReview - rightNeedsReview;
+        return left.title.localeCompare(right.title);
+      });
+  }, [mismatchTaskIds, query, scopedTasks, showMismatchOnly, statusFilter]);
 
-    return `No live Projects link for ${topLabels.join(", ")}${remainingLabelCount > 0 ? ` +${remainingLabelCount} more` : ""}.`;
-  }, [projectLabelMismatchTasks]);
-  const requestedTask = useMemo(
-    () => scopedTasks.find((task) => task.id === requestedTaskId) || null,
-    [requestedTaskId, scopedTasks]
+  const selectedTask = useMemo(
+    () => tasks.find((task) => task.id === selectedTaskId) || null,
+    [selectedTaskId, tasks]
   );
-  const requestedTaskAnywhere = useMemo(
-    () => tasks.find((task) => task.id === requestedTaskId) || null,
-    [requestedTaskId, tasks]
+  const selectedLinkedProject = useMemo(
+    () => (selectedTask ? resolveProjectForTask(selectedTask, projects) : null),
+    [projects, selectedTask]
   );
-  const requestedMismatchTask = useMemo(
-    () => projectLabelMismatchTasks.find((task) => task.id === requestedTaskId) || null,
-    [projectLabelMismatchTasks, requestedTaskId]
+  const selectedProjectLabel = selectedLinkedProject?.title || selectedTask?.project || "";
+  const selectedTaskVisible = useMemo(
+    () => visibleTasks.some((task) => task.id === selectedTaskId),
+    [selectedTaskId, visibleTasks]
   );
-  const isUrgentOverflowHandoff = requestedTaskSource === "urgent-overflow";
-  const isLinkedPreviewHandoff = requestedTaskSource === "linked-preview";
-  const isCalendarTaskHandoff = requestedTaskSource === "calendar";
-  const requestedTaskOutsideFocus = Boolean(
-    requestedTaskId &&
-      effectiveProjectFocus &&
-      !showMismatchOnly &&
-      !requestedTask &&
-      requestedTaskAnywhere
+  const detailTrackedProject = useMemo(
+    () => projectOptions.find((project) => project.id === detailProjectLinkMode) || null,
+    [detailProjectLinkMode, projectOptions]
   );
-  const requestedTaskMissingFromBoard = Boolean(
-    requestedTaskId &&
-      !showMismatchOnly &&
-      !requestedTask &&
-      !requestedTaskAnywhere
+  const createTrackedProject = useMemo(
+    () => projectOptions.find((project) => project.id === newProjectLinkMode) || null,
+    [newProjectLinkMode, projectOptions]
   );
-  const projectFocusPreviewTasks = useMemo(
-    () => [...scopedTasks].sort(compareLinkedTaskPreviewPriority),
-    [scopedTasks]
-  );
-  const replacementUrgentOverflowTask = useMemo(() => {
-    if (!isUrgentOverflowHandoff) {
-      return null;
-    }
 
+  const detailsDirty = useMemo(() => {
+    if (!selectedTask) return false;
+    const currentProjectLabel = selectedLinkedProject?.title || selectedTask.project || "";
+    const currentProjectLinkMode = selectedLinkedProject?.id || (selectedTask.project ? customProjectSentinel : "");
     return (
-      projectFocusPreviewTasks
-        .slice(3)
-        .find((task) => task.id !== requestedTaskId && isUrgentLinkedTask(task)) || null
+      detailTitle !== selectedTask.title ||
+      detailProjectLabel !== currentProjectLabel ||
+      detailProjectLinkMode !== currentProjectLinkMode ||
+      detailDueDate !== selectedTask.dueDate ||
+      detailStatus !== selectedTask.status ||
+      detailPriority !== selectedTask.priority
     );
-  }, [isUrgentOverflowHandoff, projectFocusPreviewTasks, requestedTaskId]);
-  const requestedTaskCurrentProject = useMemo(
-    () => (requestedTaskAnywhere ? resolveProjectForTask(requestedTaskAnywhere, projects) : null),
-    [projects, requestedTaskAnywhere]
-  );
-  const requestedTaskCurrentViewHref = requestedTaskAnywhere
-    ? requestedTaskCurrentProject
-      ? `/agents/tasks?project=${encodeURIComponent(requestedTaskCurrentProject.title)}&projectId=${encodeURIComponent(requestedTaskCurrentProject.id)}&task=${encodeURIComponent(requestedTaskAnywhere.id)}`
-      : requestedTaskAnywhere.project.trim()
-        ? `/agents/tasks?project=${encodeURIComponent(requestedTaskAnywhere.project.trim())}&task=${encodeURIComponent(requestedTaskAnywhere.id)}`
-        : `/agents/tasks?task=${encodeURIComponent(requestedTaskAnywhere.id)}`
-    : "/agents/tasks";
-  const requestedMismatchTaskResolved = Boolean(
-    canCheckProjectMatches && showMismatchOnly && requestedTaskId && !requestedMismatchTask && requestedTaskAnywhere
-  );
-  const requestedMismatchTaskMissing = Boolean(
-    canCheckProjectMatches && showMismatchOnly && requestedTaskId && !requestedMismatchTask && !requestedTaskAnywhere
-  );
-  const showMismatchHandoffNotice = showMismatchOnly && Boolean(requestedMismatchTask);
-  const showMissingMismatchTaskNotice = requestedMismatchTaskResolved || requestedMismatchTaskMissing;
-  const showTargetedTaskHandoffNotice = !showMismatchOnly && Boolean(requestedTask);
-  const showMissingTargetedTaskNotice = requestedTaskOutsideFocus || requestedTaskMissingFromBoard;
+  }, [
+    detailDueDate,
+    detailPriority,
+    detailProjectLabel,
+    detailProjectLinkMode,
+    detailStatus,
+    detailTitle,
+    selectedLinkedProject,
+    selectedTask,
+  ]);
 
-  const focusedProjectTaskCount = scopedTasks.length;
-  const reviewNeededTasks = useMemo(
-    () => scopedTasks.filter((task) => task.runStatus === "needs_review"),
-    [scopedTasks]
-  );
-  const reviewNeededTaskCount = reviewNeededTasks.length;
-  const reviewNeededTaskPreview = reviewNeededTasks
-    .slice(0, 2)
-    .map((task) => task.title)
-    .join(", ");
-
-  const filteredTasks = useMemo(() => {
-    const filtered = (statusFilter === "all" ? [...scopedTasks] : scopedTasks.filter((task) => task.status === statusFilter)).filter(
-      (task) => !showMismatchOnly || projectLabelMismatchTaskIds.has(task.id)
+  const routingDirty = useMemo(() => {
+    if (!selectedTask) return false;
+    return (
+      routingOwnerAgentId !== (selectedTask.assigneeAgentId || selectedTask.agent.id || "") ||
+      routingReviewerAgentId !== (selectedTask.reviewerAgentId || "") ||
+      routingHandoffToAgentId !== (selectedTask.handoffToAgentId || "") ||
+      !sameStringList(routingBlockedByIds, selectedTask.blockedByTaskIds || [])
     );
-    const reviewFiltered = showReviewQueueOnly
-      ? filtered.filter((task) => task.runStatus === "needs_review")
-      : filtered;
+  }, [routingBlockedByIds, routingHandoffToAgentId, routingOwnerAgentId, routingReviewerAgentId, selectedTask]);
 
-    reviewFiltered.sort((a, b) => {
-      let cmp = 0;
-      switch (sortField) {
-        case "title":
-          cmp = a.title.localeCompare(b.title);
-          break;
-        case "status": {
-          cmp = statusOrder[a.status] - statusOrder[b.status];
-          if (cmp === 0) {
-            cmp = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-          }
-          break;
-        }
-        case "priority":
-          cmp = priorityOrder[a.priority] - priorityOrder[b.priority];
-          break;
-        case "dueDate":
-          cmp = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-          break;
-      }
-      return sortDir === "asc" ? cmp : -cmp;
-    });
-
-    return reviewFiltered;
-  }, [projectLabelMismatchTaskIds, scopedTasks, showMismatchOnly, showReviewQueueOnly, sortDir, sortField, statusFilter]);
-
-  const toggleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortDir((direction) => (direction === "asc" ? "desc" : "asc"));
-    } else {
-      setSortField(field);
-      setSortDir("asc");
-    }
-  };
-
-  const handleToggleMismatchOnly = () => {
-    setShowMismatchOnly((current) => {
-      const next = !current;
-      if (next) {
-        setStatusFilter("all");
-        setShowReviewQueueOnly(false);
-      }
-      return next;
-    });
-    setPendingTargetTaskId(null);
-    setHighlightedTaskId(null);
-  };
-
-  const handleToggleReviewQueueOnly = () => {
-    setShowReviewQueueOnly((current) => {
-      const next = !current;
-      if (next) {
-        setStatusFilter("all");
-        setShowMismatchOnly(false);
-      }
-      return next;
-    });
-    setPendingTargetTaskId(null);
-    setHighlightedTaskId(null);
-  };
-
-  const handleJumpToFirstMismatch = () => {
-    if (projectLabelMismatchCount === 0) {
-      return;
-    }
-
-    setStatusFilter("all");
-    setShowMismatchOnly(true);
-    setShowReviewQueueOnly(false);
-    setHighlightedTaskId(null);
-    setPendingTargetTaskId(projectLabelMismatchTasks[0]?.id || null);
-  };
-
-  const handleJumpToFirstReviewNeededTask = () => {
-    if (reviewNeededTaskCount === 0) {
-      return;
-    }
-
-    setStatusFilter("all");
-    setShowMismatchOnly(false);
-    setShowReviewQueueOnly(true);
-    setHighlightedTaskId(null);
-    setPendingTargetTaskId(reviewNeededTasks[0]?.id || null);
-  };
-
-  const handleJumpToRequestedMismatch = () => {
-    if (!requestedMismatchTask) {
-      return;
-    }
-
-    setStatusFilter("all");
-    setShowMismatchOnly(true);
-    setShowReviewQueueOnly(false);
-    setHighlightedTaskId(null);
-    setPendingTargetTaskId(requestedMismatchTask.id);
-  };
-
-  const handleJumpToRequestedTask = () => {
-    if (!requestedTask) {
-      return;
-    }
-
-    setStatusFilter("all");
-    setShowMismatchOnly(false);
-    setShowReviewQueueOnly(false);
-    setHighlightedTaskId(null);
-    setPendingTargetTaskId(requestedTask.id);
-  };
-
-  const handleJumpToReplacementUrgentOverflowTask = () => {
-    if (!replacementUrgentOverflowTask) {
-      return;
-    }
-
-    setStatusFilter("all");
-    setShowMismatchOnly(false);
-    setShowReviewQueueOnly(false);
-    setHighlightedTaskId(null);
-    setPendingTargetTaskId(replacementUrgentOverflowTask.id);
-  };
+  const hasDirtyPlanning = detailsDirty || routingDirty;
 
   useEffect(() => {
     setShowMismatchOnly(mismatchOnlyRequested);
-    setShowReviewQueueOnly(reviewOnlyRequested);
-    setPendingTargetTaskId(requestedTaskId || null);
-    if (mismatchOnlyRequested || reviewOnlyRequested) {
-      setStatusFilter("all");
-    }
-  }, [mismatchOnlyRequested, normalizedProjectFocus, requestedTaskId, reviewOnlyRequested]);
+  }, [mismatchOnlyRequested]);
 
   useEffect(() => {
-    if (showMismatchOnly && projectLabelMismatchCount === 0) {
-      setShowMismatchOnly(false);
-    }
-  }, [projectLabelMismatchCount, showMismatchOnly]);
-
-  useEffect(() => {
-    if (showReviewQueueOnly && reviewNeededTaskCount === 0) {
-      setShowReviewQueueOnly(false);
-    }
-  }, [reviewNeededTaskCount, showReviewQueueOnly]);
-
-  useEffect(() => {
-    if (!pendingTargetTaskId) {
+    if (!selectedTask && visibleTasks.length > 0 && !hasDirtyPlanning) {
+      setSelectedTaskId(visibleTasks[0].id);
       return;
     }
 
-    const requestedTaskRow = filteredTasks.find((task) => task.id === pendingTargetTaskId);
-    if (!requestedTaskRow) {
+    if (selectedTask && !selectedTaskVisible && visibleTasks.length > 0 && !hasDirtyPlanning) {
+      setSelectedTaskId(visibleTasks[0].id);
+    }
+  }, [hasDirtyPlanning, selectedTask, selectedTaskVisible, visibleTasks]);
+
+  useEffect(() => {
+    if (!requestedTaskId) return;
+    if (requestedTaskId === selectedTaskId) return;
+
+    if (hasDirtyPlanning) {
+      setPendingSelectionTaskId(requestedTaskId);
+      setSelectionBlockMessage("Save or cancel planning edits before switching tasks.");
       return;
     }
 
-    const row = document.getElementById(`task-row-${requestedTaskRow.id}`);
-    if (!row) {
-      return;
+    if (tasks.some((task) => task.id === requestedTaskId)) {
+      setSelectedTaskId(requestedTaskId);
     }
+  }, [hasDirtyPlanning, requestedTaskId, selectedTaskId, tasks]);
+
+  useEffect(() => {
+    if (!selectedTask || hasDirtyPlanning) return;
+
+    const linkedProject = resolveProjectForTask(selectedTask, projects);
+    setDetailTitle(selectedTask.title);
+    setDetailProjectLabel(linkedProject?.title || selectedTask.project || "");
+    setDetailProjectLinkMode(linkedProject?.id || (selectedTask.project ? customProjectSentinel : ""));
+    setDetailDueDate(selectedTask.dueDate);
+    setDetailStatus(selectedTask.status);
+    setDetailPriority(selectedTask.priority);
+    setDetailError(null);
+    setRoutingOwnerAgentId(selectedTask.assigneeAgentId || selectedTask.agent.id || "");
+    setRoutingReviewerAgentId(selectedTask.reviewerAgentId || "");
+    setRoutingHandoffToAgentId(selectedTask.handoffToAgentId || "");
+    setRoutingBlockedByIds([...(selectedTask.blockedByTaskIds || [])]);
+    setRoutingError(null);
+  }, [hasDirtyPlanning, projects, selectedTask]);
+
+  useEffect(() => {
+    if (!selectedTaskId) return;
+    const target = document.getElementById(`task-row-${selectedTaskId}`);
+    if (!target) return;
 
     window.requestAnimationFrame(() => {
-      row.scrollIntoView({ behavior: "smooth", block: "center" });
-      setHighlightedTaskId(requestedTaskRow.id);
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightedTaskId(selectedTaskId);
     });
-    setPendingTargetTaskId(null);
-  }, [filteredTasks, pendingTargetTaskId]);
+  }, [selectedTaskId]);
 
   useEffect(() => {
-    if (!highlightedTaskId) {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      setHighlightedTaskId((current) => (current === highlightedTaskId ? null : current));
-    }, 3200);
-
+    if (!highlightedTaskId) return;
+    const timeout = window.setTimeout(() => setHighlightedTaskId(null), 2500);
     return () => window.clearTimeout(timeout);
   }, [highlightedTaskId]);
 
-  useEffect(() => {
-    if (!showCreateForm) {
-      setNewProjectLabel(defaultCreateProjectDraft.projectLabel);
-      setNewProjectLinkMode(defaultCreateProjectDraft.projectLinkMode);
-    }
-  }, [defaultCreateProjectDraft, showCreateForm]);
-
-  const resetCreateForm = () => {
-    setNewTitle("");
-    setNewProjectLabel(defaultCreateProjectDraft.projectLabel);
-    setNewProjectLinkMode(defaultCreateProjectDraft.projectLinkMode);
-    setNewDueDate(getLocalDateInputValue(7));
-    setNewStatus("pending");
-    setNewPriority("medium");
-    setNewAssigneeAgentId("");
-    setCreateError(null);
+  const resetDetailsDraft = () => {
+    if (!selectedTask) return;
+    const linkedProject = resolveProjectForTask(selectedTask, projects);
+    setDetailTitle(selectedTask.title);
+    setDetailProjectLabel(linkedProject?.title || selectedTask.project || "");
+    setDetailProjectLinkMode(linkedProject?.id || (selectedTask.project ? customProjectSentinel : ""));
+    setDetailDueDate(selectedTask.dueDate);
+    setDetailStatus(selectedTask.status);
+    setDetailPriority(selectedTask.priority);
+    setDetailError(null);
   };
 
-  const handleToggleCreateForm = () => {
-    if (showCreateForm) {
-      resetCreateForm();
-      setShowCreateForm(false);
+  const resetRoutingDraft = () => {
+    if (!selectedTask) return;
+    setRoutingOwnerAgentId(selectedTask.assigneeAgentId || selectedTask.agent.id || "");
+    setRoutingReviewerAgentId(selectedTask.reviewerAgentId || "");
+    setRoutingHandoffToAgentId(selectedTask.handoffToAgentId || "");
+    setRoutingBlockedByIds([...(selectedTask.blockedByTaskIds || [])]);
+    setRoutingError(null);
+  };
+
+  const clearSelectionBlock = () => {
+    setPendingSelectionTaskId(null);
+    setSelectionBlockMessage(null);
+  };
+
+  const applyPendingSelection = () => {
+    if (!pendingSelectionTaskId) return;
+    setSelectedTaskId(pendingSelectionTaskId);
+    clearSelectionBlock();
+  };
+
+  const handleSelectTask = (taskId: string) => {
+    if (taskId === selectedTaskId) return;
+    if (hasDirtyPlanning) {
+      setPendingSelectionTaskId(taskId);
+      setSelectionBlockMessage("Save or cancel planning edits before switching tasks.");
       return;
     }
 
-    setCreateError(null);
-    setNewProjectLabel(defaultCreateProjectDraft.projectLabel);
-    setNewProjectLinkMode(defaultCreateProjectDraft.projectLinkMode);
-    setShowCreateForm(true);
+    setSelectedTaskId(taskId);
+    clearSelectionBlock();
+  };
+
+  const dependencyOptions = useMemo(
+    () =>
+      tasks
+        .filter((task) => task.id !== selectedTask?.id)
+        .sort((left, right) => left.title.localeCompare(right.title)),
+    [selectedTask?.id, tasks]
+  );
+
+  const handleSaveDetails = async () => {
+    if (!selectedTask) return;
+
+    const trimmedTitle = detailTitle.trim();
+    const trimmedProjectLabel = detailProjectLabel.trim();
+    if (!trimmedTitle) {
+      setDetailError("Task title is required.");
+      return;
+    }
+    if (!detailDueDate) {
+      setDetailError("Due date is required.");
+      return;
+    }
+    if (detailProjectLinkMode === customProjectSentinel && !trimmedProjectLabel) {
+      setDetailError("Custom project label is required, or switch to a tracked project.");
+      return;
+    }
+
+    setSavingDetails(true);
+    setDetailError(null);
+
+    try {
+      const response = await fetch("/api/agent-tasks", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: selectedTask.id,
+          title: trimmedTitle,
+          project: detailTrackedProject ? detailTrackedProject.title : trimmedProjectLabel,
+          projectId:
+            detailProjectLinkMode === customProjectSentinel
+              ? null
+              : detailTrackedProject?.id || null,
+          dueDate: detailDueDate,
+          status: detailStatus,
+          priority: detailPriority,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to save task details");
+      }
+
+      await refetch();
+      setInspectorRefreshNonce((current) => current + 1);
+      applyPendingSelection();
+    } catch (saveError) {
+      setDetailError(saveError instanceof Error ? saveError.message : "Failed to save task details");
+    } finally {
+      setSavingDetails(false);
+    }
+  };
+
+  const handleSaveRouting = async () => {
+    if (!selectedTask) return;
+
+    if (routingOwnerAgentId && routingReviewerAgentId && routingOwnerAgentId === routingReviewerAgentId) {
+      setRoutingError("Reviewer must be different from the owner.");
+      return;
+    }
+    if (routingOwnerAgentId && routingHandoffToAgentId && routingOwnerAgentId === routingHandoffToAgentId) {
+      setRoutingError("Handoff target must be different from the owner.");
+      return;
+    }
+
+    setSavingRouting(true);
+    setRoutingError(null);
+
+    try {
+      const owner = taskAgents.find((agent) => agent.id === routingOwnerAgentId) || null;
+      const response = await fetch("/api/agent-tasks", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: selectedTask.id,
+          assigneeAgentId: routingOwnerAgentId || undefined,
+          reviewerAgentId: routingReviewerAgentId || undefined,
+          handoffToAgentId: routingHandoffToAgentId || undefined,
+          blockedByTaskIds: routingBlockedByIds,
+          agent: owner
+            ? {
+                id: owner.id,
+                name: owner.name,
+                emoji: owner.emoji,
+                color: owner.color,
+              }
+            : {
+                name: "Unassigned",
+                emoji: " ",
+                color: "#8E8E93",
+              },
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to save task routing");
+      }
+
+      await refetch();
+      setInspectorRefreshNonce((current) => current + 1);
+      applyPendingSelection();
+    } catch (saveError) {
+      setRoutingError(saveError instanceof Error ? saveError.message : "Failed to save task routing");
+    } finally {
+      setSavingRouting(false);
+    }
   };
 
   const handleCreateTask = async () => {
     const trimmedTitle = newTitle.trim();
     const trimmedProjectLabel = newProjectLabel.trim();
-    const nextTrackedProject = selectedCreateTrackedProject;
-    const nextProjectLabel = nextTrackedProject
-      ? nextTrackedProject.title
-      : newProjectLinkMode === customProjectSentinel
-        ? trimmedProjectLabel
-        : "";
-    const nextProjectId = nextTrackedProject?.id;
-
     if (!trimmedTitle) {
-      setCreateError("Title is required.");
+      setCreateError("Task title is required.");
       return;
     }
-
-    if (newProjectLinkMode === customProjectSentinel && !trimmedProjectLabel) {
-      setCreateError("Custom project label is required, or switch this task to No project.");
-      return;
-    }
-
     if (!newDueDate) {
       setCreateError("Due date is required.");
+      return;
+    }
+    if (newProjectLinkMode === customProjectSentinel && !trimmedProjectLabel) {
+      setCreateError("Custom project label is required.");
       return;
     }
 
@@ -537,14 +471,14 @@ export default function TasksPageClient({
     setCreateError(null);
 
     try {
-      const owner = initialTaskAgents.find((agent) => agent.id === newAssigneeAgentId);
+      const owner = taskAgents.find((agent) => agent.id === newAssigneeAgentId) || null;
       const response = await fetch("/api/agent-tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: trimmedTitle,
-          project: nextProjectLabel,
-          projectId: nextProjectId,
+          project: createTrackedProject ? createTrackedProject.title : trimmedProjectLabel,
+          projectId: newProjectLinkMode === customProjectSentinel ? null : createTrackedProject?.id || null,
           dueDate: newDueDate,
           status: newStatus,
           priority: newPriority,
@@ -552,521 +486,338 @@ export default function TasksPageClient({
           agent: owner
             ? {
                 id: owner.id,
-                emoji: owner.emoji,
                 name: owner.name,
+                emoji: owner.emoji,
                 color: owner.color,
               }
             : {
-                emoji: unassignedAgent.emoji,
-                name: unassignedAgent.name,
-                color: unassignedAgent.color,
+                name: "Unassigned",
+                emoji: " ",
+                color: "#8E8E93",
               },
         }),
       });
 
-      const payload = (await response.json().catch(() => null)) as
-        | ({ error?: string } & Partial<Task>)
-        | null;
+      const payload = (await response.json().catch(() => null)) as (Task & { error?: string }) | null;
       if (!response.ok) {
         throw new Error(payload?.error || "Failed to create task");
       }
 
-      const createdTaskId = typeof payload?.id === "string" ? payload.id : null;
-      resetCreateForm();
+      await refetch();
+      setSelectedTaskId(payload?.id || "");
       setShowCreateForm(false);
-      setStatusFilter("all");
-      setShowMismatchOnly(false);
-      setShowReviewQueueOnly(false);
-      setHighlightedTaskId(null);
-      setPendingTargetTaskId(createdTaskId);
-      refetch();
-    } catch (err) {
-      setCreateError(err instanceof Error ? err.message : "Failed to create task");
+      setNewTitle("");
+      setNewProjectLabel(selectedFocusedProject?.title || focusedProjectLabel || "");
+      setNewProjectLinkMode(selectedFocusedProject?.id || "");
+      setNewDueDate(getLocalDateInputValue(7));
+      setNewStatus("pending");
+      setNewPriority("medium");
+      setNewAssigneeAgentId("");
+      setInspectorRefreshNonce((current) => current + 1);
+    } catch (createTaskError) {
+      setCreateError(createTaskError instanceof Error ? createTaskError.message : "Failed to create task");
     } finally {
       setCreatingTask(false);
     }
   };
 
-  const inProgressCount = scopedTasks.filter((task) => task.status === "in_progress").length;
-  const completedCount = scopedTasks.filter((task) => task.status === "completed").length;
-  const blockedCount = scopedTasks.filter((task) => task.status === "blocked").length;
-  const overdueCount = scopedTasks.filter(isTaskOverdue).length;
+  const handleRequestPacket = async () => {
+    if (!selectedTask) return;
+    if (!selectedTask.assigneeAgentId && !selectedTask.agent.id) {
+      setWorkItemError("Assign an owner before requesting a packet.");
+      return;
+    }
 
-  const filterButtons: { key: StatusFilter; label: string }[] = [
-    { key: "all", label: "All" },
-    { key: "in_progress", label: "In Progress" },
-    { key: "completed", label: "Completed" },
-    { key: "pending", label: "Pending" },
-    { key: "blocked", label: "Blocked" },
-  ];
-  const activeFilterLabel = filterButtons.find((button) => button.key === statusFilter)?.label ?? "Current";
-  const hasAnyTasks = tasks.length > 0;
-  const hasFocusedTasks = focusedProjectTaskCount > 0;
+    setRequestingPacket(true);
+    setWorkItemError(null);
 
-  const columns: { key: SortField | null; label: string; flex: string }[] = [
-    { key: "title", label: "Task", flex: "flex-[3]" },
-    { key: "status", label: "Status", flex: "flex-[1.2]" },
-    { key: "priority", label: "Priority", flex: "flex-[1]" },
-    { key: null, label: "Owner", flex: "flex-[1.2]" },
-    { key: null, label: "Project", flex: "flex-[1.5]" },
-    { key: "dueDate", label: "Due", flex: "flex-[1]" },
-    { key: null, label: "", flex: "w-8" },
-  ];
+    try {
+      const reviewerName =
+        taskAgents.find((agent) => agent.id === selectedTask.reviewerAgentId)?.name ||
+        selectedTask.reviewerAgentId ||
+        null;
+      const handoffName =
+        taskAgents.find((agent) => agent.id === selectedTask.handoffToAgentId)?.name ||
+        selectedTask.handoffToAgentId ||
+        null;
+      const blockers = (selectedTask.blockedByTaskIds || [])
+        .map((taskId) => tasks.find((task) => task.id === taskId)?.title || taskId)
+        .filter(Boolean);
+      const response = await fetch("/api/team/actions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: selectedTask.assigneeAgentId || selectedTask.agent.id,
+          action: "check-in",
+          task: {
+            id: selectedTask.id,
+            title: selectedTask.title,
+            project: selectedProjectLabel || null,
+            status: selectedTask.status,
+            priority: selectedTask.priority,
+            dueDate: selectedTask.dueDate,
+            owner: selectedTask.agent.name !== "Unassigned" ? selectedTask.agent.name : null,
+            reviewer: reviewerName,
+            handoff: handoffName,
+            blockers,
+          },
+        }),
+      });
 
-  const formInputStyle = {
-    width: "100%",
-    padding: "0.7rem 0.8rem",
-    borderRadius: "0.75rem",
-    border: "1px solid var(--border)",
-    backgroundColor: "var(--card)",
-    color: "var(--text-primary)",
-    fontSize: "0.9rem",
-    outline: "none",
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to request owner packet");
+      }
+
+      await refetch();
+      setInspectorRefreshNonce((current) => current + 1);
+    } catch (packetError) {
+      setWorkItemError(packetError instanceof Error ? packetError.message : "Failed to request owner packet");
+    } finally {
+      setRequestingPacket(false);
+    }
   };
 
-  if (loading && !data) {
-    return (
-      <div className="p-4 md:p-8">
-        <div className="flex items-center justify-center h-64">
-          <p style={{ color: "var(--text-muted)" }}>Loading tasks...</p>
-        </div>
-      </div>
-    );
-  }
+  const handleReviewSubmit = async ({ decision, note, handoffTo }: ReviewDecisionSubmitPayload) => {
+    if (!selectedTask) return;
 
-  if (error && tasks.length === 0) {
-    return (
-      <div className="p-4 md:p-8">
-        <div className="flex flex-col items-center justify-center h-64 gap-4">
-          <p style={{ color: "var(--status-blocked)" }}>Failed to load tasks: {error}</p>
-          <button
-            onClick={refetch}
-            className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
-            style={{
-              backgroundColor: "var(--surface-elevated)",
-              color: "var(--text-primary)",
-              border: "1px solid var(--border)",
-            }}
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
+    setTaskReviewPending(decision);
+    setWorkItemError(null);
+
+    try {
+      const response = await fetch("/api/work-items/review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "task",
+          itemId: selectedTask.id,
+          decision,
+          note,
+          handoffTo: handoffTo || undefined,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to save review decision");
+      }
+
+      await refetch();
+      setInspectorRefreshNonce((current) => current + 1);
+    } catch (reviewError) {
+      const message = reviewError instanceof Error ? reviewError.message : "Failed to save review decision";
+      setWorkItemError(message);
+      throw reviewError instanceof Error ? reviewError : new Error(message);
+    } finally {
+      setTaskReviewPending(null);
+    }
+  };
+
+  const handleDeleteTask = async () => {
+    if (!selectedTask || deletingTask) return;
+    const confirmed = window.confirm(`Delete task "${selectedTask.title}"?`);
+    if (!confirmed) return;
+
+    setDeletingTask(true);
+    setDetailError(null);
+    setRoutingError(null);
+
+    try {
+      const response = await fetch(`/api/agent-tasks?id=${encodeURIComponent(selectedTask.id)}`, {
+        method: "DELETE",
+      });
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to delete task");
+      }
+
+      setSelectedTaskId("");
+      await refetch();
+      setInspectorRefreshNonce((current) => current + 1);
+    } catch (deleteError) {
+      const message = deleteError instanceof Error ? deleteError.message : "Failed to delete task";
+      setDetailError(message);
+    } finally {
+      setDeletingTask(false);
+    }
+  };
 
   return (
-    <div className="p-4 md:p-8">
-      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1
-            className="text-3xl font-bold mb-2"
-            style={{
-              fontFamily: "var(--font-heading)",
-              color: "var(--text-primary)",
-              letterSpacing: "-1.5px",
-            }}
-          >
-            <ListTodo className="inline-block w-8 h-8 mr-2 mb-1" />
+          <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+            Task Planning
+          </p>
+          <h1 className="mt-1 text-3xl font-bold" style={{ color: "var(--text-primary)" }}>
             Tasks
           </h1>
-          <p style={{ color: "var(--text-secondary)", fontSize: "14px" }}>
-            Coordination board &bull; {scopedTasks.length} {effectiveProjectFocus ? "in focus" : "tracked"} &bull; {inProgressCount} in progress &bull; {completedCount} completed
-          </p>
-          <p className="mt-2 text-sm" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
-            Use this page to track shared work across agents and projects. Task status here reflects backlog progress,
-            not live runtime online/offline state.
+          <p className="mt-2 max-w-3xl text-sm" style={{ color: "var(--text-muted)", lineHeight: 1.7 }}>
+            Keep the board focused on planning. Select a task to edit details and routing, then use the inspector for packet history and review decisions.
           </p>
         </div>
 
         <button
-          onClick={handleToggleCreateForm}
-          className="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors"
-          style={{
-            backgroundColor: showCreateForm ? "var(--surface-elevated)" : "var(--accent)",
-            color: showCreateForm ? "var(--text-primary)" : "#000",
-            border: showCreateForm ? "1px solid var(--border)" : "none",
+          type="button"
+          onClick={() => {
+            setShowCreateForm((current) => !current);
+            setCreateError(null);
           }}
+          className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold"
+          style={{ backgroundColor: "var(--accent)", color: "#111" }}
         >
-          <Plus className="w-4 h-4" />
-          {showCreateForm ? "Close task intake" : "New task"}
+          <Plus className="h-4 w-4" />
+          {showCreateForm ? "Close create form" : "Create task"}
         </button>
       </div>
 
-      {effectiveProjectFocus && (
-        <div
-          className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2 text-xs"
-          style={{
-            backgroundColor: "var(--surface-elevated)",
-            border: "1px solid var(--border)",
-          }}
-        >
-          <div className="space-y-1">
-            <p className="font-semibold" style={{ color: "var(--text-primary)" }}>
-              Project focus: {effectiveProjectFocus}
-            </p>
-            <p style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
-              Opened from Projects. Showing {focusedProjectTaskCount} linked task{focusedProjectTaskCount === 1 ? "" : "s"} before status filters.
-            </p>
-          </div>
-          <a
-            href="/agents/tasks"
-            className="rounded-full px-3 py-1 font-medium"
-            style={{
-              color: "#0A84FF",
-              border: "1px solid color-mix(in srgb, #0A84FF 28%, transparent)",
-            }}
-          >
-            Clear focus
-          </a>
+      <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-5">
+        <div className="rounded-xl p-4" style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
+          <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+            Visible tasks
+          </p>
+          <p className="mt-2 text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>
+            {visibleTasks.length}
+          </p>
         </div>
-      )}
-
-      {reviewNeededTaskCount > 0 && (
-        <div
-          className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2 text-xs"
-          style={{
-            backgroundColor: "color-mix(in srgb, #FF9F0A 10%, var(--surface-elevated))",
-            border: "1px solid color-mix(in srgb, #FF9F0A 28%, transparent)",
-          }}
-        >
-          <div className="space-y-1">
-            <p className="font-semibold" style={{ color: "#FF9F0A" }}>
-              {showReviewQueueOnly ? "Review queue active" : "Review queue ready"}
-            </p>
-            <p style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
-              {reviewNeededTaskCount} task{reviewNeededTaskCount === 1 ? "" : "s"} currently need review
-              {reviewNeededTaskPreview ? ` (${reviewNeededTaskPreview}${reviewNeededTaskCount > 2 ? "..." : ""})` : ""}.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={handleJumpToFirstReviewNeededTask}
-              className="rounded-full px-3 py-1 font-semibold transition-colors"
-              style={{
-                color: "#FF9F0A",
-                backgroundColor: "transparent",
-                border: "1px solid color-mix(in srgb, #FF9F0A 36%, transparent)",
-              }}
-            >
-              Jump to first review
-            </button>
-            <button
-              type="button"
-              onClick={handleToggleReviewQueueOnly}
-              className="rounded-full px-3 py-1 font-semibold transition-colors"
-              style={{
-                color: showReviewQueueOnly ? "#111" : "#FF9F0A",
-                backgroundColor: showReviewQueueOnly ? "#FF9F0A" : "transparent",
-                border: "1px solid color-mix(in srgb, #FF9F0A 36%, transparent)",
-              }}
-            >
-              {showReviewQueueOnly ? "Show all visible tasks" : "Show review queue only"}
-            </button>
-          </div>
+        <div className="rounded-xl p-4" style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
+          <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+            Needs review
+          </p>
+          <p className="mt-2 text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>
+            {tasks.filter((task) => task.runStatus === "needs_review").length}
+          </p>
         </div>
-      )}
-
-      {showMissingTargetedTaskNotice && (
-        <div
-          className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2 text-xs"
-          style={{
-            backgroundColor: "color-mix(in srgb, #FF9F0A 10%, var(--surface-elevated))",
-            border: "1px solid color-mix(in srgb, #FF9F0A 30%, transparent)",
-          }}
-        >
-          <div className="space-y-1">
-            <p className="font-semibold" style={{ color: "#FF9F0A" }}>
-              {isUrgentOverflowHandoff && requestedTaskOutsideFocus && requestedTaskAnywhere
-                ? `Requested hidden urgent task moved outside ${effectiveProjectFocus}`
-                : requestedTaskOutsideFocus && requestedTaskAnywhere
-                  ? `Focused task handoff moved outside ${effectiveProjectFocus}`
-                  : isUrgentOverflowHandoff
-                    ? "Requested hidden urgent task is no longer on this board"
-                    : isCalendarTaskHandoff
-                      ? "Requested calendar task is no longer on this board"
-                      : "Requested linked task is no longer on this board"}
-            </p>
-            <p style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
-              {isUrgentOverflowHandoff && requestedTaskOutsideFocus && requestedTaskAnywhere
-                ? replacementUrgentOverflowTask
-                  ? `This Tasks view opened from the Projects urgent-overflow handoff, but the requested hidden blocked/overdue task \"${requestedTaskAnywhere.title}\" is now saved under ${requestedTaskAnywhere.project.trim() ? `the ${requestedTaskAnywhere.project} project label` : "no project label"}. Mission Control does not pretend that task still belongs under ${effectiveProjectFocus}; instead, you can jump to the current first hidden urgent task still queued beyond the three-row preview for this project.`
-                  : `This Tasks view opened from the Projects urgent-overflow handoff, but the requested hidden blocked/overdue task \"${requestedTaskAnywhere.title}\" is now saved under ${requestedTaskAnywhere.project.trim() ? `the ${requestedTaskAnywhere.project} project label` : "no project label"}. This focused board does not pretend that task still belongs under ${effectiveProjectFocus}.`
-                : requestedTaskOutsideFocus && requestedTaskAnywhere
-                  ? `This Tasks view opened from Projects for ${effectiveProjectFocus}, but the requested task \"${requestedTaskAnywhere.title}\" is now saved under ${requestedTaskAnywhere.project.trim() ? `the ${requestedTaskAnywhere.project} project label` : "no project label"}. This focused board does not pretend that task still belongs here.`
-                  : isUrgentOverflowHandoff
-                    ? replacementUrgentOverflowTask
-                      ? `This Tasks view opened from the Projects urgent-overflow handoff, but the requested hidden blocked/overdue task is no longer present on the current Tasks board. Mission Control shows the missing-target state instead of pretending the original urgent-overflow shortcut still has a live row to land on. The current board still has another hidden urgent task beyond the three-row Projects preview, and you can jump straight to it here.`
-                      : "This Tasks view opened from the Projects urgent-overflow handoff, but the requested hidden blocked/overdue task is no longer present on the current Tasks board. Mission Control shows the missing-target state instead of pretending the urgent-overflow shortcut still has a live row to land on."
-                    : isCalendarTaskHandoff
-                      ? "This Tasks view opened from a task card on Calendar, but the requested task is no longer present on the current Tasks board. Mission Control shows the missing-target state instead of pretending Calendar still has a live task row to hand off here."
-                      : "This Tasks view opened from a direct Projects handoff, but the requested task is no longer present on the current Tasks board. Mission Control shows the missing-target state instead of pretending the row still exists."}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {isUrgentOverflowHandoff && replacementUrgentOverflowTask && (
-              <button
-                type="button"
-                onClick={handleJumpToReplacementUrgentOverflowTask}
-                className="rounded-full px-3 py-1 font-semibold"
-                style={{
-                  color: "#FF9F0A",
-                  border: "1px solid color-mix(in srgb, #FF9F0A 34%, transparent)",
-                }}
-              >
-                Jump to current hidden urgent task
-              </button>
-            )}
-            {requestedTaskOutsideFocus && requestedTaskAnywhere && (
-              <a
-                href={requestedTaskCurrentViewHref}
-                className="rounded-full px-3 py-1 font-semibold"
-                style={{
-                  color: "#FF9F0A",
-                  border: "1px solid color-mix(in srgb, #FF9F0A 34%, transparent)",
-                }}
-              >
-                {requestedTaskAnywhere.project.trim() ? "Open task in its current Tasks view" : "Open task on full Tasks board"}
-              </a>
-            )}
-            <a
-              href="/agents/tasks"
-              className="rounded-full px-3 py-1 font-semibold"
-              style={{
-                color: "#FF9F0A",
-                border: "1px solid color-mix(in srgb, #FF9F0A 34%, transparent)",
-              }}
-            >
-              Open full Tasks board
-            </a>
-          </div>
+        <div className="rounded-xl p-4" style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
+          <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+            Blocked
+          </p>
+          <p className="mt-2 text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>
+            {tasks.filter((task) => task.status === "blocked").length}
+          </p>
         </div>
-      )}
-
-      {showTargetedTaskHandoffNotice && requestedTask && (
-        <div
-          className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2 text-xs"
-          style={{
-            backgroundColor: "color-mix(in srgb, #0A84FF 10%, var(--surface-elevated))",
-            border: "1px solid color-mix(in srgb, #0A84FF 28%, transparent)",
-          }}
-        >
-          <div className="space-y-1">
-            <p className="font-semibold" style={{ color: "#0A84FF" }}>
-              {isUrgentOverflowHandoff
-                ? `Focused urgent follow-up: ${requestedTask.title}`
-                : isCalendarTaskHandoff
-                  ? `Focused calendar follow-up: ${requestedTask.title}`
-                  : `Focused task handoff: ${requestedTask.title}`}
-            </p>
-            <p style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
-              {isUrgentOverflowHandoff
-                ? "This Tasks view opened from the Projects card's urgent-overflow handoff. That CTA only exists when blocked or overdue linked work still sits beyond the three-row preview, so the handoff lands on the first hidden urgent task here and briefly highlights it instead of pretending the Project card preview already showed every urgent item."
-                : isLinkedPreviewHandoff
-                  ? "This Tasks view opened from a specific linked task in the Projects card preview. Projects can now create, attach, or remove a task link, but deeper task editing still happens here, so the handoff lands on the requested row and briefly highlights it instead of pretending the project card edits the whole task inline."
-                  : isCalendarTaskHandoff
-                    ? "This Tasks view opened from a specific task card on Calendar. Calendar stays task-backed and read-only, so deeper task follow-up still happens here on Tasks; the handoff lands on the requested row and briefly highlights it instead of pretending Calendar can edit the task inline."
-                    : "This Tasks view opened from a specific linked task on Projects. Projects can now create, attach, or remove a task link, but deeper task editing still happens here, so the handoff lands on the requested row and briefly highlights it instead of pretending the project card edits the whole task inline."}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={handleJumpToRequestedTask}
-            className="rounded-full px-3 py-1 font-semibold transition-colors"
-            style={{
-              color: "#0A84FF",
-              backgroundColor: "transparent",
-              border: "1px solid color-mix(in srgb, #0A84FF 36%, transparent)",
-            }}
-          >
-            {isUrgentOverflowHandoff ? "Jump back to hidden urgent task" : "Jump back to requested task"}
-          </button>
+        <div className="rounded-xl p-4" style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
+          <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+            Project links
+          </p>
+          <p className="mt-2 text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>
+            {tasks.filter((task) => Boolean(resolveProjectForTask(task, projects))).length}
+          </p>
         </div>
-      )}
-
-      {showMismatchHandoffNotice && requestedMismatchTask && (
-        <div
-          className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2 text-xs"
-          style={{
-            backgroundColor: "color-mix(in srgb, #FFD60A 10%, var(--surface-elevated))",
-            border: "1px solid color-mix(in srgb, #FFD60A 28%, transparent)",
-          }}
-        >
-          <div className="space-y-1">
-            <p className="font-semibold" style={{ color: "#FFD60A" }}>
-              Focused mismatch handoff: {requestedMismatchTask.title}
-            </p>
-            <p style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
-              This mismatch-only view opened on a specific task from Projects. The requested row briefly highlights after each targeted jump so the <span style={{ color: "#FF9F0A" }}>Link missing</span> badge and row&apos;s <span style={{ color: "#FF9F0A" }}>Fix project</span> action are easier to spot in the existing task-details editor flow.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={handleJumpToRequestedMismatch}
-            className="rounded-full px-3 py-1 font-semibold transition-colors"
-            style={{
-              color: "#FFD60A",
-              backgroundColor: "transparent",
-              border: "1px solid color-mix(in srgb, #FFD60A 36%, transparent)",
-            }}
-          >
-            Jump back to requested row
-          </button>
+        <div className="rounded-xl p-4" style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
+          <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+            Filters
+          </p>
+          <p className="mt-2 text-sm" style={{ color: "var(--text-primary)" }}>
+            {statusFilter === "all" ? "All statuses" : taskStatusConfig[statusFilter].label}
+            {showMismatchOnly ? " · mismatches only" : ""}
+          </p>
         </div>
-      )}
-
-      {showMissingMismatchTaskNotice && (
-        <div
-          className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2 text-xs"
-          style={{
-            backgroundColor: "color-mix(in srgb, #FFD60A 10%, var(--surface-elevated))",
-            border: "1px solid color-mix(in srgb, #FFD60A 28%, transparent)",
-          }}
-        >
-          <div className="space-y-1">
-            <p className="font-semibold" style={{ color: "#FFD60A" }}>
-              {requestedMismatchTaskResolved && requestedTaskAnywhere
-                ? `Requested mismatch row no longer needs mismatch-only cleanup: ${requestedTaskAnywhere.title}`
-                : "Requested mismatch row is no longer on this board"}
-            </p>
-            <p style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
-              {requestedMismatchTaskResolved && requestedTaskAnywhere
-                ? `This mismatch-only view opened from Projects for a specific label-drift row, but "${requestedTaskAnywhere.title}" no longer appears here because it is now saved under ${requestedTaskAnywhere.project.trim() ? `the ${requestedTaskAnywhere.project} project label` : "no project label"}. Projects still hands unresolved label-drift cleanup back to Tasks, so Mission Control points you to the task's current Tasks view instead of pretending it still belongs in mismatch-only cleanup.`
-                : "This mismatch-only view opened from Projects for a specific label-drift row, but that task is no longer present on the current Tasks board. Projects still hands unresolved label-drift cleanup back to Tasks, so Mission Control shows the missing-target state instead of pretending the cleanup row still exists."}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {requestedMismatchTaskResolved && requestedTaskAnywhere && (
-              <a
-                href={requestedTaskCurrentViewHref}
-                className="rounded-full px-3 py-1 font-semibold"
-                style={{
-                  color: "#FFD60A",
-                  border: "1px solid color-mix(in srgb, #FFD60A 36%, transparent)",
-                }}
-              >
-                {requestedTaskAnywhere.project.trim() ? "Open task in its current Tasks view" : "Open task on full Tasks board"}
-              </a>
-            )}
-            <a
-              href="/agents/tasks"
-              className="rounded-full px-3 py-1 font-semibold"
-              style={{
-                color: "#FFD60A",
-                border: "1px solid color-mix(in srgb, #FFD60A 36%, transparent)",
-              }}
-            >
-              Open full Tasks board
-            </a>
-          </div>
-        </div>
-      )}
+      </div>
 
       {showCreateForm && (
-        <div
-          className="mb-6 rounded-2xl p-4 md:p-5"
-          style={{
-            backgroundColor: "var(--card)",
-            border: "1px solid var(--border)",
-          }}
-        >
-          <div className="flex flex-col gap-4">
+        <div className="rounded-xl p-4" style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
+          <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                Create a tracked task
+                Create task
               </p>
               <p className="mt-1 text-sm" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
-                This first CRUD milestone keeps creation honest: title, board status, priority, due date, project linkage,
-                and initial owner all save here. Reviewer and handoff can still be added from the row-level routing editor after creation.
+                New tasks open straight into planning. Link them to a tracked project here or keep a custom label.
               </p>
-              {effectiveProjectFocus && (
-                <p className="mt-2 text-xs" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
-                  Opened from Projects for <span style={{ color: "var(--text-primary)" }}>{effectiveProjectFocus}</span>; this intake now starts with {defaultCreateProjectDraft.projectLinkMode === customProjectSentinel ? "that saved label as an unresolved/custom project value" : "the live tracked project selected by stable id"}, but you can still switch it here.
-                </p>
-              )}
             </div>
-
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              <label className="flex flex-col gap-1.5 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
-                Title
-                <input
-                  value={newTitle}
-                  onChange={(event) => setNewTitle(event.target.value)}
-                  placeholder="Add a new task"
-                  style={formInputStyle}
-                />
+          </div>
+          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+              Title
+              <input value={newTitle} onChange={(event) => setNewTitle(event.target.value)} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }} />
+            </label>
+            <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+              Tracked project
+              <select value={newProjectLinkMode} onChange={(event) => setNewProjectLinkMode(event.target.value)} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
+                <option value="">No project</option>
+                {projectOptions.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.title}
+                  </option>
+                ))}
+                <option value={customProjectSentinel}>Custom label</option>
+              </select>
+            </label>
+            {newProjectLinkMode === customProjectSentinel && (
+              <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                Custom project label
+                <input value={newProjectLabel} onChange={(event) => setNewProjectLabel(event.target.value)} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }} />
               </label>
+            )}
+            <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+              Due date
+              <input type="date" value={newDueDate} onChange={(event) => setNewDueDate(event.target.value)} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }} />
+            </label>
+            <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+              Status
+              <select value={newStatus} onChange={(event) => setNewStatus(event.target.value as Task["status"])} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
+                {Object.entries(taskStatusConfig).map(([value, config]) => (
+                  <option key={value} value={value}>
+                    {config.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+              Priority
+              <select value={newPriority} onChange={(event) => setNewPriority(event.target.value as Task["priority"])} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
+                {Object.entries(taskPriorityConfig).map(([value, config]) => (
+                  <option key={value} value={value}>
+                    {config.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+              Owner
+              <select value={newAssigneeAgentId} onChange={(event) => setNewAssigneeAgentId(event.target.value)} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
+                <option value="">Unassigned</option>
+                {taskAgents.map((agent) => (
+                  <option key={agent.id} value={agent.id}>
+                    {agent.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {createError && (
+            <p className="mt-3 text-sm" style={{ color: "var(--status-blocked)" }}>
+              {createError}
+            </p>
+          )}
+          <div className="mt-4 flex justify-end gap-2">
+            <button type="button" onClick={() => setShowCreateForm(false)} className="rounded-lg px-4 py-2 text-sm font-semibold" style={{ color: "var(--text-secondary)", border: "1px solid var(--border)" }}>
+              Cancel
+            </button>
+            <button type="button" onClick={handleCreateTask} disabled={creatingTask} className="rounded-lg px-4 py-2 text-sm font-semibold" style={{ backgroundColor: "var(--accent)", color: "#111", opacity: creatingTask ? 0.6 : 1 }}>
+              {creatingTask ? "Creating..." : "Create task"}
+            </button>
+          </div>
+        </div>
+      )}
 
-              <div className="flex flex-col gap-1.5 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
-                <label className="flex flex-col gap-1.5">
-                  Project linkage
-                  <select
-                    value={newProjectLinkMode}
-                    onChange={(event) => {
-                      const nextValue = event.target.value;
-                      setNewProjectLinkMode(nextValue);
-                      setCreateError(null);
-
-                      if (nextValue === customProjectSentinel) {
-                        setNewProjectLabel((current) => current || effectiveProjectFocus || "");
-                        return;
-                      }
-
-                      const nextProject = projectOptions.find((option) => option.id === nextValue);
-                      setNewProjectLabel(nextProject?.title || "");
-                    }}
-                    style={formInputStyle}
-                  >
-                    <option value="">No project</option>
-                    <option value={customProjectSentinel}>Custom label / unresolved link</option>
-                    {projectOptions.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.title}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                {newProjectLinkMode === customProjectSentinel ? (
-                  <>
-                    <label className="flex flex-col gap-1.5">
-                      Project label
-                      <input
-                        value={newProjectLabel}
-                        onChange={(event) => setNewProjectLabel(event.target.value)}
-                        placeholder="Mission Control"
-                        style={formInputStyle}
-                      />
-                    </label>
-                    <p style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
-                      This keeps the saved label editable, but the task will stay outside the live Projects linkage model until you relink it to a tracked project.
-                    </p>
-                  </>
-                ) : selectedCreateTrackedProject ? (
-                  <p style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
-                    This task will link to <span style={{ color: "var(--text-primary)" }}>{selectedCreateTrackedProject.title}</span> through its stable project id instead of relying only on a free-typed title.
-                  </p>
-                ) : (
-                  <p style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
-                    No project link will be saved for this task.
-                  </p>
-                )}
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
+        <div className="space-y-4">
+          <div className="rounded-xl p-4" style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="relative flex-1 min-w-[220px]">
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search tasks, projects, owners, reviewers..."
+                  className="w-full rounded-lg px-3 py-2 text-sm"
+                  style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}
+                />
               </div>
-
-              <label className="flex flex-col gap-1.5 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
-                Due date
-                <input
-                  type="date"
-                  value={newDueDate}
-                  onChange={(event) => setNewDueDate(event.target.value)}
-                  style={formInputStyle}
-                />
-              </label>
-
-              <label className="flex flex-col gap-1.5 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
-                Initial status
-                <select value={newStatus} onChange={(event) => setNewStatus(event.target.value as Task["status"])} style={formInputStyle}>
+              <label className="flex items-center gap-2 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                <ArrowUpDown className="h-4 w-4" />
+                <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
+                  <option value="all">All statuses</option>
                   {Object.entries(taskStatusConfig).map(([value, config]) => (
                     <option key={value} value={value}>
                       {config.label}
@@ -1074,461 +825,274 @@ export default function TasksPageClient({
                   ))}
                 </select>
               </label>
-
-              <label className="flex flex-col gap-1.5 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
-                Priority
-                <select value={newPriority} onChange={(event) => setNewPriority(event.target.value as Task["priority"])} style={formInputStyle}>
-                  {Object.entries(taskPriorityConfig).map(([value, config]) => (
-                    <option key={value} value={value}>
-                      {config.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="flex flex-col gap-1.5 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
-                Owner
-                <select value={newAssigneeAgentId} onChange={(event) => setNewAssigneeAgentId(event.target.value)} style={formInputStyle}>
-                  <option value="">Unassigned</option>
-                  {initialTaskAgents.map((agent) => (
-                    <option key={agent.id} value={agent.id}>
-                      {agent.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <button type="button" onClick={() => setShowMismatchOnly((current) => !current)} className="rounded-lg px-3 py-2 text-sm font-semibold" style={{ color: showMismatchOnly ? "#0A84FF" : "var(--text-secondary)", border: "1px solid var(--border)", backgroundColor: showMismatchOnly ? "color-mix(in srgb, #0A84FF 10%, transparent)" : "transparent" }}>
+                {showMismatchOnly ? "Showing mismatches" : "Show mismatches"}
+              </button>
             </div>
-
-            {createError && (
-              <p className="text-sm font-medium" style={{ color: "var(--status-blocked)" }}>
-                {createError}
+            {error && (
+              <p className="mt-3 text-sm" style={{ color: "var(--status-blocked)" }}>
+                {error}
               </p>
             )}
-
-            <div className="flex flex-wrap justify-end gap-2">
-              <button
-                onClick={() => {
-                  resetCreateForm();
-                  setShowCreateForm(false);
-                }}
-                className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
-                style={{
-                  backgroundColor: "transparent",
-                  color: "var(--text-secondary)",
-                  border: "1px solid var(--border)",
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateTask}
-                disabled={creatingTask}
-                className="px-4 py-2 text-sm font-semibold rounded-lg transition-colors"
-                style={{
-                  backgroundColor: "var(--accent)",
-                  color: "#000",
-                  opacity: creatingTask ? 0.7 : 1,
-                }}
-              >
-                {creatingTask ? "Creating..." : "Create task"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {(blockedCount > 0 || overdueCount > 0 || projectLabelMismatchCount > 0 || reviewNeededTaskCount > 0) && (
-        <div
-          className="mb-6 flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
-          style={{
-            backgroundColor: "var(--surface-elevated)",
-            border: "1px solid var(--border)",
-          }}
-        >
-          <span className="font-semibold" style={{ color: "var(--text-secondary)" }}>
-            Needs attention
-          </span>
-          {blockedCount > 0 && (
-            <span
-              className="rounded-full px-2 py-1 font-semibold"
-              style={{
-                color: "var(--status-blocked)",
-                backgroundColor: "color-mix(in srgb, var(--status-blocked) 14%, transparent)",
-                border: "1px solid color-mix(in srgb, var(--status-blocked) 28%, transparent)",
-              }}
-            >
-              {blockedCount} blocked
-            </span>
-          )}
-          {overdueCount > 0 && (
-            <span
-              className="rounded-full px-2 py-1 font-semibold"
-              style={{
-                color: "#FF9F0A",
-                backgroundColor: "color-mix(in srgb, #FF9F0A 16%, transparent)",
-                border: "1px solid color-mix(in srgb, #FF9F0A 30%, transparent)",
-              }}
-            >
-              {overdueCount} overdue
-            </span>
-          )}
-          {projectLabelMismatchCount > 0 && (
-            <>
-              <span
-                className="rounded-full px-2 py-1 font-semibold"
-                style={{
-                  color: "#FFD60A",
-                  backgroundColor: "color-mix(in srgb, #FFD60A 16%, transparent)",
-                  border: "1px solid color-mix(in srgb, #FFD60A 30%, transparent)",
-                }}
-              >
-                {projectLabelMismatchCount} project link mismatch{projectLabelMismatchCount === 1 ? "" : "es"}
-              </span>
-              <span style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
-                {projectLabelMismatchPreview} Clean them up from the affected task rows so focused Projects navigation stays honest.
-              </span>
-              <button
-                type="button"
-                onClick={handleJumpToFirstMismatch}
-                className="rounded-full px-3 py-1 font-semibold transition-colors"
-                style={{
-                  color: "#FFD60A",
-                  backgroundColor: "transparent",
-                  border: "1px solid color-mix(in srgb, #FFD60A 36%, transparent)",
-                }}
-              >
-                Jump to first mismatch
-              </button>
-              <button
-                type="button"
-                onClick={handleToggleMismatchOnly}
-                className="rounded-full px-3 py-1 font-semibold transition-colors"
-                style={{
-                  color: showMismatchOnly ? "#111" : "#FFD60A",
-                  backgroundColor: showMismatchOnly ? "#FFD60A" : "transparent",
-                  border: "1px solid color-mix(in srgb, #FFD60A 36%, transparent)",
-                }}
-              >
-                {showMismatchOnly ? "Show all visible tasks" : "Show mismatches only"}
-              </button>
-            </>
-          )}
-          {reviewNeededTaskCount > 0 && (
-            <>
-              <span
-                className="rounded-full px-2 py-1 font-semibold"
-                style={{
-                  color: "#FF9F0A",
-                  backgroundColor: "color-mix(in srgb, #FF9F0A 16%, transparent)",
-                  border: "1px solid color-mix(in srgb, #FF9F0A 30%, transparent)",
-                }}
-              >
-                {reviewNeededTaskCount} in review queue
-              </span>
-              <span style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
-                {showReviewQueueOnly
-                  ? "Showing only tasks that still need reviewer action."
-                  : reviewNeededTaskPreview
-                    ? `Reviewer attention is currently queued on ${reviewNeededTaskPreview}${reviewNeededTaskCount > 2 ? " and more." : "."}`
-                    : "Reviewer attention is currently queued on one or more tasks."}
-              </span>
-              <button
-                type="button"
-                onClick={handleJumpToFirstReviewNeededTask}
-                className="rounded-full px-3 py-1 font-semibold transition-colors"
-                style={{
-                  color: "#FF9F0A",
-                  backgroundColor: "transparent",
-                  border: "1px solid color-mix(in srgb, #FF9F0A 36%, transparent)",
-                }}
-              >
-                Jump to first review
-              </button>
-              <button
-                type="button"
-                onClick={handleToggleReviewQueueOnly}
-                className="rounded-full px-3 py-1 font-semibold transition-colors"
-                style={{
-                  color: showReviewQueueOnly ? "#111" : "#FF9F0A",
-                  backgroundColor: showReviewQueueOnly ? "#FF9F0A" : "transparent",
-                  border: "1px solid color-mix(in srgb, #FF9F0A 36%, transparent)",
-                }}
-              >
-                {showReviewQueueOnly ? `Review queue (${reviewNeededTaskCount})` : `Needs review (${reviewNeededTaskCount})`}
-              </button>
-            </>
-          )}
-        </div>
-      )}
-
-      {hasAnyTasks ? (
-        <>
-          <div className="mb-6 flex flex-wrap gap-2">
-            {filterButtons.map((button) => {
-              const isActive = statusFilter === button.key;
-              const statusColor = button.key !== "all" ? taskStatusConfig[button.key]?.color : undefined;
-              return (
-                <button
-                  key={button.key}
-                  onClick={() => setStatusFilter(button.key)}
-                  className="text-xs font-semibold px-3 py-1.5 rounded-full transition-all duration-150"
-                  style={{
-                    backgroundColor: isActive
-                      ? statusColor
-                        ? `color-mix(in srgb, ${statusColor} 20%, transparent)`
-                        : "var(--surface-elevated)"
-                      : "transparent",
-                    color: isActive ? statusColor || "var(--text-primary)" : "var(--text-muted)",
-                    border: isActive
-                      ? `1px solid ${statusColor ? `color-mix(in srgb, ${statusColor} 40%, transparent)` : "var(--border-strong)"}`
-                      : "1px solid var(--border)",
-                  }}
-                >
-                  {button.label}
-                  {button.key === "all" && ` (${scopedTasks.length})`}
-                  {button.key !== "all" && ` (${scopedTasks.filter((task) => task.status === button.key).length})`}
-                </button>
-              );
-            })}
-            {showMismatchOnly && (
-              <button
-                type="button"
-                onClick={handleToggleMismatchOnly}
-                className="text-xs font-semibold px-3 py-1.5 rounded-full transition-all duration-150"
-                style={{
-                  backgroundColor: "color-mix(in srgb, #FFD60A 18%, transparent)",
-                  color: "#FFD60A",
-                  border: "1px solid color-mix(in srgb, #FFD60A 34%, transparent)",
-                }}
-              >
-                Mismatches only ({projectLabelMismatchCount})
-              </button>
-            )}
-            {showReviewQueueOnly && (
-              <button
-                type="button"
-                onClick={handleToggleReviewQueueOnly}
-                className="text-xs font-semibold px-3 py-1.5 rounded-full transition-all duration-150"
-                style={{
-                  backgroundColor: "color-mix(in srgb, #FF9F0A 18%, transparent)",
-                  color: "#FF9F0A",
-                  border: "1px solid color-mix(in srgb, #FF9F0A 34%, transparent)",
-                }}
-              >
-                Review queue ({reviewNeededTaskCount})
-              </button>
-            )}
           </div>
 
-          <div
-            className="rounded-xl overflow-hidden"
-            style={{
-              backgroundColor: "var(--card)",
-              border: "1px solid var(--border)",
-            }}
-          >
-            <div
-              className="flex items-center gap-3 px-4 py-2.5"
-              style={{
-                borderBottom: "1px solid var(--border)",
-                backgroundColor: "var(--surface-elevated)",
-              }}
-            >
-              {columns.map((column, index) => (
-                <div
-                  key={index}
-                  className={`${column.flex} flex items-center gap-1 ${column.key ? "cursor-pointer select-none" : ""}`}
-                  onClick={() => column.key && toggleSort(column.key)}
-                >
-                  <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
-                    {column.label}
-                  </span>
-                  {column.key && sortField === column.key && (
-                    <ArrowUpDown
-                      className="w-3 h-3"
-                      style={{
-                        color: "var(--text-secondary)",
-                        transform: sortDir === "desc" ? "scaleY(-1)" : undefined,
-                      }}
-                    />
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {filteredTasks.length > 0 ? (
-              filteredTasks.map((task) => {
-                const linkedProject = canCheckProjectMatches ? resolveProjectForTask(task, projects) : null;
-
-                return (
-                  <TaskRow
-                    key={task.id}
-                    rowId={`task-row-${task.id}`}
-                    task={task}
-                    agentOptions={initialTaskAgents}
-                    projectOptions={projectOptions}
-                    allTasks={tasks}
-                    linkedProjectId={linkedProject?.id}
-                    linkedProjectTitle={linkedProject?.title || null}
-                    hasProjectLink={canCheckProjectMatches ? !taskHasProjectMismatch(task, projects) : null}
-                    isTemporarilyHighlighted={task.id === highlightedTaskId}
-                    onUpdate={refetch}
-                  />
-                );
-              })
-            ) : (
-              <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                    {showMismatchOnly
-                      ? "No project link mismatches in this view"
-                      : showReviewQueueOnly
-                        ? effectiveProjectFocus
-                          ? `No review-needed tasks in ${effectiveProjectFocus}`
-                          : "No review-needed tasks in this view"
-                      : effectiveProjectFocus && !hasFocusedTasks
-                        ? `No tasks linked to ${effectiveProjectFocus} yet`
-                        : `No ${activeFilterLabel.toLowerCase()} tasks right now`}
-                  </p>
-                  <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                    {showMismatchOnly
-                      ? effectiveProjectFocus
-                        ? `Every visible task in the ${effectiveProjectFocus} focus currently resolves to a live Projects record, so there is no linkage cleanup to do here.`
-                        : "Every visible task currently resolves to a live Projects record, so the mismatch-only filter has nothing left to show."
-                      : showReviewQueueOnly
-                        ? effectiveProjectFocus
-                          ? hasFocusedTasks
-                            ? `The ${effectiveProjectFocus} focus still has ${focusedProjectTaskCount} linked task${focusedProjectTaskCount === 1 ? "" : "s"}, but none currently carry a latest run that still needs review.`
-                            : `This project focus does not have any linked tasks yet, so there is no review queue to show here.`
-                          : `The board still has ${tasks.length} tracked task${tasks.length === 1 ? "" : "s"}, but none currently carry a latest run that still needs review.`
-                      : effectiveProjectFocus
-                        ? hasFocusedTasks
-                          ? `The ${effectiveProjectFocus} focus is active, and the current status filter is not showing any matching tasks.`
-                          : `This project focus is active, but no task currently links back to ${effectiveProjectFocus} from the Tasks board yet.`
-                        : `The board still has ${tasks.length} tracked task${tasks.length === 1 ? "" : "s"}; this filter just is not showing any of them.`}
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center justify-center gap-2">
-                  <button
-                    onClick={() => setStatusFilter("all")}
-                    className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
-                    style={{
-                      backgroundColor: "var(--surface-elevated)",
-                      color: "var(--text-primary)",
-                      border: "1px solid var(--border)",
-                    }}
-                  >
-                    Show all statuses
-                  </button>
-                  {showMismatchOnly && (
-                    <button
-                      type="button"
-                      onClick={handleToggleMismatchOnly}
-                      className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
-                      style={{
-                        backgroundColor: "transparent",
-                        color: "#FFD60A",
-                        border: "1px solid color-mix(in srgb, #FFD60A 34%, transparent)",
-                      }}
-                    >
-                      Show all visible tasks
-                    </button>
-                  )}
-                  {showReviewQueueOnly && (
-                    <button
-                      type="button"
-                      onClick={handleToggleReviewQueueOnly}
-                      className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
-                      style={{
-                        backgroundColor: "transparent",
-                        color: "#FF9F0A",
-                        border: "1px solid color-mix(in srgb, #FF9F0A 34%, transparent)",
-                      }}
-                    >
-                      Show all visible tasks
-                    </button>
-                  )}
-                  {effectiveProjectFocus && (
-                    <button
-                      onClick={() => {
-                        resetCreateForm();
-                        setStatusFilter("all");
-                        setShowCreateForm(true);
-                      }}
-                      className="px-4 py-2 text-sm font-semibold rounded-lg transition-colors"
-                      style={{
-                        backgroundColor: "var(--accent)",
-                        color: "#000",
-                      }}
-                    >
-                      Create task for this project
-                    </button>
-                  )}
-                  {effectiveProjectFocus && (
-                    <a
-                      href="/agents/tasks"
-                      className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
-                      style={{
-                        backgroundColor: "transparent",
-                        color: "#0A84FF",
-                        border: "1px solid color-mix(in srgb, #0A84FF 28%, transparent)",
-                      }}
-                    >
-                      Clear project focus
-                    </a>
-                  )}
-                </div>
-                {effectiveProjectFocus && (
-                  <p className="max-w-md text-xs" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
-                    The intake form opens with <span style={{ color: "var(--text-primary)" }}>{effectiveProjectFocus}</span> {defaultCreateProjectDraft.projectLinkMode === customProjectSentinel ? "prefilled as a custom/unresolved project label" : "selected as a tracked project link"}, but you can still change it before saving.
-                  </p>
-                )}
+          <div className="space-y-3">
+            {loading && visibleTasks.length === 0 ? (
+              <div className="rounded-xl p-4" style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
+                <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                  Loading tasks...
+                </p>
               </div>
+            ) : visibleTasks.length === 0 ? (
+              <div className="rounded-xl p-4" style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
+                <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                  No tasks match the current filters.
+                </p>
+              </div>
+            ) : (
+              visibleTasks.map((task) => (
+                <TaskRow
+                  key={task.id}
+                  rowId={`task-row-${task.id}`}
+                  task={task}
+                  linkedProjectTitle={resolveProjectForTask(task, projects)?.title || null}
+                  hasProjectLink={Boolean(resolveProjectForTask(task, projects))}
+                  isSelected={task.id === selectedTaskId}
+                  isTemporarilyHighlighted={task.id === highlightedTaskId}
+                  onSelect={() => handleSelectTask(task.id)}
+                />
+              ))
             )}
           </div>
-        </>
-      ) : (
-        <div
-          className="rounded-xl px-6 py-12 text-center"
-          style={{
-            backgroundColor: "var(--card)",
-            border: "1px solid var(--border)",
-          }}
-        >
-          <div className="mx-auto max-w-md space-y-3">
-            <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-              No tracked tasks yet
-            </p>
-            <p className="text-sm" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
-              This coordination board is ready for real intake now. Create the first task to start tracking owner,
-              board status, priority, project, and due date from Mission Control instead of editing JSON by hand.
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
-              <button
-                onClick={() => setShowCreateForm(true)}
-                className="px-4 py-2 text-sm font-semibold rounded-lg transition-colors"
-                style={{
-                  backgroundColor: "var(--accent)",
-                  color: "#000",
-                }}
-              >
-                Create first task
-              </button>
-              <button
-                onClick={refetch}
-                className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
-                style={{
-                  backgroundColor: "var(--surface-elevated)",
-                  color: "var(--text-primary)",
-                  border: "1px solid var(--border)",
-                }}
-              >
-                Refresh board
-              </button>
-            </div>
-          </div>
         </div>
-      )}
+
+        <div className="space-y-4">
+          {selectionBlockMessage && (
+            <div className="rounded-xl p-4" style={{ backgroundColor: "color-mix(in srgb, #FF9F0A 10%, var(--surface-elevated))", border: "1px solid color-mix(in srgb, #FF9F0A 24%, transparent)" }}>
+              <p className="text-sm font-semibold" style={{ color: "#FF9F0A" }}>
+                Planning changes are still unsaved
+              </p>
+              <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)", lineHeight: 1.6 }}>
+                {selectionBlockMessage}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" onClick={applyPendingSelection} disabled={hasDirtyPlanning} className="rounded-lg px-3 py-2 text-sm font-semibold" style={{ color: "#111", backgroundColor: "#FF9F0A", opacity: hasDirtyPlanning ? 0.6 : 1 }}>
+                  Switch now
+                </button>
+                <button type="button" onClick={clearSelectionBlock} className="rounded-lg px-3 py-2 text-sm font-semibold" style={{ color: "var(--text-secondary)", border: "1px solid var(--border)" }}>
+                  Stay here
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-xl p-4" style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
+            <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+              Planning
+            </p>
+            {selectedTask ? (
+              <div className="mt-3 space-y-5">
+                <section>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                        Task details
+                      </p>
+                      <p className="mt-1 text-sm" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+                        Core board fields live here. This stays separate from routing so the planning surface stays honest.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                      Title
+                      <input value={detailTitle} onChange={(event) => setDetailTitle(event.target.value)} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }} />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                      Tracked project
+                      <select value={detailProjectLinkMode} onChange={(event) => setDetailProjectLinkMode(event.target.value)} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
+                        <option value="">No project</option>
+                        {projectOptions.map((project) => (
+                          <option key={project.id} value={project.id}>
+                            {project.title}
+                          </option>
+                        ))}
+                        <option value={customProjectSentinel}>Custom label</option>
+                      </select>
+                    </label>
+                    {detailProjectLinkMode === customProjectSentinel && (
+                      <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                        Custom project label
+                        <input value={detailProjectLabel} onChange={(event) => setDetailProjectLabel(event.target.value)} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }} />
+                      </label>
+                    )}
+                    <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                      Due date
+                      <input type="date" value={detailDueDate} onChange={(event) => setDetailDueDate(event.target.value)} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }} />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                      Status
+                      <select value={detailStatus} onChange={(event) => setDetailStatus(event.target.value as Task["status"])} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
+                        {Object.entries(taskStatusConfig).map(([value, config]) => (
+                          <option key={value} value={value}>
+                            {config.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                      Priority
+                      <select value={detailPriority} onChange={(event) => setDetailPriority(event.target.value as Task["priority"])} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
+                        {Object.entries(taskPriorityConfig).map(([value, config]) => (
+                          <option key={value} value={value}>
+                            {config.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  {detailError && (
+                    <p className="mt-3 text-sm" style={{ color: "var(--status-blocked)" }}>
+                      {detailError}
+                    </p>
+                  )}
+                  <div className="mt-4 flex flex-wrap justify-between gap-2">
+                    <button type="button" onClick={handleDeleteTask} disabled={deletingTask} className="rounded-lg px-3 py-2 text-sm font-semibold" style={{ color: "#FF453A", border: "1px solid color-mix(in srgb, #FF453A 24%, transparent)", opacity: deletingTask ? 0.6 : 1 }}>
+                      {deletingTask ? "Deleting..." : "Delete task"}
+                    </button>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={resetDetailsDraft} className="rounded-lg px-3 py-2 text-sm font-semibold" style={{ color: "var(--text-secondary)", border: "1px solid var(--border)" }}>
+                        Cancel details
+                      </button>
+                      <button type="button" onClick={handleSaveDetails} disabled={savingDetails || !detailsDirty} className="rounded-lg px-3 py-2 text-sm font-semibold" style={{ backgroundColor: "var(--accent)", color: "#111", opacity: savingDetails || !detailsDirty ? 0.6 : 1 }}>
+                        {savingDetails ? "Saving..." : "Save details"}
+                      </button>
+                    </div>
+                  </div>
+                </section>
+
+                <section>
+                  <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                    Task routing
+                  </p>
+                  <p className="mt-1 text-sm" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+                    Owner, reviewer, handoff, and blockers stay together here so the execution contract is explicit.
+                  </p>
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                      Owner
+                      <select value={routingOwnerAgentId} onChange={(event) => setRoutingOwnerAgentId(event.target.value)} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
+                        <option value="">Unassigned</option>
+                        {taskAgents.map((agent) => (
+                          <option key={agent.id} value={agent.id}>
+                            {agent.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                      Reviewer
+                      <select value={routingReviewerAgentId} onChange={(event) => setRoutingReviewerAgentId(event.target.value)} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
+                        <option value="">Unassigned</option>
+                        {taskAgents.map((agent) => (
+                          <option key={agent.id} value={agent.id}>
+                            {agent.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                      Handoff target
+                      <select value={routingHandoffToAgentId} onChange={(event) => setRoutingHandoffToAgentId(event.target.value)} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
+                        <option value="">None</option>
+                        {taskAgents.map((agent) => (
+                          <option key={agent.id} value={agent.id}>
+                            {agent.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                      Blocking tasks
+                      <select
+                        multiple
+                        value={routingBlockedByIds}
+                        onChange={(event) =>
+                          setRoutingBlockedByIds(
+                            Array.from(event.target.selectedOptions).map((option) => option.value)
+                          )
+                        }
+                        className="rounded-lg px-3 py-2 text-sm"
+                        style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)", minHeight: "120px" }}
+                      >
+                        {dependencyOptions.map((task) => (
+                          <option key={task.id} value={task.id}>
+                            {task.title}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  {routingError && (
+                    <p className="mt-3 text-sm" style={{ color: "var(--status-blocked)" }}>
+                      {routingError}
+                    </p>
+                  )}
+                  <div className="mt-4 flex justify-end gap-2">
+                    <button type="button" onClick={resetRoutingDraft} className="rounded-lg px-3 py-2 text-sm font-semibold" style={{ color: "var(--text-secondary)", border: "1px solid var(--border)" }}>
+                      Cancel routing
+                    </button>
+                    <button type="button" onClick={handleSaveRouting} disabled={savingRouting || !routingDirty} className="rounded-lg px-3 py-2 text-sm font-semibold" style={{ backgroundColor: "var(--accent)", color: "#111", opacity: savingRouting || !routingDirty ? 0.6 : 1 }}>
+                      {savingRouting ? "Saving..." : "Save routing"}
+                    </button>
+                  </div>
+                </section>
+              </div>
+            ) : (
+              <p className="mt-3 text-sm" style={{ color: "var(--text-muted)" }}>
+                Select a task to start planning.
+              </p>
+            )}
+          </div>
+
+          <WorkItemInspector
+            kind={selectedTask ? "task" : null}
+            itemId={selectedTask?.id || null}
+            agentOptions={taskAgents}
+            refreshNonce={inspectorRefreshNonce}
+            defaultHandoffToAgentId={selectedTask?.handoffToAgentId || ""}
+            pendingDecision={taskReviewPending}
+            reviewDisabled={!selectedTask || hasDirtyPlanning}
+            reviewError={workItemError}
+            onReviewSubmit={selectedTask ? handleReviewSubmit : undefined}
+            packetActions={
+              selectedTask ? (
+                <div className="space-y-3">
+                  <p className="text-sm" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+                    Request the latest owner packet from the assigned agent. Save planning changes first so packet context matches the board.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={handleRequestPacket}
+                      disabled={requestingPacket || hasDirtyPlanning || !(selectedTask.assigneeAgentId || selectedTask.agent.id)}
+                      className="rounded-lg px-3 py-2 text-sm font-semibold"
+                      style={{ backgroundColor: "var(--accent)", color: "#111", opacity: requestingPacket || hasDirtyPlanning || !(selectedTask.assigneeAgentId || selectedTask.agent.id) ? 0.6 : 1 }}
+                    >
+                      {requestingPacket ? "Requesting..." : "Request owner packet"}
+                    </button>
+                  </div>
+                  {workItemError && (
+                    <p className="text-sm" style={{ color: "var(--status-blocked)" }}>
+                      {workItemError}
+                    </p>
+                  )}
+                </div>
+              ) : null
+            }
+          />
+        </div>
+      </div>
     </div>
   );
 }

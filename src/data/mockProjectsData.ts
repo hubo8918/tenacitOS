@@ -11,6 +11,8 @@ export interface ProjectPhaseRunFields {
   needsFromHuman?: string;
   decision?: string;
   handoffTo?: string;
+  reviewerAgentId?: string;
+  reviewerName?: string;
 }
 
 export interface ProjectPhaseLatestRun {

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { teamAgents } from "@/data/mockTeamData";
-import { getProjectPhaseRuns, recordProjectPhaseRun } from "@/lib/project-phase-runs-data";
-import { getProjects } from "@/lib/projects-data";
+import { getProjectPhaseRuns } from "@/lib/project-phase-runs-data";
+import { applyProjectPhaseReviewDecision } from "@/lib/work-item-review";
 
 export async function GET(request: NextRequest) {
   try {
@@ -40,14 +39,18 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as Record<string, unknown>;
     const projectId = asTrimmedString(body.projectId);
     const phaseId = asTrimmedString(body.phaseId);
-    const decision = asTrimmedString(body.decision).toLowerCase();
+    const decisionValue = asTrimmedString(body.decision).toLowerCase();
+    const decision =
+      decisionValue === "approve" || decisionValue === "rework" || decisionValue === "block"
+        ? decisionValue
+        : null;
     const note = asTrimmedString(body.note);
 
     if (!projectId || !phaseId) {
       return NextResponse.json({ error: "Missing required fields: projectId, phaseId" }, { status: 400 });
     }
 
-    if (!["approve", "rework", "block"].includes(decision)) {
+    if (!decision) {
       return NextResponse.json({ error: "Invalid decision. Use approve, rework, or block." }, { status: 400 });
     }
 
@@ -58,80 +61,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const projects = await getProjects();
-    const project = projects.find((entry) => entry.id === projectId) || null;
-    if (!project) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 });
-    }
-
-    const phase = project.phases.find((entry) => entry.id === phaseId) || null;
-    if (!phase) {
-      return NextResponse.json({ error: "Project phase not found" }, { status: 404 });
-    }
-
-    const decisionLabel =
-      decision === "approve"
-        ? "APPROVED"
-        : decision === "rework"
-        ? "CHANGES_REQUESTED"
-        : "BLOCKED";
-    const handoffTargetId = asTrimmedString(body.handoffTo) || phase.handoffToAgentId || "";
-    const handoffAgent = handoffTargetId
-      ? teamAgents.find((agent) => agent.id === handoffTargetId) || null
-      : null;
-
-    const nextPhasePatch =
-      decision === "approve"
-        ? handoffTargetId && handoffTargetId !== phase.ownerAgentId
-          ? {
-              status: "pending" as const,
-              ownerAgentId: handoffTargetId,
-              handoffToAgentId: undefined,
-            }
-          : {
-              status: "completed" as const,
-            }
-        : decision === "rework"
-        ? {
-            status: "in_progress" as const,
-          }
-        : {
-            status: "blocked" as const,
-          };
-
-    const summaryParts = [
-      `Decision: ${decisionLabel}`,
-      decision === "approve"
-        ? nextPhasePatch.ownerAgentId
-          ? `Next owner: ${handoffAgent?.name || nextPhasePatch.ownerAgentId}`
-          : "Phase marked complete"
-        : null,
-      note ? `Note: ${note}` : null,
-    ].filter((entry): entry is string => Boolean(entry));
-
-    const result = await recordProjectPhaseRun({
-      projectId: project.id,
-      projectTitle: project.title,
-      phaseId: phase.id,
-      phaseTitle: phase.title,
+    const result = await applyProjectPhaseReviewDecision(projectId, phaseId, {
+      decision,
+      note,
+      handoffTo: asTrimmedString(body.handoffTo) || undefined,
       userAgent: request.headers.get("user-agent") || undefined,
-      phasePatch: nextPhasePatch,
-      run: {
-        kind: "manual",
-        intent: "review",
-        action: "review",
-        runStatus:
-          decision === "approve" ? "done" : decision === "rework" ? "running" : "failed",
-        executionMode: "manual",
-        deliverable: summaryParts.join(" | "),
-        text: note || undefined,
-        fields: {
-          status: decision === "approve" ? "Approved" : decision === "rework" ? "Needs rework" : "Blocked",
-          decision: decisionLabel,
-          handoffTo: handoffAgent?.name || handoffTargetId || undefined,
-          needsFromHuman: note || undefined,
-        },
-      },
     });
 
     return NextResponse.json({

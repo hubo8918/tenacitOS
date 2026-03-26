@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
+import ReactMarkdown from "react-markdown";
 import {
   X,
   Download,
@@ -11,6 +12,8 @@ import {
   Copy,
   Check,
 } from "lucide-react";
+
+import { getDownloadUrl, readFile } from "@/lib/files-client";
 
 interface FilePreviewProps {
   workspace: string;
@@ -71,61 +74,6 @@ function isCodeFile(ext: string): boolean {
   ].includes(ext);
 }
 
-// Simple markdown renderer
-function renderMarkdown(text: string): string {
-  return (
-    text
-      // Headers
-      .replace(
-        /^### (.*$)/gm,
-        '<h3 style="font-size: 1.125rem; font-weight: bold; color: var(--text-primary); margin-top: 1rem; margin-bottom: 0.5rem;">$1</h3>'
-      )
-      .replace(
-        /^## (.*$)/gm,
-        '<h2 style="font-size: 1.25rem; font-weight: bold; color: var(--text-primary); margin-top: 1.5rem; margin-bottom: 0.75rem;">$1</h2>'
-      )
-      .replace(
-        /^# (.*$)/gm,
-        '<h1 style="font-size: 1.5rem; font-weight: bold; color: var(--text-primary); margin-top: 1.5rem; margin-bottom: 1rem;">$1</h1>'
-      )
-      // Bold and italic
-      .replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>")
-      .replace(
-        /\*\*(.*?)\*\*/g,
-        '<strong style="color: var(--text-primary);">$1</strong>'
-      )
-      .replace(/\*(.*?)\*/g, "<em>$1</em>")
-      // Code blocks
-      .replace(
-        /```(\w+)?\n([\s\S]*?)```/g,
-        '<pre style="background-color: var(--background); padding: 1rem; border-radius: 0.5rem; margin: 1rem 0; overflow-x: auto;"><code style="color: var(--accent);">$2</code></pre>'
-      )
-      // Inline code
-      .replace(
-        /`([^`]+)`/g,
-        '<code style="background-color: var(--background); padding: 0.125rem 0.375rem; border-radius: 0.25rem; color: var(--accent);">$1</code>'
-      )
-      // Links
-      .replace(
-        /\[([^\]]+)\]\(([^)]+)\)/g,
-        '<a href="$2" style="color: #60A5FA;" target="_blank">$1</a>'
-      )
-      // Unordered lists
-      .replace(
-        /^\s*[-*] (.*$)/gm,
-        '<li style="margin-left: 1rem; list-style-type: disc;">$1</li>'
-      )
-      // Blockquotes
-      .replace(
-        /^> (.*$)/gm,
-        '<blockquote style="border-left: 4px solid var(--border); padding-left: 1rem; font-style: italic; color: var(--text-secondary);">$1</blockquote>'
-      )
-      // Line breaks
-      .replace(/\n\n/g, '</p><p style="margin-bottom: 1rem;">')
-      .replace(/\n/g, "<br/>")
-  );
-}
-
 export function FilePreview({ workspace, path, name, onClose }: FilePreviewProps) {
   const ext = getFileExtension(name);
   const isImage = isImageFile(ext);
@@ -142,29 +90,25 @@ export function FilePreview({ workspace, path, name, onClose }: FilePreviewProps
       return;
     }
 
-    fetch(`/api/browse?workspace=${encodeURIComponent(workspace)}&path=${encodeURIComponent(path)}&content=true`)
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to load file");
-        return res.json();
-      })
+    readFile(workspace, path)
       .then((data) => {
+        if (!("content" in data)) {
+          throw new Error("Failed to load file.");
+        }
         setContent(data.content);
         setLoading(false);
       })
       .catch((err) => {
-        setError(err.message);
+        setError(err instanceof Error ? err.message : "Failed to load file.");
         setLoading(false);
       });
   }, [workspace, path, isImage]);
 
   const handleDownload = () => {
-    const blob = new Blob([content || ""], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url;
+    a.href = getDownloadUrl(workspace, path);
     a.download = name;
     a.click();
-    URL.revokeObjectURL(url);
   };
 
   const handleCopy = async () => {
@@ -313,13 +257,50 @@ export function FilePreview({ workspace, path, name, onClose }: FilePreviewProps
           )}
 
           {!loading && !error && isMd && content && (
-            <div
-              className="prose prose-invert max-w-none"
-              style={{ color: "var(--text-secondary)" }}
-              dangerouslySetInnerHTML={{
-                __html: `<p style="margin-bottom: 1rem;">${renderMarkdown(content)}</p>`,
-              }}
-            />
+            <div className="prose prose-invert max-w-none" style={{ color: "var(--text-secondary)" }}>
+              <ReactMarkdown
+                components={{
+                  a: ({ ...props }) => (
+                    <a
+                      {...props}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ color: "#60A5FA" }}
+                    />
+                  ),
+                  code: ({ className, children, ...props }) => (
+                    <code
+                      {...props}
+                      className={className}
+                      style={{
+                        backgroundColor: "var(--background)",
+                        padding: "0.125rem 0.375rem",
+                        borderRadius: "0.25rem",
+                        color: "var(--accent)",
+                      }}
+                    >
+                      {children}
+                    </code>
+                  ),
+                  pre: ({ children, ...props }) => (
+                    <pre
+                      {...props}
+                      style={{
+                        backgroundColor: "var(--background)",
+                        padding: "1rem",
+                        borderRadius: "0.5rem",
+                        margin: "1rem 0",
+                        overflowX: "auto",
+                      }}
+                    >
+                      {children}
+                    </pre>
+                  ),
+                }}
+              >
+                {content}
+              </ReactMarkdown>
+            </div>
           )}
 
           {!loading && !error && isCode && content && (

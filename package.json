@@ -6,7 +6,9 @@
     "dev": "next dev -H 0.0.0.0",
     "build": "next build",
     "start": "next start -H 0.0.0.0",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:files": "node --import tsx --test tests/files-routes.test.ts",
+    "test:work-items": "node --import tsx --test tests/work-items-review.test.ts"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
@@ -33,6 +35,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
+    "tsx": "^4.20.6",
     "typescript": "^5"
   }
 }

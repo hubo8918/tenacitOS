@@ -78,6 +78,12 @@ function normalizeProjectPhaseRunFields(value: unknown): ProjectPhaseRunFields |
   }
   if (asNonEmptyString(fields.decision)) normalized.decision = asNonEmptyString(fields.decision);
   if (asNonEmptyString(fields.handoffTo)) normalized.handoffTo = asNonEmptyString(fields.handoffTo);
+  if (asNonEmptyString(fields.reviewerAgentId)) {
+    normalized.reviewerAgentId = asNonEmptyString(fields.reviewerAgentId);
+  }
+  if (asNonEmptyString(fields.reviewerName)) {
+    normalized.reviewerName = asNonEmptyString(fields.reviewerName);
+  }
 
   return Object.keys(normalized).length > 0 ? normalized : null;
 }

@@ -673,7 +673,7 @@ async function refreshTeamCache(): Promise<TeamBuildResult> {
   return teamRefreshInFlight;
 }
 
-async function resolveTeamForGet(): Promise<TeamAgent[]> {
+export async function getTeamForDisplay(): Promise<TeamAgent[]> {
   const cached = getFreshTeamCache();
   if (cached) {
     return cached;
@@ -706,7 +706,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const tierParam = searchParams.get("tier");
 
-    const team = await resolveTeamForGet();
+    const team = await getTeamForDisplay();
 
     if (!tierParam) {
       return NextResponse.json({ team });

@@ -1,6 +1,6 @@
 # Mission Control Plan
 
-_Last updated: 2026-03-24_
+_Last updated: 2026-03-25_
 
 This is the active execution plan for Mission Control. Keep this file short, current, and honest.
 
@@ -19,11 +19,13 @@ Mission Control should let Bo run real multi-agent work from one surface:
 ## Product Truths
 
 - Team and Agents are real configuration surfaces for planning metadata.
-- Tasks and Projects support real create and edit flows plus first-pass routing metadata.
+- Tasks and Projects now separate planning from execution operations instead of mixing both in the same card or row.
 - Files supports real CRUD inside the workspace.
+- Files and Memory now share one workspace-aware file-system core with aligned path validation and error handling.
 - Calendar is still a workload and handoff view, not a full editing surface.
 - Team action prompts now support task-linked and phase-linked operator packets, but they are still explicit one-off turns rather than background automation.
 - Project phases now support explicit owner, reviewer, handoff, dependency, coordination, and review metadata in the same saved record.
+- Work-item review and run history now aggregate task and phase execution into one inbox and inspector model.
 
 ## Active Milestones
 
@@ -96,12 +98,12 @@ Done when:
 
 ## Current Focus
 
-Move Mission Control out of the row-polish loop and into real execution semantics.
+Keep pushing Mission Control toward a single honest operator model instead of entity-by-entity UI sprawl.
 
 Priority now:
-1. turn the hardened review flows into a clearer Henry operating model for assigning, approving, and rerouting work
+1. harden the new work-item model so Inbox, Tasks, and Projects stay aligned instead of regrowing separate packet/review semantics
 2. keep shrinking the gap between a saved task or phase record and the exact OpenClaw run/session it produced
-3. resist slipping back into copy polish when execution semantics are the real product work
+3. resist slipping back into copy polish when operator surfaces are the real product work
 
 ## Rules
 
@@ -113,11 +115,26 @@ Priority now:
 
 ## Latest Checkpoint
 
+### 2026-03-25
+
+- unified Files and Memory on a shared file-system service instead of route-local workspace maps
+- standardized file API failures around `{ error, code }` and aligned `browse`, `write`, `mkdir`, `delete`, `download`, `upload`, and `workspaces`
+- added unsaved-change guards plus inline error/confirm flows to Files and Memory so they no longer rely on raw browser alerts
+- locked the new file-system contract with route-level tests covering traversal rejection, CRUD, workspace registry, and memory allowlist behavior
+- closed the remaining file-system boundary leak so absolute paths can no longer hop across registered workspaces
+- switched markdown file preview to safe rendering instead of raw HTML injection
+- changed review history to store reviewer snapshots on the attempt itself, so reassignment no longer rewrites who appears to have reviewed old work
+- aligned Team page bootstrap with the shared data layer instead of self-fetching `/api/team`
+
 ### 2026-03-24
 
 - reset the planning docs into active plan, backlog, and log files
 - upgraded team action prompts from loose chat to structured operator packets
 - fixed Settings to read the real OpenClaw model configuration instead of an unrelated fallback
+- simplified Team into Inbox plus Agents views backed by a unified work-item review model
+- simplified Tasks into summary rows plus a dedicated planning and inspector stack
+- simplified Projects into summary cards plus dedicated project metadata, phase planning, and phase inspector panels
+- added `/api/work-items` and `/api/work-items/review` so task and phase review/history flows share one public contract
 - wired task-linked owner packets into execution history with session, model, and structured field capture
 - fixed execution history so task rows read the real task data source and only show attempts for the current task
 - added phase-linked coordination packets, history, and current-phase packet badges to Projects

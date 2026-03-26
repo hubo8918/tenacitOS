@@ -7,13 +7,13 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { logActivity } from "@/lib/activities-db";
-import { teamAgents } from "@/data/mockTeamData";
-import { getAgentTasks, type TaskRunStatus } from "@/lib/agent-tasks-data";
+import { type TaskRunStatus } from "@/lib/agent-tasks-data";
 import {
   getExecutionAttempts,
   recordTaskRun,
   type TaskRunAttempt,
 } from "@/lib/task-runs-data";
+import { applyTaskReviewDecision } from "@/lib/work-item-review";
 
 type ManualIntent = "start" | "review" | "debug";
 
@@ -69,112 +69,42 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let taskPatch:
-      | {
-          status?: "pending" | "in_progress" | "completed" | "blocked";
-          assigneeAgentId?: string;
-          handoffToAgentId?: string;
-          agent?: {
-            id?: string;
-            emoji: string;
-            name: string;
-            color: string;
-          };
-        }
-      | undefined;
-    let reviewRunStatus: TaskRunStatus | undefined = runStatus;
-    let reviewDeliverable = deliverable;
-    let reviewText: string | undefined;
-    let reviewFields:
-      | {
-          status?: string;
-          decision?: string;
-          handoffTo?: string;
-          needsFromHuman?: string;
-        }
-      | undefined;
-    let taskTitle: string | undefined;
+    const reviewRunStatus: TaskRunStatus | undefined = runStatus;
+    const reviewDeliverable = deliverable;
+    const reviewText: string | undefined = undefined;
 
     if (decision) {
-      const tasks = await getAgentTasks();
-      const task = tasks.find((entry) => entry.id === taskId) || null;
-      if (!task) {
-        return NextResponse.json({ error: "Task not found" }, { status: 404 });
+      const result = await applyTaskReviewDecision(taskId, {
+        decision,
+        note,
+        handoffTo: typeof body.handoffTo === "string" ? body.handoffTo : undefined,
+        userAgent: request.headers.get("user-agent") || undefined,
+      });
+
+      if (result.task) {
+        logActivity(
+          "execution",
+          `Manual review recorded: ${decision} on "${result.task.title}", runStatus=${result.task.runStatus}`,
+          "success",
+          {
+            metadata: {
+              taskId,
+              intent,
+              decision,
+              runStatus: result.task.runStatus,
+              executionMode: result.task.executionMode,
+              timestamp: result.attempt.timestamp,
+            },
+          }
+        );
       }
 
-      taskTitle = task.title;
-
-      const decisionLabel =
-        decision === "approve"
-          ? "APPROVED"
-          : decision === "rework"
-          ? "CHANGES_REQUESTED"
-          : "BLOCKED";
-      const handoffTargetId =
-        (typeof body.handoffTo === "string" && body.handoffTo.trim()) || task.handoffToAgentId || "";
-      const handoffAgent = handoffTargetId
-        ? teamAgents.find((agent) => agent.id === handoffTargetId) || null
-        : null;
-
-      taskPatch =
-        decision === "approve"
-          ? handoffTargetId && handoffTargetId !== task.assigneeAgentId
-            ? {
-                status: "pending",
-                assigneeAgentId: handoffTargetId,
-                handoffToAgentId: undefined,
-                agent: handoffAgent
-                  ? {
-                      id: handoffAgent.id,
-                      emoji: handoffAgent.emoji,
-                      name: handoffAgent.name,
-                      color: handoffAgent.color,
-                    }
-                  : undefined,
-              }
-            : {
-                status: "completed",
-              }
-          : decision === "rework"
-          ? {
-              status: "in_progress",
-            }
-          : {
-              status: "blocked",
-            };
-
-      reviewRunStatus =
-        decision === "approve" ? "done" : decision === "rework" ? "running" : "failed";
-      reviewText = note || undefined;
-      reviewFields = {
-        status:
-          decision === "approve"
-            ? "Approved"
-            : decision === "rework"
-            ? "Needs rework"
-            : "Blocked",
-        decision: decisionLabel,
-        handoffTo: handoffAgent?.name || handoffTargetId || undefined,
-        needsFromHuman: note || undefined,
-      };
-      reviewDeliverable = [
-        `Decision: ${decisionLabel}`,
-        decision === "approve"
-          ? taskPatch.assigneeAgentId
-            ? `Next owner: ${handoffAgent?.name || taskPatch.assigneeAgentId}`
-            : "Task marked complete"
-          : null,
-        note ? `Note: ${note}` : null,
-      ]
-        .filter((entry): entry is string => Boolean(entry))
-        .join(" | ");
+      return NextResponse.json({ success: true, ...result });
     }
 
     const { attempt, task } = await recordTaskRun({
       taskId,
-      taskTitle,
       userAgent: request.headers.get("user-agent") || undefined,
-      taskPatch,
       run: {
         kind: "manual",
         intent,
@@ -183,7 +113,6 @@ export async function POST(request: NextRequest) {
         executionMode: executionMode || "manual",
         deliverable: reviewDeliverable,
         text: reviewText,
-        fields: reviewFields,
       },
     });
 

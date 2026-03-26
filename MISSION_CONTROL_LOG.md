@@ -38,8 +38,28 @@ This file holds checkpoint summaries. Keep the active plan in `MISSION_CONTROL_P
 
 ## Recent Checkpoints
 
+### 2026-03-25
+
+- introduced a shared file-system service so Files and Memory now resolve workspaces, paths, protection rules, uploads, downloads, and activity logging through one backend core
+- replaced route-local workspace maps with shared registry lookups across `/api/browse`, `/api/files/*`, and the legacy memory facade
+- standardized file API failures around `{ error, code }` so frontend error handling can distinguish invalid paths, missing paths, protected files, write denial, and workspace lookup failures
+- Files now uses a shared client helper, inline error banners, confirm modals, and unsaved editor guards instead of `alert`-driven flows
+- Memory now reuses the shared workspace loader and error client, supports nested `memory/**/*.md` trees, and keeps its allowlist limited to root memory docs plus markdown inside `memory/`
+- added route-level tests covering workspace registry, traversal rejection, shared CRUD flow, and memory facade allowlist behavior
+- closed the absolute-path workspace escape so file APIs now reject paths that point into another registered workspace even when the absolute path is valid on disk
+- replaced markdown preview HTML injection with safe React Markdown rendering so workspace markdown no longer depends on `dangerouslySetInnerHTML`
+- review attempts now persist reviewer id and reviewer name snapshots, keeping recent decisions and history tied to the reviewer who actually made the decision even after reassignment
+- Team page server bootstrap now loads shared team data directly instead of self-fetching `/api/team` through host and cookie plumbing
+- tightened `mkdir` semantics so folder names must be single path segments, then added tests for invalid names and cross-workspace absolute-path rejection
+- targeted `eslint`, `npm run test:files`, and `npm run build` all passed after the filesystem hardening pass
+
 ### 2026-03-24
 
+- introduced a unified work-item read/write layer so task and phase review flows now share `/api/work-items` and `/api/work-items/review`
+- Team is now split into Inbox and Agents views; inbox now reads one combined task/phase queue instead of stitching together page-local review logic
+- Tasks now uses summary rows plus a separate planning surface and shared work-item inspector instead of packing edit/review/history into each row
+- Projects now uses summary cards plus separate project metadata, selected phase planning, and shared phase inspector panels
+- Project cards no longer own linked-task attach/move/detach flows; linked task editing is now pushed back to the Tasks page where it belongs
 - hardened review semantics so `needs_review` now only means "waiting for reviewer action"; rework maps back to running and block maps to failed
 - Team review inbox now supports `all`, `unassigned`, and explicit-reviewer focus without fallbacking unassigned work onto owners
 - Team recent decisions now read real task/phase review history instead of `latestRun`, so approve/rework/block decisions stay visible after later check-ins

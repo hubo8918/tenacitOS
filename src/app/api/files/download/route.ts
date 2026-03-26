@@ -1,92 +1,34 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
-import { logActivity } from '@/lib/activities-db';
+import { NextRequest, NextResponse } from "next/server";
 
-import { getWorkspaceBase, resolveWorkspaceFilePath } from '@/lib/workspace-files';
-
-function getMimeType(filename: string): string {
-  const ext = path.extname(filename).toLowerCase();
-  const mimeMap: Record<string, string> = {
-    '.ts': 'text/plain',
-    '.tsx': 'text/plain',
-    '.js': 'text/javascript',
-    '.jsx': 'text/javascript',
-    '.json': 'application/json',
-    '.md': 'text/markdown',
-    '.txt': 'text/plain',
-    '.log': 'text/plain',
-    '.py': 'text/plain',
-    '.sh': 'text/plain',
-    '.yaml': 'text/yaml',
-    '.yml': 'text/yaml',
-    '.toml': 'text/plain',
-    '.css': 'text/css',
-    '.html': 'text/html',
-    '.png': 'image/png',
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.gif': 'image/gif',
-    '.svg': 'image/svg+xml',
-    '.webp': 'image/webp',
-    '.pdf': 'application/pdf',
-    '.zip': 'application/zip',
-  };
-  return mimeMap[ext] || 'application/octet-stream';
-}
+import { downloadFile, toFileSystemErrorResponse } from "@/lib/file-system";
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const workspace = searchParams.get('workspace') || 'workspace';
-    const filePath = searchParams.get('path') || '';
+    const workspace = searchParams.get("workspace") || "workspace";
+    const filePath = searchParams.get("path") || "";
 
     if (!filePath) {
-      return NextResponse.json({ error: 'Missing path parameter' }, { status: 400 });
-    }
-
-    if (!getWorkspaceBase(workspace)) {
-      return NextResponse.json({ error: 'Unknown workspace' }, { status: 400 });
-    }
-
-    const resolved = resolveWorkspaceFilePath({ workspace, filePath });
-    if (!resolved) {
       return NextResponse.json(
-        {
-          error:
-            'Invalid path. Use a path inside the selected workspace, or an absolute/~/ path that resolves inside a known workspace.',
-        },
+        { error: "Missing path parameter.", code: "invalid_path" },
         { status: 400 }
       );
     }
 
-    const stat = await fs.stat(resolved.fullPath);
-    if (!stat.isFile()) {
-      return NextResponse.json({ error: 'Not a file' }, { status: 400 });
-    }
-
-    const content = await fs.readFile(resolved.fullPath);
-    const filename = path.basename(resolved.fullPath);
-    const mimeType = getMimeType(filename);
-
-    logActivity('file_read', `Downloaded file: ${resolved.relativePath || filePath}`, 'success', {
-      metadata: {
-        workspace: resolved.workspace,
-        requestedWorkspace: workspace,
-        filePath: resolved.relativePath || filePath,
-        size: stat.size,
-      },
-    });
-
-    return new NextResponse(content, {
+    const download = await downloadFile({ workspace, path: filePath });
+    return new NextResponse(new Uint8Array(download.content), {
       headers: {
-        'Content-Type': mimeType,
-        'Content-Disposition': `attachment; filename="${filename}"`,
-        'Content-Length': stat.size.toString(),
+        "Content-Type": download.mimeType,
+        "Content-Disposition": `attachment; filename="${download.filename}"`,
+        "Content-Length": download.size.toString(),
       },
     });
   } catch (error) {
-    console.error('[download] Error:', error);
-    return NextResponse.json({ error: 'Download failed' }, { status: 500 });
+    const normalized = toFileSystemErrorResponse(error, "Download failed.");
+    console.error("[download] Error:", error);
+    return NextResponse.json(
+      { error: normalized.error, code: normalized.code },
+      { status: normalized.status }
+    );
   }
 }

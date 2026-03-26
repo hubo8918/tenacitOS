@@ -1,41 +1,36 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
+import { NextRequest, NextResponse } from "next/server";
 
-import { OPENCLAW_DIR } from '@/lib/paths';
-
-const WORKSPACE_MAP: Record<string, string> = {
-  workspace: path.join(OPENCLAW_DIR, 'workspace'),
-  'mission-control': path.join(OPENCLAW_DIR, 'workspace', 'mission-control'),
-};
+import { createDirectory, toFileSystemErrorResponse } from "@/lib/file-system";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { workspace, path: dirPath, name } = body;
+    const { workspace, path, name } = body as {
+      workspace?: string;
+      path?: string;
+      name?: string;
+    };
 
-    if (!dirPath && !name) {
-      return NextResponse.json({ error: 'Missing path or name' }, { status: 400 });
+    if (!path && !name) {
+      return NextResponse.json(
+        { error: "Missing path or name.", code: "invalid_path" },
+        { status: 400 }
+      );
     }
 
-    const base = WORKSPACE_MAP[workspace || 'workspace'];
-    if (!base) {
-      return NextResponse.json({ error: 'Unknown workspace' }, { status: 400 });
-    }
+    const result = await createDirectory({
+      workspace: workspace || "workspace",
+      path,
+      name,
+    });
 
-    const targetPath = name
-      ? path.resolve(base, dirPath || '', name)
-      : path.resolve(base, dirPath);
-
-    if (!targetPath.startsWith(base)) {
-      return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
-    }
-
-    await fs.mkdir(targetPath, { recursive: true });
-
-    return NextResponse.json({ success: true, path: path.relative(base, targetPath) });
+    return NextResponse.json({ success: true, ...result });
   } catch (error) {
-    console.error('[mkdir] Error:', error);
-    return NextResponse.json({ error: 'Failed to create directory' }, { status: 500 });
+    const normalized = toFileSystemErrorResponse(error, "Failed to create directory.");
+    console.error("[mkdir] Error:", error);
+    return NextResponse.json(
+      { error: normalized.error, code: normalized.code },
+      { status: normalized.status }
+    );
   }
 }

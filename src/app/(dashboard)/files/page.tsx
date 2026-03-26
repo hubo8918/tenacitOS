@@ -1,46 +1,66 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { List, Grid3X3 } from "lucide-react";
-import { Breadcrumbs } from "@/components/Breadcrumbs";
-import { FileBrowser } from "@/components/FileBrowser";
+import { useEffect, useState } from "react";
+import { Grid3X3, List } from "lucide-react";
 
-interface Workspace {
-  id: string;
-  name: string;
-  emoji: string;
-  path: string;
-  agentName?: string;
-}
+import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { FileBrowser } from "@/components/FileBrowser";
+import { loadWorkspaces } from "@/lib/files-client";
+import type { WorkspaceDescriptor } from "@/lib/workspace-files";
+
+type PendingNavigation =
+  | { kind: "workspace"; workspaceId: string }
+  | { kind: "path"; path: string }
+  | null;
 
 export default function FilesPage() {
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [workspaces, setWorkspaces] = useState<WorkspaceDescriptor[]>([]);
   const [selectedWorkspace, setSelectedWorkspace] = useState<string | null>(null);
   const [currentPath, setCurrentPath] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
+  const [pageError, setPageError] = useState<string | null>(null);
+  const [browserHasUnsavedChanges, setBrowserHasUnsavedChanges] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<PendingNavigation>(null);
 
   useEffect(() => {
-    fetch("/api/files/workspaces")
-      .then((res) => res.json())
-      .then((data) => {
-        setWorkspaces(data.workspaces || []);
-        if (data.workspaces.length > 0) {
-          setSelectedWorkspace(data.workspaces[0].id);
+    loadWorkspaces()
+      .then((nextWorkspaces) => {
+        setWorkspaces(nextWorkspaces);
+        if (nextWorkspaces.length > 0) {
+          setSelectedWorkspace((current) => current || nextWorkspaces[0].id);
         }
+        setPageError(null);
       })
-      .catch(() => setWorkspaces([]));
+      .catch((error) => {
+        setWorkspaces([]);
+        setPageError(error instanceof Error ? error.message : "Failed to load workspaces.");
+      });
   }, []);
 
-  const handleWorkspaceSelect = (workspaceId: string) => {
-    setSelectedWorkspace(workspaceId);
-    setCurrentPath("");
+  const selectedWorkspaceData = workspaces.find((workspace) => workspace.id === selectedWorkspace);
+
+  const applyNavigation = (next: Exclude<PendingNavigation, null>) => {
+    if (next.kind === "workspace") {
+      setSelectedWorkspace(next.workspaceId);
+      setCurrentPath("");
+      return;
+    }
+
+    setCurrentPath(next.path);
   };
 
-  const selectedWorkspaceData = workspaces.find((w) => w.id === selectedWorkspace);
+  const requestNavigation = (next: Exclude<PendingNavigation, null>) => {
+    if (browserHasUnsavedChanges) {
+      setPendingNavigation(next);
+      return;
+    }
+
+    applyNavigation(next);
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: "0" }}>
-      {/* Page header */}
       <div style={{ padding: "24px 24px 16px 24px" }}>
         <h1
           style={{
@@ -55,11 +75,26 @@ export default function FilesPage() {
           File Browser
         </h1>
         <p style={{ fontFamily: "var(--font-body)", fontSize: "13px", color: "var(--text-secondary)" }}>
-          Navega por los workspaces y archivos de los agentes
+          Browse workspace files, preview content, and make safe edits without leaving Mission Control.
         </p>
       </div>
 
-      {/* Two-column layout */}
+      {pageError && (
+        <div
+          style={{
+            margin: "0 24px 16px",
+            padding: "12px 14px",
+            borderRadius: "12px",
+            border: "1px solid color-mix(in srgb, var(--status-blocked) 35%, var(--border))",
+            backgroundColor: "color-mix(in srgb, var(--status-blocked) 10%, transparent)",
+            color: "var(--status-blocked)",
+            fontSize: "13px",
+          }}
+        >
+          {pageError}
+        </div>
+      )}
+
       <div
         style={{
           display: "flex",
@@ -68,7 +103,6 @@ export default function FilesPage() {
           borderTop: "1px solid var(--border)",
         }}
       >
-        {/* ── LEFT SIDEBAR: Workspace list ─────────────────────────────────── */}
         <aside
           style={{
             width: "220px",
@@ -97,7 +131,8 @@ export default function FilesPage() {
             return (
               <button
                 key={workspace.id}
-                onClick={() => handleWorkspaceSelect(workspace.id)}
+                type="button"
+                onClick={() => requestNavigation({ kind: "workspace", workspaceId: workspace.id })}
                 style={{
                   width: "100%",
                   display: "flex",
@@ -111,11 +146,11 @@ export default function FilesPage() {
                   textAlign: "left",
                   transition: "all 120ms ease",
                 }}
-                onMouseEnter={(e) => {
-                  if (!isSelected) e.currentTarget.style.background = "var(--surface-hover, rgba(255,255,255,0.05))";
+                onMouseEnter={(event) => {
+                  if (!isSelected) event.currentTarget.style.background = "var(--surface-hover, rgba(255,255,255,0.05))";
                 }}
-                onMouseLeave={(e) => {
-                  if (!isSelected) e.currentTarget.style.background = "transparent";
+                onMouseLeave={(event) => {
+                  if (!isSelected) event.currentTarget.style.background = "transparent";
                 }}
               >
                 <span style={{ fontSize: "18px", lineHeight: 1, flexShrink: 0 }}>{workspace.emoji}</span>
@@ -152,11 +187,9 @@ export default function FilesPage() {
           })}
         </aside>
 
-        {/* ── RIGHT PANEL: File explorer ────────────────────────────────────── */}
         <main style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
           {selectedWorkspace && selectedWorkspaceData ? (
             <>
-              {/* Breadcrumb bar + view toggle */}
               <div
                 style={{
                   display: "flex",
@@ -172,16 +205,16 @@ export default function FilesPage() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <Breadcrumbs
                     path={currentPath}
-                    onNavigate={setCurrentPath}
+                    onNavigate={(nextPath) => requestNavigation({ kind: "path", path: nextPath })}
                     prefix={selectedWorkspaceData.name}
                   />
                 </div>
 
-                {/* View mode toggle */}
                 <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
                   <button
+                    type="button"
                     onClick={() => setViewMode("list")}
-                    title="Vista lista"
+                    title="List view"
                     style={{
                       padding: "5px 7px",
                       borderRadius: "6px",
@@ -198,8 +231,9 @@ export default function FilesPage() {
                     <List size={15} />
                   </button>
                   <button
+                    type="button"
                     onClick={() => setViewMode("grid")}
-                    title="Vista iconos"
+                    title="Grid view"
                     style={{
                       padding: "5px 7px",
                       borderRadius: "6px",
@@ -218,13 +252,13 @@ export default function FilesPage() {
                 </div>
               </div>
 
-              {/* File list */}
               <div style={{ flex: 1, padding: "0" }}>
                 <FileBrowser
                   workspace={selectedWorkspace}
                   path={currentPath}
-                  onNavigate={setCurrentPath}
+                  onNavigate={(nextPath) => requestNavigation({ kind: "path", path: nextPath })}
                   viewMode={viewMode}
+                  onUnsavedChangesChange={setBrowserHasUnsavedChanges}
                 />
               </div>
             </>
@@ -239,11 +273,27 @@ export default function FilesPage() {
                 fontSize: "14px",
               }}
             >
-              Selecciona un workspace para explorar sus archivos
+              Select a workspace to explore files.
             </div>
           )}
         </main>
       </div>
+
+      <ConfirmDialog
+        open={Boolean(pendingNavigation)}
+        title="Discard unsaved editor changes?"
+        description="You have unsaved file edits. Switching folders or workspaces now will discard those changes."
+        confirmLabel="Discard changes"
+        confirmTone="danger"
+        onCancel={() => setPendingNavigation(null)}
+        onConfirm={() => {
+          if (pendingNavigation) {
+            applyNavigation(pendingNavigation);
+          }
+          setPendingNavigation(null);
+          setBrowserHasUnsavedChanges(false);
+        }}
+      />
     </div>
   );
 }

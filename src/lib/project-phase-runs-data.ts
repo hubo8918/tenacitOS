@@ -72,6 +72,8 @@ function normalizeFields(value: unknown): ProjectPhaseLatestRun["fields"] {
     needsFromHuman: asString(fields.needsFromHuman),
     decision: asString(fields.decision),
     handoffTo: asString(fields.handoffTo),
+    reviewerAgentId: asString(fields.reviewerAgentId),
+    reviewerName: asString(fields.reviewerName),
   };
 
   return Object.values(normalized).some(Boolean) ? normalized : null;
