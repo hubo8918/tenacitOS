@@ -113,8 +113,17 @@ interface ManagerTaskMutation {
   dependsOnTitles: string[];
 }
 
+interface ManagerTaskUpdateMutation {
+  title: string;
+  assigneeAgentId: string | null;
+  reviewerAgentId: string | null;
+  handoffToAgentId: string | null;
+  status: "pending" | "in_progress" | "blocked" | "completed" | null;
+}
+
 interface ManagerActionPlan {
   createTasks: ManagerTaskMutation[];
+  updateTasks: ManagerTaskUpdateMutation[];
   phaseUpdate: {
     status?: "pending" | "in_progress" | "blocked" | "completed";
     ownerAgentId?: string | null;
@@ -647,12 +656,13 @@ function buildPrompt(
       : action === "manage"
       ? [
           "Return an ACTIONS_JSON line with one compact JSON object.",
-          'ACTIONS_JSON schema: {"createTasks":[{"title":"...","assigneeAgentId":"...","reviewerAgentId":"...","handoffToAgentId":"...","priority":"high|medium|low","dueDate":"YYYY-MM-DD","deliverable":"...","dependsOnTitles":["..."]}],"phaseUpdate":{"status":"pending|in_progress|blocked|completed","ownerAgentId":"...","reviewerAgentId":"...","handoffToAgentId":"..."}}',
+          'ACTIONS_JSON schema: {"createTasks":[{"title":"...","assigneeAgentId":"...","reviewerAgentId":"...","handoffToAgentId":"...","priority":"high|medium|low","dueDate":"YYYY-MM-DD","deliverable":"...","dependsOnTitles":["..."]}],"updateTasks":[{"title":"...","assigneeAgentId":"...","reviewerAgentId":"...","handoffToAgentId":"...","status":"pending|in_progress|blocked|completed"}],"phaseUpdate":{"status":"pending|in_progress|blocked|completed","ownerAgentId":"...","reviewerAgentId":"...","handoffToAgentId":"..."}}',
           "Create at most 3 tasks.",
+          "Use updateTasks to reassign or reroute existing linked tasks instead of creating duplicates.",
           "Use phaseUpdate when you need to reassign the phase, set its reviewer, change handoff, or close/advance the phase.",
           "Every assigneeAgentId must be a real agent id. Prefer delegates from your likely handoffs list when assigning to others.",
           "Do not invent project ids, phase ids, or dependency ids. Use dependsOnTitles only when referencing other tasks you created in the same ACTIONS_JSON.",
-          "If no task or phase mutation should happen, return ACTIONS_JSON: {\"createTasks\":[],\"phaseUpdate\":null}.",
+          "If no task or phase mutation should happen, return ACTIONS_JSON: {\"createTasks\":[],\"updateTasks\":[],\"phaseUpdate\":null}.",
         ]
       : [];
 
@@ -749,12 +759,12 @@ function parseManagerActionPlan(text: string): ManagerActionPlan {
     .map((entry) => entry.trim())
     .find((entry) => entry.startsWith("ACTIONS_JSON:"));
   if (!line) {
-    return { createTasks: [], phaseUpdate: null };
+    return { createTasks: [], updateTasks: [], phaseUpdate: null };
   }
 
   const rawJson = line.slice("ACTIONS_JSON:".length).trim();
   if (!rawJson) {
-    return { createTasks: [], phaseUpdate: null };
+    return { createTasks: [], updateTasks: [], phaseUpdate: null };
   }
 
   let parsed: unknown;
@@ -797,6 +807,31 @@ function parseManagerActionPlan(text: string): ManagerActionPlan {
         .slice(0, 3)
     : [];
 
+  const updateTasks = Array.isArray((parsed as { updateTasks?: unknown })?.updateTasks)
+    ? ((parsed as { updateTasks: unknown[] }).updateTasks)
+        .map((entry) => {
+          if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
+          const task = entry as Record<string, unknown>;
+          const title = typeof task.title === "string" ? task.title.trim() : "";
+          if (!title) return null;
+          return {
+            title,
+            assigneeAgentId: sanitizeAgentId(task.assigneeAgentId),
+            reviewerAgentId: sanitizeAgentId(task.reviewerAgentId),
+            handoffToAgentId: sanitizeAgentId(task.handoffToAgentId),
+            status:
+              task.status === "pending" ||
+              task.status === "in_progress" ||
+              task.status === "blocked" ||
+              task.status === "completed"
+                ? task.status
+                : null,
+          } satisfies ManagerTaskUpdateMutation;
+        })
+        .filter((entry): entry is ManagerTaskUpdateMutation => Boolean(entry))
+        .slice(0, 6)
+    : [];
+
   const rawPhaseUpdate = (parsed as { phaseUpdate?: unknown })?.phaseUpdate;
   const phaseUpdate =
     rawPhaseUpdate && typeof rawPhaseUpdate === "object" && !Array.isArray(rawPhaseUpdate)
@@ -818,7 +853,7 @@ function parseManagerActionPlan(text: string): ManagerActionPlan {
         }
       : null;
 
-  return { createTasks, phaseUpdate };
+  return { createTasks, updateTasks, phaseUpdate };
 }
 
 function generateManagedTaskId(tasks: AgentTask[]): string {
@@ -835,14 +870,16 @@ async function applyManagerActionPlan(
   phaseContext: ProjectPhasePromptContext
 ): Promise<{
   createdTasks: Task[];
+  updatedTasks: Task[];
   progress: number | null;
   phaseUpdateApplied: ManagerActionPlan["phaseUpdate"];
 }> {
-  if (plan.createTasks.length === 0 && !plan.phaseUpdate) {
+  if (plan.createTasks.length === 0 && plan.updateTasks.length === 0 && !plan.phaseUpdate) {
     const tasks = await getAgentTasks();
     const projects = applyDerivedProjectProgress(await getProjects(), tasks);
     return {
       createdTasks: [],
+      updatedTasks: [],
       progress: projects.find((project) => project.id === phaseContext.projectId)?.progress ?? null,
       phaseUpdateApplied: null,
     };
@@ -861,6 +898,7 @@ async function applyManagerActionPlan(
   const linkedTasks = tasks.filter((task) => taskLinksToProject(task, project));
   const taskTitles = new Set(linkedTasks.map((task) => task.title.trim().toLowerCase()));
   const createdTasks: AgentTask[] = [];
+  const updatedTasks: AgentTask[] = [];
 
   for (const mutation of plan.createTasks) {
     const normalizedTitle = mutation.title.trim().toLowerCase();
@@ -922,8 +960,61 @@ async function applyManagerActionPlan(
     taskTitles.add(normalizedTitle);
   }
 
+  for (const mutation of plan.updateTasks) {
+    const normalizedTitle = mutation.title.trim().toLowerCase();
+    if (!normalizedTitle) continue;
+
+    const existingTask = linkedTasks.find((task) => task.title.trim().toLowerCase() === normalizedTitle);
+    if (!existingTask) {
+      continue;
+    }
+
+    const nextAssigneeAgentId = mutation.assigneeAgentId || existingTask.assigneeAgentId || existingTask.agent.id || null;
+    if (!nextAssigneeAgentId) {
+      throw new Error(`Manager action for "${mutation.title}" is missing an assignee.`);
+    }
+    if (
+      context.canDelegateToIds.length > 0 &&
+      nextAssigneeAgentId !== context.id &&
+      !context.canDelegateToIds.includes(nextAssigneeAgentId)
+    ) {
+      throw new Error(`Manager action cannot assign "${mutation.title}" to ${nextAssigneeAgentId}; not in canDelegateTo.`);
+    }
+
+    const nextReviewerAgentId = mutation.reviewerAgentId || existingTask.reviewerAgentId || undefined;
+    const nextHandoffToAgentId = mutation.handoffToAgentId || existingTask.handoffToAgentId || undefined;
+    const policyValidationError = await validateRoutingPolicy({
+      ownerAgentId: nextAssigneeAgentId,
+      reviewerAgentId: nextReviewerAgentId,
+      handoffToAgentId: nextHandoffToAgentId,
+    });
+    if (policyValidationError) {
+      throw new Error(`Manager action for "${mutation.title}" failed policy validation: ${policyValidationError}`);
+    }
+
+    const nextTask = normalizeAgentTask({
+      ...existingTask,
+      status: mutation.status || existingTask.status,
+      assigneeAgentId: nextAssigneeAgentId,
+      reviewerAgentId: nextReviewerAgentId,
+      handoffToAgentId: nextHandoffToAgentId,
+      agent:
+        existingTask.agent.id === nextAssigneeAgentId
+          ? existingTask.agent
+          : { id: nextAssigneeAgentId, emoji: existingTask.agent.emoji, name: nextAssigneeAgentId, color: existingTask.agent.color },
+    });
+
+    const nextIndex = tasks.findIndex((task) => task.id === existingTask.id);
+    if (nextIndex >= 0) {
+      tasks[nextIndex] = nextTask;
+      updatedTasks.push(nextTask);
+    }
+  }
+
   if (createdTasks.length > 0) {
     await saveAgentTasks([...tasks, ...createdTasks]);
+  } else if (updatedTasks.length > 0) {
+    await saveAgentTasks(tasks);
   }
 
   let phaseUpdateApplied: ManagerActionPlan["phaseUpdate"] = null;
@@ -994,6 +1085,7 @@ async function applyManagerActionPlan(
 
   return {
     createdTasks: createdTasks as Task[],
+    updatedTasks: updatedTasks as Task[],
     progress: nextProject?.progress ?? null,
     phaseUpdateApplied,
   };
@@ -1140,7 +1232,7 @@ export async function POST(request: NextRequest) {
     const timestamp = new Date().toISOString();
     const managerResult =
       action === "manage" && projectPhaseContext
-        ? await applyManagerActionPlan(managerPlan || { createTasks: [], phaseUpdate: null }, context, projectPhaseContext)
+        ? await applyManagerActionPlan(managerPlan || { createTasks: [], updateTasks: [], phaseUpdate: null }, context, projectPhaseContext)
         : null;
 
     const runDeliverable =
@@ -1151,10 +1243,13 @@ export async function POST(request: NextRequest) {
               managerResult.createdTasks.length > 0
                 ? `Created ${managerResult.createdTasks.length} managed task(s): ${managerResult.createdTasks.map((task) => task.title).join(", ")}`
                 : null,
+              managerResult.updatedTasks.length > 0
+                ? `Updated ${managerResult.updatedTasks.length} task(s): ${managerResult.updatedTasks.map((task) => task.title).join(", ")}`
+                : null,
               managerResult.phaseUpdateApplied
                 ? `Updated phase: status=${managerResult.phaseUpdateApplied.status || "unchanged"}, owner=${managerResult.phaseUpdateApplied.ownerAgentId || "unchanged"}, reviewer=${managerResult.phaseUpdateApplied.reviewerAgentId || "unchanged"}, handoff=${managerResult.phaseUpdateApplied.handoffToAgentId || "unchanged"}`
                 : null,
-              managerResult.createdTasks.length === 0 && !managerResult.phaseUpdateApplied
+              managerResult.createdTasks.length === 0 && managerResult.updatedTasks.length === 0 && !managerResult.phaseUpdateApplied
                 ? "Manager action completed without creating new tasks."
                 : null,
             ]
@@ -1226,6 +1321,12 @@ export async function POST(request: NextRequest) {
         managerResult
           ? {
               createdTasks: managerResult.createdTasks.map((task) => ({
+                id: task.id,
+                title: task.title,
+                assigneeAgentId: task.assigneeAgentId || null,
+                reviewerAgentId: task.reviewerAgentId || null,
+              })),
+              updatedTasks: managerResult.updatedTasks.map((task) => ({
                 id: task.id,
                 title: task.title,
                 assigneeAgentId: task.assigneeAgentId || null,

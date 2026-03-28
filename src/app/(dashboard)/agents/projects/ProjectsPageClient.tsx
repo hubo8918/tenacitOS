@@ -722,6 +722,7 @@ export default function ProjectsPageClient({
         error?: string;
         appliedMutations?: {
           createdTasks?: Array<{ title?: string | null }>;
+          updatedTasks?: Array<{ title?: string | null }>;
           phaseUpdate?: {
             status?: string | null;
             ownerAgentId?: string | null;
@@ -738,10 +739,16 @@ export default function ProjectsPageClient({
       const createdTitles = payload?.appliedMutations?.createdTasks
         ?.map((task) => task.title)
         .filter((title): title is string => Boolean(title));
+      const updatedTitles = payload?.appliedMutations?.updatedTasks
+        ?.map((task) => task.title)
+        .filter((title): title is string => Boolean(title));
       const phaseUpdate = payload?.appliedMutations?.phaseUpdate;
       const summaryParts = [
         createdTitles && createdTitles.length > 0
           ? `Created ${createdTitles.length} task${createdTitles.length === 1 ? "" : "s"}: ${createdTitles.join(", ")}.`
+          : null,
+        updatedTitles && updatedTitles.length > 0
+          ? `Updated ${updatedTitles.length} task${updatedTitles.length === 1 ? "" : "s"}: ${updatedTitles.join(", ")}.`
           : null,
         phaseUpdate
           ? `Phase updated${phaseUpdate.status ? ` to ${phaseUpdate.status.replace(/_/g, " ")}` : ""}.`
@@ -750,7 +757,7 @@ export default function ProjectsPageClient({
       setManagerActionSummary(
         summaryParts.length > 0
           ? summaryParts.join(" ")
-          : "Manager action completed without creating new tasks or phase changes."
+          : "Manager action completed without creating or updating tasks or phase changes."
       );
 
       await Promise.all([refetch(), refetchTasks()]);
@@ -1345,8 +1352,8 @@ export default function ProjectsPageClient({
             packetActions={
               selectedPhase ? (
                 <div className="space-y-3">
-                  <p className="text-sm" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
-                    Coordination packets go to the phase owner or project owner fallback. Review packets go only to the explicitly assigned reviewer.
+                    <p className="text-sm" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+                    Manager actions can create tasks, update linked task routing, and advance the selected phase. Coordination packets go to the phase owner or project owner fallback. Review packets go only to the explicitly assigned reviewer.
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <button type="button" onClick={handleRequestManagerAction} disabled={requestingManagerAction || hasDirtyPlanning || !selectedProject?.ownerAgentId} className="rounded-lg px-3 py-2 text-sm font-semibold" style={{ color: "#32D74B", border: "1px solid color-mix(in srgb, #32D74B 24%, transparent)", opacity: requestingManagerAction || hasDirtyPlanning || !selectedProject?.ownerAgentId ? 0.6 : 1 }}>
