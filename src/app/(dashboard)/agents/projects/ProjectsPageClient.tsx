@@ -1628,6 +1628,75 @@ export default function ProjectsPageClient({
 
           <div className="rounded-xl p-4" style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
             <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+              Delivery Snapshot
+            </p>
+            {selectedProject && selectedProjectHealth ? (
+              <div className="mt-3 space-y-4">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-lg p-3" style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                      Phase progress
+                    </p>
+                    <p className="mt-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                      {selectedProjectHealth.completedPhaseCount}/{selectedProjectHealth.phaseCount} complete
+                    </p>
+                    <p className="mt-1 text-xs" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+                      {selectedProjectHealth.inProgressPhaseCount} in progress | {selectedProjectHealth.needsReviewPhaseCount} waiting for review
+                    </p>
+                  </div>
+                  <div className="rounded-lg p-3" style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                      Task progress
+                    </p>
+                    <p className="mt-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                      {selectedProjectHealth.completedTaskCount}/{selectedProjectHealth.taskCount} complete
+                    </p>
+                    <p className="mt-1 text-xs" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+                      {selectedProjectHealth.inProgressTaskCount} active | {selectedProjectHealth.pendingTaskCount} pending
+                    </p>
+                  </div>
+                </div>
+                <div className="rounded-lg p-3" style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                    Participation
+                  </p>
+                  <p className="mt-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                    {selectedProject.participatingAgentIds.length} participating agent{selectedProject.participatingAgentIds.length === 1 ? "" : "s"}
+                  </p>
+                  <p className="mt-1 text-xs" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+                    {selectedProject.participatingAgentIds.length > 0
+                      ? selectedProject.participatingAgentIds
+                          .map((agentId) => teamAgentMap.get(agentId)?.name || agentId)
+                          .join(", ")
+                      : "No participants registered yet."}
+                  </p>
+                </div>
+                <div className="rounded-lg p-3" style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                    Risk watch
+                  </p>
+                  <p
+                    className="mt-2 text-sm font-semibold"
+                    style={{ color: selectedProjectHealth.blockedPhaseCount + selectedProjectHealth.blockedTaskCount > 0 ? "#FF9F0A" : "var(--text-primary)" }}
+                  >
+                    {selectedProjectHealth.blockedPhaseCount + selectedProjectHealth.blockedTaskCount > 0
+                      ? `${selectedProjectHealth.blockedPhaseCount + selectedProjectHealth.blockedTaskCount} blocked item${selectedProjectHealth.blockedPhaseCount + selectedProjectHealth.blockedTaskCount === 1 ? "" : "s"}`
+                      : "No blocked items"}
+                  </p>
+                  <p className="mt-1 text-xs" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+                    Use the manager queue above to jump straight into blocked or unrouted projects.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-3 text-sm" style={{ color: "var(--text-muted)" }}>
+                Select a project to inspect phase progress, task completion, and participant coverage.
+              </p>
+            )}
+          </div>
+
+          <div className="rounded-xl p-4" style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
+            <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
               Phase Planning
             </p>
             {selectedProject ? (
