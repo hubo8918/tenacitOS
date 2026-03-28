@@ -45,12 +45,14 @@ export default function TeamPageClient({
   initialTeam,
   initialDashboard,
   initialReviewFocus,
+  initialView,
 }: {
   initialTeam: TeamAgent[];
   initialDashboard: WorkItemDashboardData;
   initialReviewFocus: string;
+  initialView: TeamView;
 }) {
-  const [view, setView] = useState<TeamView>("inbox");
+  const [view, setView] = useState<TeamView>(initialView);
   const [reviewFocus, setReviewFocus] = useState(initialReviewFocus);
   const [query, setQuery] = useState("");
   const [tierFilter, setTierFilter] = useState<TierFilter>("all");

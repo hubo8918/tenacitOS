@@ -66,6 +66,7 @@ export default function ProjectsPageClient({
   const requestedProjectId = searchParams.get("projectId")?.trim() || "";
   const requestedPhaseId = searchParams.get("phaseId")?.trim() || "";
   const focusedProjectLabel = searchParams.get("project")?.trim() || "";
+  const focusedOwnerAgentId = searchParams.get("ownerAgentId")?.trim() || "";
   const normalizedFocusedProjectLabel = normalizeProjectLabel(focusedProjectLabel);
 
   const { data, loading, error, refetch } = useFetch<{ projects: Project[] }>("/api/projects", {
@@ -99,8 +100,11 @@ export default function ProjectsPageClient({
     if (normalizedFocusedProjectLabel) {
       return projects.filter((project) => normalizeProjectLabel(project.title) === normalizedFocusedProjectLabel);
     }
+    if (focusedOwnerAgentId) {
+      return projects.filter((project) => project.ownerAgentId === focusedOwnerAgentId);
+    }
     return projects;
-  }, [normalizedFocusedProjectLabel, projects, requestedProjectId]);
+  }, [focusedOwnerAgentId, normalizedFocusedProjectLabel, projects, requestedProjectId]);
 
   const [selectedProjectId, setSelectedProjectId] = useState(requestedProjectId);
   const [selectedPhaseId, setSelectedPhaseId] = useState(requestedPhaseId);
@@ -191,6 +195,9 @@ export default function ProjectsPageClient({
   const executionOwnerAgent = effectiveExecutionOwnerAgentId ? teamAgentMap.get(effectiveExecutionOwnerAgentId) || null : null;
   const reviewerAgent = effectiveReviewerAgentId ? teamAgentMap.get(effectiveReviewerAgentId) || null : null;
   const handoffAgent = effectiveHandoffAgentId ? teamAgentMap.get(effectiveHandoffAgentId) || null : null;
+  const focusedOwnerAgentName = focusedOwnerAgentId
+    ? teamAgentMap.get(focusedOwnerAgentId)?.name || focusedOwnerAgentId
+    : "";
   const projectRoutingWarnings = useMemo(() => {
     if (!selectedProject) return [];
 
@@ -1193,6 +1200,15 @@ export default function ProjectsPageClient({
                   <p key={line}>{line}</p>
                 ))}
               </div>
+            </div>
+          )}
+
+          {focusedOwnerAgentId && (
+            <div
+              className="rounded-xl p-4 text-sm"
+              style={{ backgroundColor: "color-mix(in srgb, #32D74B 10%, var(--surface-elevated))", border: "1px solid color-mix(in srgb, #32D74B 22%, transparent)", color: "var(--text-secondary)" }}
+            >
+              Showing projects managed by {focusedOwnerAgentName}.
             </div>
           )}
 

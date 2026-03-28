@@ -7,6 +7,16 @@ import type { WorkItemDashboardData } from "@/lib/work-item-types";
 export const dynamic = "force-dynamic";
 
 const REVIEW_FOCUS_ALL = "__all__";
+const TEAM_VIEW_INBOX = "inbox";
+
+function readSearchParam(
+  value: string | string[] | undefined
+): string {
+  if (Array.isArray(value)) {
+    return typeof value[0] === "string" ? value[0] : "";
+  }
+  return typeof value === "string" ? value : "";
+}
 
 async function getInitialTeam(): Promise<TeamAgent[]> {
   try {
@@ -40,9 +50,21 @@ async function getInitialDashboard(reviewer: string): Promise<WorkItemDashboardD
   }
 }
 
-export default async function TeamPage() {
+export default async function TeamPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const resolvedSearchParams = searchParams ? await searchParams : {};
   const initialTeam = await getInitialTeam();
-  const initialReviewFocus = getDefaultReviewFocus(initialTeam);
+  const requestedReviewFocus = readSearchParam(resolvedSearchParams.reviewer).trim();
+  const requestedView = readSearchParam(resolvedSearchParams.view).trim() === "agents" ? "agents" : TEAM_VIEW_INBOX;
+  const initialReviewFocus =
+    requestedReviewFocus === REVIEW_FOCUS_ALL ||
+    requestedReviewFocus === "__unassigned__" ||
+    initialTeam.some((agent) => agent.id === requestedReviewFocus)
+      ? requestedReviewFocus || getDefaultReviewFocus(initialTeam)
+      : getDefaultReviewFocus(initialTeam);
   const initialDashboard = await getInitialDashboard(initialReviewFocus);
 
   return (
@@ -50,6 +72,7 @@ export default async function TeamPage() {
       initialTeam={initialTeam}
       initialDashboard={initialDashboard}
       initialReviewFocus={initialReviewFocus}
+      initialView={requestedView}
     />
   );
 }

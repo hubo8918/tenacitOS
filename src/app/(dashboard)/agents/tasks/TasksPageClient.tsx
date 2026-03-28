@@ -57,6 +57,8 @@ export default function TasksPageClient({
   const requestedTaskId = searchParams.get("taskId")?.trim() || searchParams.get("task")?.trim() || "";
   const focusedProjectId = searchParams.get("projectId")?.trim() || "";
   const focusedProjectLabel = searchParams.get("project")?.trim() || "";
+  const focusedAgentId = searchParams.get("agentId")?.trim() || "";
+  const focusedReviewerId = searchParams.get("reviewerId")?.trim() || "";
   const mismatchOnlyRequested = searchParams.get("mismatch") === "1";
 
   const { data, loading, error, refetch } = useFetch<{ tasks: Task[] }>("/api/agent-tasks", {
@@ -74,6 +76,12 @@ export default function TasksPageClient({
     () => [...initialTaskAgents].sort((left, right) => left.name.localeCompare(right.name)),
     [initialTaskAgents]
   );
+  const focusedAgentName = focusedAgentId
+    ? taskAgents.find((agent) => agent.id === focusedAgentId)?.name || focusedAgentId
+    : "";
+  const focusedReviewerName = focusedReviewerId
+    ? taskAgents.find((agent) => agent.id === focusedReviewerId)?.name || focusedReviewerId
+    : "";
   const projectOptions = useMemo(
     () =>
       [...projects]
@@ -150,6 +158,12 @@ export default function TasksPageClient({
     const loweredQuery = query.trim().toLowerCase();
 
     return scopedTasks
+      .filter((task) =>
+        focusedAgentId ? (task.assigneeAgentId || task.agent.id || "") === focusedAgentId : true
+      )
+      .filter((task) =>
+        focusedReviewerId ? (task.reviewerAgentId || "") === focusedReviewerId : true
+      )
       .filter((task) => (showMismatchOnly ? mismatchTaskIds.has(task.id) : true))
       .filter((task) => (statusFilter === "all" ? true : task.status === statusFilter))
       .filter((task) => {
@@ -165,7 +179,7 @@ export default function TasksPageClient({
         if (leftNeedsReview !== rightNeedsReview) return leftNeedsReview - rightNeedsReview;
         return left.title.localeCompare(right.title);
       });
-  }, [mismatchTaskIds, query, scopedTasks, showMismatchOnly, statusFilter]);
+  }, [focusedAgentId, focusedReviewerId, mismatchTaskIds, query, scopedTasks, showMismatchOnly, statusFilter]);
 
   const selectedTask = useMemo(
     () => tasks.find((task) => task.id === selectedTaskId) || null,
@@ -829,6 +843,17 @@ export default function TasksPageClient({
                 {showMismatchOnly ? "Showing mismatches" : "Show mismatches"}
               </button>
             </div>
+            {(focusedAgentId || focusedReviewerId) && (
+              <div
+                className="mt-3 rounded-lg p-3 text-sm"
+                style={{ backgroundColor: "color-mix(in srgb, #0A84FF 10%, var(--card))", border: "1px solid color-mix(in srgb, #0A84FF 22%, transparent)", color: "var(--text-secondary)" }}
+              >
+                Showing
+                {focusedAgentId ? ` tasks owned by ${focusedAgentName}` : ""}
+                {focusedAgentId && focusedReviewerId ? " and" : ""}
+                {focusedReviewerId ? ` tasks reviewed by ${focusedReviewerName}` : ""}.
+              </div>
+            )}
             {error && (
               <p className="mt-3 text-sm" style={{ color: "var(--status-blocked)" }}>
                 {error}

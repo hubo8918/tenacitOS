@@ -711,6 +711,30 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
           </div>
         </div>
 
+        <div className="mb-3 flex flex-wrap gap-2 text-xs font-semibold">
+          <Link
+            href={`/agents/projects?ownerAgentId=${encodeURIComponent(agent.id)}`}
+            className="rounded-full px-3 py-1.5"
+            style={{ color: "#32D74B", border: "1px solid color-mix(in srgb, #32D74B 24%, transparent)" }}
+          >
+            Open projects
+          </Link>
+          <Link
+            href={`/agents/tasks?agentId=${encodeURIComponent(agent.id)}`}
+            className="rounded-full px-3 py-1.5"
+            style={{ color: "#0A84FF", border: "1px solid color-mix(in srgb, #0A84FF 24%, transparent)" }}
+          >
+            Open tasks
+          </Link>
+          <Link
+            href={`/agents/team?view=inbox&reviewer=${encodeURIComponent(agent.id)}`}
+            className="rounded-full px-3 py-1.5"
+            style={{ color: "#F59E0B", border: "1px solid color-mix(in srgb, #F59E0B 24%, transparent)" }}
+          >
+            Open review queue
+          </Link>
+        </div>
+
         {(reportsToName || reviewForNames.length > 0 || delegateToNames.length > 0) && (
           <div className="mb-3 flex flex-wrap gap-1.5">
             {reportsToName && (
