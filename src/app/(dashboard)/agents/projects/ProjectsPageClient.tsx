@@ -35,6 +35,31 @@ interface ProjectAttentionItem {
   severity: "high" | "medium";
 }
 
+interface ManagerActionResultSummary {
+  summary: string;
+  createdTasks: Array<{
+    id?: string | null;
+    title?: string | null;
+    assigneeAgentId?: string | null;
+    reviewerAgentId?: string | null;
+  }>;
+  updatedTasks: Array<{
+    id?: string | null;
+    title?: string | null;
+    assigneeAgentId?: string | null;
+    reviewerAgentId?: string | null;
+    handoffToAgentId?: string | null;
+    status?: string | null;
+  }>;
+  phaseUpdate: {
+    status?: string | null;
+    ownerAgentId?: string | null;
+    reviewerAgentId?: string | null;
+    handoffToAgentId?: string | null;
+  } | null;
+  projectProgress: number | null;
+}
+
 function getCurrentPhase(project: Project | null): ProjectPhase | null {
   if (!project) return null;
   return (
@@ -159,6 +184,7 @@ export default function ProjectsPageClient({
 
   const [requestingManagerAction, setRequestingManagerAction] = useState(false);
   const [managerActionSummary, setManagerActionSummary] = useState<string | null>(null);
+  const [managerActionResult, setManagerActionResult] = useState<ManagerActionResultSummary | null>(null);
   const [requestingCoordinationPacket, setRequestingCoordinationPacket] = useState(false);
   const [requestingReviewPacket, setRequestingReviewPacket] = useState(false);
   const [phaseReviewPending, setPhaseReviewPending] = useState<"approve" | "rework" | "block" | null>(null);
@@ -194,6 +220,13 @@ export default function ProjectsPageClient({
   const selectedProjectHealth = useMemo(
     () => (selectedProject ? projectHealthMap.get(selectedProject.id) || null : null),
     [projectHealthMap, selectedProject]
+  );
+  const latestManagerRun = useMemo(
+    () =>
+      selectedPhase?.latestRun?.fields?.managerAction
+        ? selectedPhase.latestRun
+        : null,
+    [selectedPhase]
   );
   const selectedProjectLinkedTasks = useMemo(
     () => (selectedProject ? projectLinkedTaskMap.get(selectedProject.id) || [] : []),
@@ -908,6 +941,7 @@ export default function ProjectsPageClient({
     setRequestingManagerAction(true);
     setPhasePacketError(null);
     setManagerActionSummary(null);
+    setManagerActionResult(null);
 
     try {
       const linkedTasks = (projectLinkedTaskMap.get(selectedProject.id) || []).slice(0, 12).map((task) => ({
@@ -995,6 +1029,16 @@ export default function ProjectsPageClient({
           ? summaryParts.join(" ")
           : "Manager action completed without creating or updating tasks or phase changes."
       );
+      setManagerActionResult({
+        summary:
+          summaryParts.length > 0
+            ? summaryParts.join(" ")
+            : "Manager action completed without creating or updating tasks or phase changes.",
+        createdTasks: payload?.appliedMutations?.createdTasks || [],
+        updatedTasks: payload?.appliedMutations?.updatedTasks || [],
+        phaseUpdate: payload?.appliedMutations?.phaseUpdate || null,
+        projectProgress: payload?.appliedMutations?.projectProgress ?? null,
+      });
 
       await Promise.all([refetch(), refetchTasks()]);
       setInspectorRefreshNonce((current) => current + 1);
@@ -1697,6 +1741,55 @@ export default function ProjectsPageClient({
 
           <div className="rounded-xl p-4" style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
             <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+              Latest Manager Result
+            </p>
+            {latestManagerRun ? (
+              <div className="mt-3 space-y-3">
+                <div>
+                  <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                    {latestManagerRun.fields?.mutationSummary || latestManagerRun.text || "Manager action applied"}
+                  </p>
+                  <p className="mt-1 text-xs" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+                    {latestManagerRun.agentName || latestManagerRun.agentId || "Manager"} | {new Date(latestManagerRun.timestamp).toLocaleString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      hour: "numeric",
+                      minute: "numeric",
+                    })}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {latestManagerRun.fields?.createdTasks && (
+                    <span className="rounded-full px-2 py-1 text-[10px] font-semibold" style={{ color: "#32D74B", backgroundColor: "color-mix(in srgb, #32D74B 12%, transparent)" }}>
+                      Created: {latestManagerRun.fields.createdTasks}
+                    </span>
+                  )}
+                  {latestManagerRun.fields?.updatedTasks && (
+                    <span className="rounded-full px-2 py-1 text-[10px] font-semibold" style={{ color: "#0A84FF", backgroundColor: "color-mix(in srgb, #0A84FF 12%, transparent)" }}>
+                      Updated: {latestManagerRun.fields.updatedTasks}
+                    </span>
+                  )}
+                  {latestManagerRun.fields?.phaseUpdate && (
+                    <span className="rounded-full px-2 py-1 text-[10px] font-semibold" style={{ color: "#FF9F0A", backgroundColor: "color-mix(in srgb, #FF9F0A 12%, transparent)" }}>
+                      Phase: {latestManagerRun.fields.phaseUpdate}
+                    </span>
+                  )}
+                  {latestManagerRun.fields?.projectProgress && (
+                    <span className="rounded-full px-2 py-1 text-[10px] font-semibold" style={{ color: "#BF5AF2", backgroundColor: "color-mix(in srgb, #BF5AF2 12%, transparent)" }}>
+                      Progress: {latestManagerRun.fields.projectProgress}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <p className="mt-3 text-sm" style={{ color: "var(--text-muted)" }}>
+                Run a manager action on the selected phase to record the latest coordination result here.
+              </p>
+            )}
+          </div>
+
+          <div className="rounded-xl p-4" style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
+            <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
               Phase Planning
             </p>
             {selectedProject ? (
@@ -1862,9 +1955,79 @@ export default function ProjectsPageClient({
                     </p>
                   )}
                   {managerActionSummary && !phasePacketError && (
-                    <p className="text-sm" style={{ color: "#32D74B" }}>
-                      {managerActionSummary}
-                    </p>
+                    <div
+                      className="space-y-3 rounded-lg p-3"
+                      style={{ backgroundColor: "color-mix(in srgb, #32D74B 10%, var(--card))", border: "1px solid color-mix(in srgb, #32D74B 24%, transparent)" }}
+                    >
+                      <p className="text-sm font-semibold" style={{ color: "#32D74B" }}>
+                        {managerActionSummary}
+                      </p>
+                      {managerActionResult && (
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                              Tasks created
+                            </p>
+                            <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)", lineHeight: 1.6 }}>
+                              {managerActionResult.createdTasks.length > 0
+                                ? managerActionResult.createdTasks
+                                    .map((task) => task.title)
+                                    .filter((title): title is string => Boolean(title))
+                                    .join(", ")
+                                : "None"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                              Tasks updated
+                            </p>
+                            <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)", lineHeight: 1.6 }}>
+                              {managerActionResult.updatedTasks.length > 0
+                                ? managerActionResult.updatedTasks
+                                    .map((task) => task.title)
+                                    .filter((title): title is string => Boolean(title))
+                                    .join(", ")
+                                : "None"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                              Phase update
+                            </p>
+                            <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)", lineHeight: 1.6 }}>
+                              {managerActionResult.phaseUpdate
+                                ? [
+                                    managerActionResult.phaseUpdate.status
+                                      ? `status ${managerActionResult.phaseUpdate.status.replace(/_/g, " ")}`
+                                      : null,
+                                    managerActionResult.phaseUpdate.ownerAgentId
+                                      ? `owner ${teamAgentMap.get(managerActionResult.phaseUpdate.ownerAgentId)?.name || managerActionResult.phaseUpdate.ownerAgentId}`
+                                      : null,
+                                    managerActionResult.phaseUpdate.reviewerAgentId
+                                      ? `reviewer ${teamAgentMap.get(managerActionResult.phaseUpdate.reviewerAgentId)?.name || managerActionResult.phaseUpdate.reviewerAgentId}`
+                                      : null,
+                                    managerActionResult.phaseUpdate.handoffToAgentId
+                                      ? `handoff ${teamAgentMap.get(managerActionResult.phaseUpdate.handoffToAgentId)?.name || managerActionResult.phaseUpdate.handoffToAgentId}`
+                                      : null,
+                                  ]
+                                    .filter((entry): entry is string => Boolean(entry))
+                                    .join(" | ") || "Applied"
+                                : "No phase mutation"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                              Resulting progress
+                            </p>
+                            <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)", lineHeight: 1.6 }}>
+                              {typeof managerActionResult.projectProgress === "number"
+                                ? `${managerActionResult.projectProgress}%`
+                                : "Unchanged"}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               ) : null
