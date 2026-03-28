@@ -3,11 +3,13 @@
 import Link from "next/link";
 
 import { priorityConfig, statusConfig, type Project, type ProjectPhase } from "@/data/mockProjectsData";
+import type { ProjectHealthSummary } from "@/lib/project-progress";
 
 interface ProjectCardProps {
   cardId?: string;
   project: Project;
   linkedTaskCount: number;
+  healthSummary?: ProjectHealthSummary | null;
   selectedPhaseId?: string | null;
   isSelectedProject?: boolean;
   isTemporarilyHighlighted?: boolean;
@@ -35,6 +37,7 @@ export function ProjectCard({
   cardId,
   project,
   linkedTaskCount,
+  healthSummary = null,
   selectedPhaseId = null,
   isSelectedProject = false,
   isTemporarilyHighlighted = false,
@@ -44,7 +47,8 @@ export function ProjectCard({
   const status = statusConfig[project.status];
   const priority = priorityConfig[project.priority];
   const currentPhase = getCurrentPhase(project);
-  const reviewNeededCount = project.phases.filter((phase) => phase.latestRun?.runStatus === "needs_review").length;
+  const reviewNeededCount = healthSummary?.needsReviewPhaseCount || 0;
+  const blockedItemCount = (healthSummary?.blockedPhaseCount || 0) + (healthSummary?.blockedTaskCount || 0);
 
   return (
     <div
@@ -95,6 +99,11 @@ export function ProjectCard({
           <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
             {currentPhase?.status || "pending"}
           </p>
+          <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+            {healthSummary
+              ? `${healthSummary.completedPhaseCount}/${healthSummary.phaseCount} phases complete`
+              : "No phase telemetry yet"}
+          </p>
         </div>
         <div className="rounded-lg px-3 py-2" style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
           <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
@@ -102,6 +111,11 @@ export function ProjectCard({
           </p>
           <p className="mt-1 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
             {linkedTaskCount}
+          </p>
+          <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+            {healthSummary
+              ? `${healthSummary.inProgressTaskCount} active • ${healthSummary.blockedTaskCount} blocked`
+              : "No task telemetry yet"}
           </p>
           <Link
             href={`/agents/tasks?projectId=${encodeURIComponent(project.id)}`}
@@ -120,6 +134,9 @@ export function ProjectCard({
           </p>
           <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
             Updated by {project.updatedBy || "Mission Control"}
+          </p>
+          <p className="mt-1 text-xs" style={{ color: blockedItemCount > 0 ? "#FF9F0A" : "var(--text-muted)" }}>
+            {blockedItemCount > 0 ? `${blockedItemCount} blocked item${blockedItemCount === 1 ? "" : "s"}` : "No blocked items"}
           </p>
         </div>
       </div>

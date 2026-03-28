@@ -2,6 +2,19 @@ import type { Project } from "@/data/mockProjectsData";
 import type { Task } from "@/data/mockTasksData";
 import { taskLinksToProject } from "@/lib/project-task-linkage";
 
+export interface ProjectHealthSummary {
+  phaseCount: number;
+  completedPhaseCount: number;
+  inProgressPhaseCount: number;
+  blockedPhaseCount: number;
+  needsReviewPhaseCount: number;
+  taskCount: number;
+  completedTaskCount: number;
+  inProgressTaskCount: number;
+  blockedTaskCount: number;
+  pendingTaskCount: number;
+}
+
 function clampProgress(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
@@ -42,6 +55,23 @@ export function deriveProjectProgress(project: Project, tasks: Task[]) {
   }
 
   return clampProgress((phaseScore * 0.65 + taskScore * 0.35) * 100);
+}
+
+export function summarizeProjectHealth(project: Project, tasks: Task[]): ProjectHealthSummary {
+  const linkedTasks = tasks.filter((task) => taskLinksToProject(task, project));
+
+  return {
+    phaseCount: project.phases.length,
+    completedPhaseCount: project.phases.filter((phase) => phase.status === "completed").length,
+    inProgressPhaseCount: project.phases.filter((phase) => phase.status === "in_progress").length,
+    blockedPhaseCount: project.phases.filter((phase) => phase.status === "blocked").length,
+    needsReviewPhaseCount: project.phases.filter((phase) => phase.latestRun?.runStatus === "needs_review").length,
+    taskCount: linkedTasks.length,
+    completedTaskCount: linkedTasks.filter((task) => task.status === "completed").length,
+    inProgressTaskCount: linkedTasks.filter((task) => task.status === "in_progress").length,
+    blockedTaskCount: linkedTasks.filter((task) => task.status === "blocked").length,
+    pendingTaskCount: linkedTasks.filter((task) => task.status === "pending").length,
+  };
 }
 
 export function applyDerivedProjectProgress(projects: Project[], tasks: Task[]) {

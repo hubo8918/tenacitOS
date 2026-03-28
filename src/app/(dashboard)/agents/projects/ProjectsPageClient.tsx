@@ -12,14 +12,20 @@ import { ProjectCard } from "@/components/ProjectCard";
 import { WorkItemInspector } from "@/components/WorkItemInspector";
 import { priorityConfig, statusConfig, type Project, type ProjectPhase } from "@/data/mockProjectsData";
 import type { Task } from "@/data/mockTasksData";
+import { summarizeProjectHealth } from "@/lib/project-progress";
 import { normalizeProjectLabel, resolveProjectForTask } from "@/lib/project-task-linkage";
 import { useFetch } from "@/lib/useFetch";
 
 interface ProjectsPageClientProps {
   initialProjects: Project[];
-  initialTeam: ReviewDecisionAgentOption[];
+  initialTeam: ProjectAgentOption[];
   initialTasks: Task[];
   initialTasksAvailable: boolean;
+}
+
+interface ProjectAgentOption extends ReviewDecisionAgentOption {
+  canReviewFor: string[];
+  canDelegateTo: string[];
 }
 
 function getCurrentPhase(project: Project): ProjectPhase | null {
@@ -81,6 +87,10 @@ export default function ProjectsPageClient({
     () => [...initialTeam].sort((left, right) => left.name.localeCompare(right.name)),
     [initialTeam]
   );
+  const teamAgentMap = useMemo(
+    () => new Map(teamAgents.map((agent) => [agent.id, agent])),
+    [teamAgents]
+  );
 
   const scopedProjects = useMemo(() => {
     if (requestedProjectId) {
@@ -138,16 +148,6 @@ export default function ProjectsPageClient({
   const [phaseReviewPending, setPhaseReviewPending] = useState<"approve" | "rework" | "block" | null>(null);
   const [phasePacketError, setPhasePacketError] = useState<string | null>(null);
   const [inspectorRefreshNonce, setInspectorRefreshNonce] = useState(0);
-
-  const selectedProject = useMemo(
-    () => projects.find((project) => project.id === selectedProjectId) || null,
-    [projects, selectedProjectId]
-  );
-  const selectedPhase = useMemo(
-    () => selectedProject?.phases.find((phase) => phase.id === selectedPhaseId) || null,
-    [selectedPhaseId, selectedProject]
-  );
-
   const projectLinkedTaskMap = useMemo(() => {
     const map = new Map<string, Task[]>();
     projects.forEach((project) => {
@@ -158,6 +158,116 @@ export default function ProjectsPageClient({
     });
     return map;
   }, [projects, tasks]);
+
+  const projectHealthMap = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof summarizeProjectHealth>>();
+    projects.forEach((project) => {
+      map.set(project.id, summarizeProjectHealth(project, tasks));
+    });
+    return map;
+  }, [projects, tasks]);
+
+  const selectedProject = useMemo(
+    () => projects.find((project) => project.id === selectedProjectId) || null,
+    [projects, selectedProjectId]
+  );
+  const selectedPhase = useMemo(
+    () => selectedProject?.phases.find((phase) => phase.id === selectedPhaseId) || null,
+    [selectedPhaseId, selectedProject]
+  );
+  const selectedProjectLinkedTasks = useMemo(
+    () => (selectedProject ? projectLinkedTaskMap.get(selectedProject.id) || [] : []),
+    [projectLinkedTaskMap, selectedProject]
+  );
+  const effectiveManagerAgentId = projectOwnerAgentId || selectedProject?.ownerAgentId || "";
+  const effectiveExecutionOwnerAgentId = phaseOwnerAgentId || selectedPhase?.ownerAgentId || projectOwnerAgentId || selectedProject?.ownerAgentId || "";
+  const effectiveReviewerAgentId = phaseReviewerAgentId || selectedPhase?.reviewerAgentId || "";
+  const effectiveHandoffAgentId = phaseHandoffAgentId || selectedPhase?.handoffToAgentId || "";
+  const managerAgent = effectiveManagerAgentId ? teamAgentMap.get(effectiveManagerAgentId) || null : null;
+  const executionOwnerAgent = effectiveExecutionOwnerAgentId ? teamAgentMap.get(effectiveExecutionOwnerAgentId) || null : null;
+  const reviewerAgent = effectiveReviewerAgentId ? teamAgentMap.get(effectiveReviewerAgentId) || null : null;
+  const handoffAgent = effectiveHandoffAgentId ? teamAgentMap.get(effectiveHandoffAgentId) || null : null;
+  const projectRoutingWarnings = useMemo(() => {
+    if (!selectedProject) return [];
+
+    const warnings: string[] = [];
+    if (!effectiveManagerAgentId) {
+      warnings.push("Assign a project owner so one agent can manage the project and issue manager actions.");
+    }
+    if (selectedPhase && !effectiveExecutionOwnerAgentId) {
+      warnings.push("Assign a phase owner or a project owner before requesting coordination or manager actions.");
+    }
+    if (selectedPhase && !effectiveReviewerAgentId) {
+      warnings.push("Assign an explicit reviewer if this phase should enter the review inbox.");
+    }
+
+    const reviewerPolicy =
+      effectiveReviewerAgentId && reviewerAgent ? reviewerAgent.canReviewFor : [];
+    if (
+      selectedPhase &&
+      effectiveExecutionOwnerAgentId &&
+      effectiveReviewerAgentId &&
+      reviewerPolicy.length > 0 &&
+      !reviewerPolicy.includes(effectiveExecutionOwnerAgentId)
+    ) {
+      warnings.push(
+        `${reviewerAgent?.name || effectiveReviewerAgentId} is not configured to review work for ${executionOwnerAgent?.name || effectiveExecutionOwnerAgentId}.`
+      );
+    }
+
+    const executionOwnerPolicy =
+      effectiveExecutionOwnerAgentId && executionOwnerAgent ? executionOwnerAgent.canDelegateTo : [];
+    if (
+      selectedPhase &&
+      effectiveExecutionOwnerAgentId &&
+      effectiveHandoffAgentId &&
+      executionOwnerPolicy.length > 0 &&
+      !executionOwnerPolicy.includes(effectiveHandoffAgentId)
+    ) {
+      warnings.push(
+        `${executionOwnerAgent?.name || effectiveExecutionOwnerAgentId} is not configured to hand off phase work to ${handoffAgent?.name || effectiveHandoffAgentId}.`
+      );
+    }
+
+    const managerPolicy = managerAgent?.canDelegateTo || [];
+    const disallowedLinkedAssignees =
+      managerPolicy.length > 0
+        ? Array.from(
+            new Set(
+              selectedProjectLinkedTasks
+                .map((task) => task.assigneeAgentId || task.agent.id || "")
+                .filter(
+                  (agentId) =>
+                    Boolean(agentId) &&
+                    agentId !== effectiveManagerAgentId &&
+                    !managerPolicy.includes(agentId)
+                )
+            )
+          )
+        : [];
+    if (disallowedLinkedAssignees.length > 0) {
+      warnings.push(
+        `${managerAgent?.name || effectiveManagerAgentId} cannot delegate to ${disallowedLinkedAssignees
+          .map((agentId) => teamAgentMap.get(agentId)?.name || agentId)
+          .join(", ")} under current routing policy.`
+      );
+    }
+
+    return warnings;
+  }, [
+    effectiveExecutionOwnerAgentId,
+    effectiveHandoffAgentId,
+    effectiveManagerAgentId,
+    effectiveReviewerAgentId,
+    executionOwnerAgent,
+    handoffAgent,
+    managerAgent,
+    reviewerAgent,
+    selectedPhase,
+    selectedProject,
+    selectedProjectLinkedTasks,
+    teamAgentMap,
+  ]);
 
   const projectWithoutPhaseCount = useMemo(
     () => projects.filter((project) => project.phases.length === 0).length,
@@ -1104,6 +1214,7 @@ export default function ProjectsPageClient({
                 cardId={`project-card-${project.id}`}
                 project={project}
                 linkedTaskCount={(projectLinkedTaskMap.get(project.id) || []).length}
+                healthSummary={projectHealthMap.get(project.id) || null}
                 selectedPhaseId={project.id === selectedProjectId ? selectedPhaseId : null}
                 isSelectedProject={project.id === selectedProjectId}
                 isTemporarilyHighlighted={project.id === highlightedProjectId}
@@ -1140,6 +1251,45 @@ export default function ProjectsPageClient({
             </p>
             {selectedProject ? (
               <div className="mt-3 space-y-4">
+                {projectHealthMap.get(selectedProject.id) ? (
+                  <div
+                    className="grid gap-3 md:grid-cols-4"
+                    style={{ color: "var(--text-secondary)" }}
+                  >
+                    <div className="rounded-lg px-3 py-2" style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                        Phase completion
+                      </p>
+                      <p className="mt-1 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                        {projectHealthMap.get(selectedProject.id)?.completedPhaseCount}/{projectHealthMap.get(selectedProject.id)?.phaseCount}
+                      </p>
+                    </div>
+                    <div className="rounded-lg px-3 py-2" style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                        Tasks in flight
+                      </p>
+                      <p className="mt-1 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                        {projectHealthMap.get(selectedProject.id)?.inProgressTaskCount || 0}
+                      </p>
+                    </div>
+                    <div className="rounded-lg px-3 py-2" style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                        Waiting review
+                      </p>
+                      <p className="mt-1 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                        {projectHealthMap.get(selectedProject.id)?.needsReviewPhaseCount || 0}
+                      </p>
+                    </div>
+                    <div className="rounded-lg px-3 py-2" style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                        Blocked items
+                      </p>
+                      <p className="mt-1 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                        {(projectHealthMap.get(selectedProject.id)?.blockedPhaseCount || 0) + (projectHealthMap.get(selectedProject.id)?.blockedTaskCount || 0)}
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
                 <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
                   Title
                   <input value={projectTitle} onChange={(event) => { setProjectTitle(event.target.value); setProjectDraftDirty(true); }} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }} />
@@ -1231,6 +1381,72 @@ export default function ProjectsPageClient({
             ) : (
               <p className="mt-3 text-sm" style={{ color: "var(--text-muted)" }}>
                 Select a project to edit its planning metadata, or create a new project above.
+              </p>
+            )}
+          </div>
+
+          <div className="rounded-xl p-4" style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
+            <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+              Execution Readiness
+            </p>
+            {selectedProject ? (
+              <div className="mt-3 space-y-4">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-lg p-3" style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                      Manager agent
+                    </p>
+                    <p className="mt-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                      {managerAgent?.name || "Unassigned"}
+                    </p>
+                    <p className="mt-1 text-xs" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                      {managerAgent
+                        ? managerAgent.canDelegateTo.length > 0
+                          ? `Explicit delegation scope: ${managerAgent.canDelegateTo.length} agent${managerAgent.canDelegateTo.length === 1 ? "" : "s"}.`
+                          : "Open delegation scope. Manager actions can assign any agent unless a task or phase review policy blocks it."
+                        : "Project-level manager actions stay disabled until a project owner is assigned."}
+                    </p>
+                  </div>
+                  <div className="rounded-lg p-3" style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                      Selected phase routing
+                    </p>
+                    <p className="mt-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                      {selectedPhase ? selectedPhase.title : "No phase selected"}
+                    </p>
+                    <p className="mt-1 text-xs" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+                      Owner: {executionOwnerAgent?.name || "Unassigned"} | Reviewer: {reviewerAgent?.name || "Unassigned"} | Handoff: {handoffAgent?.name || "None"}
+                    </p>
+                    <p className="mt-1 text-xs" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+                      Linked tasks: {selectedProjectLinkedTasks.length}
+                    </p>
+                  </div>
+                </div>
+                {projectRoutingWarnings.length > 0 ? (
+                  <div className="rounded-lg p-3" style={{ backgroundColor: "color-mix(in srgb, #FF9F0A 10%, var(--card))", border: "1px solid color-mix(in srgb, #FF9F0A 24%, transparent)" }}>
+                    <p className="text-sm font-semibold" style={{ color: "#FF9F0A" }}>
+                      Routing needs attention
+                    </p>
+                    <div className="mt-2 space-y-1 text-sm" style={{ color: "var(--text-secondary)", lineHeight: 1.6 }}>
+                      {projectRoutingWarnings.map((warning) => (
+                        <p key={warning}>{warning}</p>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-lg p-3" style={{ backgroundColor: "color-mix(in srgb, #32D74B 10%, var(--card))", border: "1px solid color-mix(in srgb, #32D74B 24%, transparent)" }}>
+                    <p className="text-sm font-semibold" style={{ color: "#32D74B" }}>
+                      Manager and review routing look coherent
+                    </p>
+                    <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)", lineHeight: 1.6 }}>
+                      This project has enough owner and reviewer data for manager actions, coordination packets, and review inbox handoff to stay on-policy.
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm" style={{ color: "var(--text-muted)" }}>
+                Select a project to inspect manager ownership, phase routing, and review readiness.
               </p>
             )}
           </div>

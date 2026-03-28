@@ -3,6 +3,7 @@ import type { ReviewDecisionAgentOption } from "@/components/ReviewDecisionCompo
 import type { Task } from "@/data/mockTasksData";
 import { getAgentTasks } from "@/lib/agent-tasks-data";
 import { getAgentsSummary } from "@/lib/agents-data";
+import { getRoutingPolicies } from "@/lib/agent-routing-policy";
 import { applyDerivedProjectProgress } from "@/lib/project-progress";
 import { getProjects } from "@/lib/projects-data";
 
@@ -25,13 +26,24 @@ async function getInitialTasks(): Promise<{ tasks: Task[]; available: boolean }>
   }
 }
 
-async function getInitialTeam(): Promise<ReviewDecisionAgentOption[]> {
+async function getInitialTeam(): Promise<
+  Array<
+    ReviewDecisionAgentOption & {
+      canReviewFor: string[];
+      canDelegateTo: string[];
+    }
+  >
+> {
   try {
-    const agents = await getAgentsSummary();
+    const [agents, routingPolicies] = await Promise.all([getAgentsSummary(), getRoutingPolicies()]);
     return agents
       .map((agent) => ({
         id: agent.id,
         name: agent.name || agent.id,
+        emoji: agent.emoji,
+        color: agent.color,
+        canReviewFor: routingPolicies.get(agent.id)?.canReviewFor || [],
+        canDelegateTo: routingPolicies.get(agent.id)?.canDelegateTo || [],
       }));
   } catch {
     return [];
