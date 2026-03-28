@@ -722,6 +722,12 @@ export default function ProjectsPageClient({
         error?: string;
         appliedMutations?: {
           createdTasks?: Array<{ title?: string | null }>;
+          phaseUpdate?: {
+            status?: string | null;
+            ownerAgentId?: string | null;
+            reviewerAgentId?: string | null;
+            handoffToAgentId?: string | null;
+          } | null;
           projectProgress?: number | null;
         } | null;
       } | null;
@@ -732,13 +738,20 @@ export default function ProjectsPageClient({
       const createdTitles = payload?.appliedMutations?.createdTasks
         ?.map((task) => task.title)
         .filter((title): title is string => Boolean(title));
-      if (createdTitles && createdTitles.length > 0) {
-        setManagerActionSummary(
-          `Created ${createdTitles.length} task${createdTitles.length === 1 ? "" : "s"}: ${createdTitles.join(", ")}.`
-        );
-      } else {
-        setManagerActionSummary("Manager action completed without creating new tasks.");
-      }
+      const phaseUpdate = payload?.appliedMutations?.phaseUpdate;
+      const summaryParts = [
+        createdTitles && createdTitles.length > 0
+          ? `Created ${createdTitles.length} task${createdTitles.length === 1 ? "" : "s"}: ${createdTitles.join(", ")}.`
+          : null,
+        phaseUpdate
+          ? `Phase updated${phaseUpdate.status ? ` to ${phaseUpdate.status.replace(/_/g, " ")}` : ""}.`
+          : null,
+      ].filter((entry): entry is string => Boolean(entry));
+      setManagerActionSummary(
+        summaryParts.length > 0
+          ? summaryParts.join(" ")
+          : "Manager action completed without creating new tasks or phase changes."
+      );
 
       await Promise.all([refetch(), refetchTasks()]);
       setInspectorRefreshNonce((current) => current + 1);
