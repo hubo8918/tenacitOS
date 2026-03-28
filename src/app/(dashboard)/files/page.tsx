@@ -19,6 +19,7 @@ export default function FilesPage() {
   const [selectedWorkspace, setSelectedWorkspace] = useState<string | null>(null);
   const [currentPath, setCurrentPath] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
+  const [workspacesResolved, setWorkspacesResolved] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [browserHasUnsavedChanges, setBrowserHasUnsavedChanges] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<PendingNavigation>(null);
@@ -35,6 +36,9 @@ export default function FilesPage() {
       .catch((error) => {
         setWorkspaces([]);
         setPageError(error instanceof Error ? error.message : "Failed to load workspaces.");
+      })
+      .finally(() => {
+        setWorkspacesResolved(true);
       });
   }, []);
 
@@ -77,6 +81,31 @@ export default function FilesPage() {
         <p style={{ fontFamily: "var(--font-body)", fontSize: "13px", color: "var(--text-secondary)" }}>
           Browse workspace files, preview content, and make safe edits without leaving Mission Control.
         </p>
+        {workspacesResolved && selectedWorkspaceData && (
+          <div
+            style={{
+              marginTop: "12px",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              padding: "8px 12px",
+              borderRadius: "999px",
+              backgroundColor: "color-mix(in srgb, var(--accent) 10%, var(--card))",
+              border: "1px solid color-mix(in srgb, var(--accent) 22%, var(--border))",
+              color: "var(--text-primary)",
+              fontSize: "12px",
+              fontWeight: 600,
+            }}
+          >
+            <span>{selectedWorkspaceData.emoji}</span>
+            <span>Auto-selected workspace: {selectedWorkspaceData.name}</span>
+            {selectedWorkspaceData.agentName && (
+              <span style={{ color: "var(--text-muted)", fontWeight: 500 }}>
+                {selectedWorkspaceData.agentName}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {pageError && (
@@ -188,7 +217,20 @@ export default function FilesPage() {
         </aside>
 
         <main style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
-          {selectedWorkspace && selectedWorkspaceData ? (
+          {!workspacesResolved ? (
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "var(--text-muted)",
+                fontSize: "14px",
+              }}
+            >
+              Loading workspaces...
+            </div>
+          ) : selectedWorkspace && selectedWorkspaceData ? (
             <>
               <div
                 style={{
@@ -262,6 +304,19 @@ export default function FilesPage() {
                 />
               </div>
             </>
+          ) : workspaces.length === 0 ? (
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "var(--text-muted)",
+                fontSize: "14px",
+              }}
+            >
+              No workspaces are available yet. Add one in settings or restore seeded data to start browsing files.
+            </div>
           ) : (
             <div
               style={{
@@ -273,7 +328,7 @@ export default function FilesPage() {
                 fontSize: "14px",
               }}
             >
-              Select a workspace to explore files.
+              Select a workspace to explore files. Mission Control auto-selects the first available workspace when it can.
             </div>
           )}
         </main>

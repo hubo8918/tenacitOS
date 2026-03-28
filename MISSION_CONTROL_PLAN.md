@@ -115,8 +115,22 @@ Priority now:
 
 ## Latest Checkpoint
 
+### 2026-03-28
+
+- clarified Team inbox empty states so routing gaps now point directly at `Unassigned` focus and explain that `needs_review` plus an assigned reviewer are required
+- added a lightweight routing-status banner for Team and Projects so legacy or partially routed data reads as "still needs setup" instead of looking broken
+- made Projects planning hints more explicit when there are no projects, no phases, or no reviewer assignments
+- surfaced the currently auto-selected workspace in Files so the first-run browser is clearly anchored to one workspace instead of feeling like it has not loaded yet
+
 ### 2026-03-25
 
+- added disk-backed migration and normalization for legacy `projects.json` and `agent-tasks.json` so old data is upgraded into real owners, reviewers, handoffs, phases, and linked run metadata instead of only being type-compatible
+- seeded live phase and review-capable task data so Team Inbox, Projects phase flow, and recent decisions now open with honest work instead of empty placeholder states
+- simplified Projects selection, draft hydration, and dirty tracking so clicking projects or phases no longer triggers false unsaved-planning banners
+- stabilized Files first paint around an explicit workspace loading state so auto-selected workspaces render the browser instead of briefly showing the empty "Select a workspace" fallback
+- tightened Team empty-state copy to distinguish "no work waiting for review" from "review routing is not configured yet"
+- aligned dev proxy and Next config with internal HMR/font paths, then added migration regression coverage with `npm run test:migrations`
+- cleaned up generated Playwright output so release hygiene stays focused on source changes, not browser audit artifacts
 - unified Files and Memory on a shared file-system service instead of route-local workspace maps
 - standardized file API failures around `{ error, code }` and aligned `browse`, `write`, `mkdir`, `delete`, `download`, `upload`, and `workspaces`
 - added unsaved-change guards plus inline error/confirm flows to Files and Memory so they no longer rely on raw browser alerts

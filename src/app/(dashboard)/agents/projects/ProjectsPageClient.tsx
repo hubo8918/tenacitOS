@@ -113,6 +113,7 @@ export default function ProjectsPageClient({
   const [projectProgress, setProjectProgress] = useState(0);
   const [projectOwnerAgentId, setProjectOwnerAgentId] = useState("");
   const [projectParticipants, setProjectParticipants] = useState<string[]>([]);
+  const [projectDraftDirty, setProjectDraftDirty] = useState(false);
   const [projectSaveError, setProjectSaveError] = useState<string | null>(null);
   const [savingProject, setSavingProject] = useState(false);
   const [deletingProject, setDeletingProject] = useState(false);
@@ -123,6 +124,7 @@ export default function ProjectsPageClient({
   const [phaseReviewerAgentId, setPhaseReviewerAgentId] = useState("");
   const [phaseHandoffAgentId, setPhaseHandoffAgentId] = useState("");
   const [phaseDependencyIds, setPhaseDependencyIds] = useState<string[]>([]);
+  const [phaseDraftDirty, setPhaseDraftDirty] = useState(false);
   const [phaseSaveError, setPhaseSaveError] = useState<string | null>(null);
   const [savingPhase, setSavingPhase] = useState(false);
   const [newPhaseTitle, setNewPhaseTitle] = useState("");
@@ -156,8 +158,35 @@ export default function ProjectsPageClient({
     return map;
   }, [projects, tasks]);
 
+  const projectWithoutPhaseCount = useMemo(
+    () => projects.filter((project) => project.phases.length === 0).length,
+    [projects]
+  );
+  const phaseWithoutReviewerCount = useMemo(
+    () =>
+      projects.reduce(
+        (count, project) => count + project.phases.filter((phase) => !phase.reviewerAgentId).length,
+        0
+      ),
+    [projects]
+  );
+  const projectDataHint =
+    projectWithoutPhaseCount > 0 || phaseWithoutReviewerCount > 0
+      ? {
+          title: "Routing still needs a little setup",
+          lines: [
+            projectWithoutPhaseCount > 0
+              ? `${projectWithoutPhaseCount} project${projectWithoutPhaseCount === 1 ? "" : "s"} still need their first tracked phase.`
+              : null,
+            phaseWithoutReviewerCount > 0
+              ? `${phaseWithoutReviewerCount} phase${phaseWithoutReviewerCount === 1 ? "" : "s"} still need a reviewer before they can enter the inbox.`
+              : null,
+          ].filter(Boolean) as string[],
+        }
+      : null;
+
   const projectDirty = useMemo(() => {
-    if (!selectedProject) return false;
+    if (!selectedProject || !projectDraftDirty) return false;
     return (
       projectTitle !== selectedProject.title ||
       projectDescription !== selectedProject.description ||
@@ -175,11 +204,12 @@ export default function ProjectsPageClient({
     projectProgress,
     projectStatus,
     projectTitle,
+    projectDraftDirty,
     selectedProject,
   ]);
 
   const phaseDirty = useMemo(() => {
-    if (!selectedPhase) return false;
+    if (!selectedPhase || !phaseDraftDirty) return false;
     return (
       phaseTitle !== selectedPhase.title ||
       phaseStatus !== selectedPhase.status ||
@@ -195,10 +225,11 @@ export default function ProjectsPageClient({
     phaseReviewerAgentId,
     phaseStatus,
     phaseTitle,
+    phaseDraftDirty,
     selectedPhase,
   ]);
 
-  const hasDirtyPlanning = projectDirty || phaseDirty || Boolean(newPhaseTitle.trim());
+  const hasDirtyPlanning = projectDirty || phaseDirty;
 
   const phaseDependents = useMemo(() => {
     if (!selectedProject || !selectedPhase) return [];
@@ -225,7 +256,7 @@ export default function ProjectsPageClient({
   }, [hasDirtyPlanning, projects, requestedPhaseId, requestedProjectId, scopedProjects, selectedProject]);
 
   useEffect(() => {
-    if (!selectedProject || hasDirtyPlanning) return;
+    if (!selectedProject) return;
 
     setProjectTitle(selectedProject.title);
     setProjectDescription(selectedProject.description);
@@ -234,6 +265,7 @@ export default function ProjectsPageClient({
     setProjectProgress(selectedProject.progress);
     setProjectOwnerAgentId(selectedProject.ownerAgentId || "");
     setProjectParticipants([...(selectedProject.participatingAgentIds || [])]);
+    setProjectDraftDirty(false);
     setProjectSaveError(null);
 
     const nextPhase =
@@ -250,10 +282,11 @@ export default function ProjectsPageClient({
     setPhaseReviewerAgentId(nextPhase?.reviewerAgentId || "");
     setPhaseHandoffAgentId(nextPhase?.handoffToAgentId || "");
     setPhaseDependencyIds([...(nextPhase?.dependsOnPhaseIds || [])]);
+    setPhaseDraftDirty(false);
     setPhaseSaveError(null);
     setNewPhaseTitle("");
     setNewPhaseStatus("pending");
-  }, [hasDirtyPlanning, requestedPhaseId, selectedPhaseId, selectedProject]);
+  }, [requestedPhaseId, selectedPhaseId, selectedProject]);
 
   useEffect(() => {
     if (!selectedProjectId) return;
@@ -279,8 +312,12 @@ export default function ProjectsPageClient({
 
   const applyPendingSelection = () => {
     if (!pendingSelection) return;
+    setProjectDraftDirty(false);
+    setPhaseDraftDirty(false);
     setSelectedProjectId(pendingSelection.projectId);
     setSelectedPhaseId(pendingSelection.phaseId || "");
+    setNewPhaseTitle("");
+    setNewPhaseStatus("pending");
     clearSelectionBlock();
   };
 
@@ -305,6 +342,7 @@ export default function ProjectsPageClient({
     setProjectProgress(selectedProject.progress);
     setProjectOwnerAgentId(selectedProject.ownerAgentId || "");
     setProjectParticipants([...(selectedProject.participatingAgentIds || [])]);
+    setProjectDraftDirty(false);
     setProjectSaveError(null);
   };
 
@@ -316,6 +354,7 @@ export default function ProjectsPageClient({
     setPhaseReviewerAgentId(selectedPhase.reviewerAgentId || "");
     setPhaseHandoffAgentId(selectedPhase.handoffToAgentId || "");
     setPhaseDependencyIds([...(selectedPhase.dependsOnPhaseIds || [])]);
+    setPhaseDraftDirty(false);
     setPhaseSaveError(null);
   };
 
@@ -362,6 +401,8 @@ export default function ProjectsPageClient({
       }
 
       await refetch();
+      setProjectDraftDirty(false);
+      setPhaseDraftDirty(false);
       setSelectedProjectId(payload?.id || "");
       setSelectedPhaseId("");
       setShowCreateForm(false);
@@ -417,6 +458,7 @@ export default function ProjectsPageClient({
       }
 
       await refetch();
+      setProjectDraftDirty(false);
       applyPendingSelection();
     } catch (saveError) {
       setProjectSaveError(saveError instanceof Error ? saveError.message : "Failed to save project metadata");
@@ -475,6 +517,7 @@ export default function ProjectsPageClient({
       }
 
       await refetch();
+      setPhaseDraftDirty(false);
       setInspectorRefreshNonce((current) => current + 1);
       applyPendingSelection();
     } catch (saveError) {
@@ -525,6 +568,7 @@ export default function ProjectsPageClient({
       }
 
       await refetch();
+      setPhaseDraftDirty(false);
       setSelectedPhaseId(nextPhaseId);
       setNewPhaseTitle("");
       setNewPhaseStatus("pending");
@@ -566,6 +610,7 @@ export default function ProjectsPageClient({
       }
 
       await refetch();
+      setPhaseDraftDirty(false);
       setSelectedPhaseId(nextPhases[0]?.id || "");
       setInspectorRefreshNonce((current) => current + 1);
     } catch (deletePhaseError) {
@@ -902,6 +947,19 @@ export default function ProjectsPageClient({
             </div>
           )}
 
+          {projectDataHint && (
+            <div className="rounded-xl p-4" style={{ backgroundColor: "color-mix(in srgb, #0A84FF 10%, var(--surface-elevated))", border: "1px solid color-mix(in srgb, #0A84FF 22%, transparent)" }}>
+              <p className="text-sm font-semibold" style={{ color: "#0A84FF" }}>
+                {projectDataHint.title}
+              </p>
+              <div className="mt-2 space-y-1 text-sm" style={{ color: "var(--text-secondary)", lineHeight: 1.6 }}>
+                {projectDataHint.lines.map((line) => (
+                  <p key={line}>{line}</p>
+                ))}
+              </div>
+            </div>
+          )}
+
           {loading && scopedProjects.length === 0 ? (
             <div className="rounded-xl p-4" style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
               <p className="text-sm" style={{ color: "var(--text-muted)" }}>
@@ -912,6 +970,9 @@ export default function ProjectsPageClient({
             <div className="rounded-xl p-4" style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
               <p className="text-sm" style={{ color: "var(--text-muted)" }}>
                 No projects match the current focus.
+              </p>
+              <p className="mt-2 text-sm" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+                Clear the project link filter or open a different project to continue planning.
               </p>
             </div>
           ) : (
@@ -924,7 +985,7 @@ export default function ProjectsPageClient({
                 selectedPhaseId={project.id === selectedProjectId ? selectedPhaseId : null}
                 isSelectedProject={project.id === selectedProjectId}
                 isTemporarilyHighlighted={project.id === highlightedProjectId}
-                onSelectProject={() => attemptSelect(project.id, selectedPhaseId)}
+                onSelectProject={() => attemptSelect(project.id, null)}
                 onSelectPhase={(phaseId) => attemptSelect(project.id, phaseId)}
               />
             ))
@@ -941,8 +1002,8 @@ export default function ProjectsPageClient({
                 {selectionBlockMessage}
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
-                <button type="button" onClick={applyPendingSelection} disabled={hasDirtyPlanning} className="rounded-lg px-3 py-2 text-sm font-semibold" style={{ color: "#111", backgroundColor: "#FF9F0A", opacity: hasDirtyPlanning ? 0.6 : 1 }}>
-                  Switch now
+                <button type="button" onClick={applyPendingSelection} className="rounded-lg px-3 py-2 text-sm font-semibold" style={{ color: "#111", backgroundColor: "#FF9F0A" }}>
+                  Discard changes and switch
                 </button>
                 <button type="button" onClick={clearSelectionBlock} className="rounded-lg px-3 py-2 text-sm font-semibold" style={{ color: "var(--text-secondary)", border: "1px solid var(--border)" }}>
                   Stay here
@@ -959,16 +1020,16 @@ export default function ProjectsPageClient({
               <div className="mt-3 space-y-4">
                 <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
                   Title
-                  <input value={projectTitle} onChange={(event) => setProjectTitle(event.target.value)} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }} />
+                  <input value={projectTitle} onChange={(event) => { setProjectTitle(event.target.value); setProjectDraftDirty(true); }} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }} />
                 </label>
                 <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
                   Description
-                  <textarea value={projectDescription} onChange={(event) => setProjectDescription(event.target.value)} rows={4} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)", resize: "vertical" }} />
+                  <textarea value={projectDescription} onChange={(event) => { setProjectDescription(event.target.value); setProjectDraftDirty(true); }} rows={4} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)", resize: "vertical" }} />
                 </label>
                 <div className="grid gap-4 md:grid-cols-2">
                   <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
                     Status
-                    <select value={projectStatus} onChange={(event) => setProjectStatus(event.target.value as Project["status"])} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
+                    <select value={projectStatus} onChange={(event) => { setProjectStatus(event.target.value as Project["status"]); setProjectDraftDirty(true); }} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
                       {Object.entries(statusConfig).map(([value, config]) => (
                         <option key={value} value={value}>
                           {config.label}
@@ -978,7 +1039,7 @@ export default function ProjectsPageClient({
                   </label>
                   <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
                     Priority
-                    <select value={projectPriority} onChange={(event) => setProjectPriority(event.target.value as Project["priority"])} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
+                    <select value={projectPriority} onChange={(event) => { setProjectPriority(event.target.value as Project["priority"]); setProjectDraftDirty(true); }} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
                       {Object.entries(priorityConfig).map(([value, config]) => (
                         <option key={value} value={value}>
                           {config.label}
@@ -988,11 +1049,11 @@ export default function ProjectsPageClient({
                   </label>
                   <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
                     Progress
-                    <input type="number" min={0} max={100} value={projectProgress} onChange={(event) => setProjectProgress(Number(event.target.value) || 0)} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }} />
+                    <input type="number" min={0} max={100} value={projectProgress} onChange={(event) => { setProjectProgress(Number(event.target.value) || 0); setProjectDraftDirty(true); }} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }} />
                   </label>
                   <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
                     Owner
-                    <select value={projectOwnerAgentId} onChange={(event) => setProjectOwnerAgentId(event.target.value)} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
+                    <select value={projectOwnerAgentId} onChange={(event) => { setProjectOwnerAgentId(event.target.value); setProjectDraftDirty(true); }} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
                       <option value="">Unassigned</option>
                       {teamAgents.map((agent) => (
                         <option key={agent.id} value={agent.id}>
@@ -1007,9 +1068,10 @@ export default function ProjectsPageClient({
                   <select
                     multiple
                     value={projectParticipants}
-                    onChange={(event) =>
-                      setProjectParticipants(Array.from(event.target.selectedOptions).map((option) => option.value))
-                    }
+                    onChange={(event) => {
+                      setProjectParticipants(Array.from(event.target.selectedOptions).map((option) => option.value));
+                      setProjectDraftDirty(true);
+                    }}
                     className="rounded-lg px-3 py-2 text-sm"
                     style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)", minHeight: "120px" }}
                   >
@@ -1041,7 +1103,7 @@ export default function ProjectsPageClient({
               </div>
             ) : (
               <p className="mt-3 text-sm" style={{ color: "var(--text-muted)" }}>
-                Select a project to edit its planning metadata.
+                Select a project to edit its planning metadata, or create a new project above.
               </p>
             )}
           </div>
@@ -1056,12 +1118,12 @@ export default function ProjectsPageClient({
                   <>
                     <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
                       Phase title
-                      <input value={phaseTitle} onChange={(event) => setPhaseTitle(event.target.value)} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }} />
+                      <input value={phaseTitle} onChange={(event) => { setPhaseTitle(event.target.value); setPhaseDraftDirty(true); }} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }} />
                     </label>
                     <div className="grid gap-4 md:grid-cols-2">
                       <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
                         Status
-                        <select value={phaseStatus} onChange={(event) => setPhaseStatus(event.target.value as ProjectPhase["status"])} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
+                        <select value={phaseStatus} onChange={(event) => { setPhaseStatus(event.target.value as ProjectPhase["status"]); setPhaseDraftDirty(true); }} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
                           <option value="pending">Pending</option>
                           <option value="in_progress">In progress</option>
                           <option value="blocked">Blocked</option>
@@ -1070,7 +1132,7 @@ export default function ProjectsPageClient({
                       </label>
                       <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
                         Owner
-                        <select value={phaseOwnerAgentId} onChange={(event) => setPhaseOwnerAgentId(event.target.value)} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
+                        <select value={phaseOwnerAgentId} onChange={(event) => { setPhaseOwnerAgentId(event.target.value); setPhaseDraftDirty(true); }} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
                           <option value="">Unassigned</option>
                           {teamAgents.map((agent) => (
                             <option key={agent.id} value={agent.id}>
@@ -1081,7 +1143,7 @@ export default function ProjectsPageClient({
                       </label>
                       <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
                         Reviewer
-                        <select value={phaseReviewerAgentId} onChange={(event) => setPhaseReviewerAgentId(event.target.value)} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
+                        <select value={phaseReviewerAgentId} onChange={(event) => { setPhaseReviewerAgentId(event.target.value); setPhaseDraftDirty(true); }} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
                           <option value="">Unassigned</option>
                           {teamAgents.map((agent) => (
                             <option key={agent.id} value={agent.id}>
@@ -1092,7 +1154,7 @@ export default function ProjectsPageClient({
                       </label>
                       <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
                         Handoff target
-                        <select value={phaseHandoffAgentId} onChange={(event) => setPhaseHandoffAgentId(event.target.value)} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
+                        <select value={phaseHandoffAgentId} onChange={(event) => { setPhaseHandoffAgentId(event.target.value); setPhaseDraftDirty(true); }} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
                           <option value="">None</option>
                           {teamAgents.map((agent) => (
                             <option key={agent.id} value={agent.id}>
@@ -1107,9 +1169,10 @@ export default function ProjectsPageClient({
                       <select
                         multiple
                         value={phaseDependencyIds}
-                        onChange={(event) =>
-                          setPhaseDependencyIds(Array.from(event.target.selectedOptions).map((option) => option.value))
-                        }
+                        onChange={(event) => {
+                          setPhaseDependencyIds(Array.from(event.target.selectedOptions).map((option) => option.value));
+                          setPhaseDraftDirty(true);
+                        }}
                         className="rounded-lg px-3 py-2 text-sm"
                         style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)", minHeight: "120px" }}
                       >
@@ -1141,7 +1204,7 @@ export default function ProjectsPageClient({
                   </>
                 ) : (
                   <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                    Select a phase from the project card to edit it.
+                    Select a phase from the project card to edit packet routing, review assignment, and dependencies.
                   </p>
                 )}
 
@@ -1173,7 +1236,7 @@ export default function ProjectsPageClient({
               </div>
             ) : (
               <p className="mt-3 text-sm" style={{ color: "var(--text-muted)" }}>
-                Select a project to edit phase planning.
+                Select a project to edit phase planning, or use the card list to jump to a specific phase.
               </p>
             )}
           </div>

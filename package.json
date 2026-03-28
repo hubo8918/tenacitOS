@@ -8,6 +8,7 @@
     "start": "next start -H 0.0.0.0",
     "lint": "eslint",
     "test:files": "node --import tsx --test tests/files-routes.test.ts",
+    "test:migrations": "node --import tsx --test tests/data-migrations.test.ts",
     "test:work-items": "node --import tsx --test tests/work-items-review.test.ts"
   },
   "dependencies": {

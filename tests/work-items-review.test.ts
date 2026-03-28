@@ -70,7 +70,17 @@ before(async () => {
 after(async () => {
   process.chdir(originalCwd);
   if (tempRoot) {
-    await rm(tempRoot, { recursive: true, force: true });
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try {
+        await rm(tempRoot, { recursive: true, force: true });
+        break;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EBUSY" || attempt === 4) {
+          throw error;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
   }
 });
 

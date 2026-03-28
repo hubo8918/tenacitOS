@@ -130,7 +130,7 @@ export function ProjectCard({
         </p>
         {project.phases.length === 0 ? (
           <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>
-            No phases yet. Create the first tracked phase in the planning panel.
+            No tracked phases yet. Add the first phase in the planning panel so this project can start routing work.
           </p>
         ) : (
           <div className="mt-3 space-y-2">
@@ -153,7 +153,7 @@ export function ProjectCard({
                       {phase.title}
                     </p>
                     <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
-                      {phase.ownerAgentId || "unassigned"} · {phase.reviewerAgentId || "no reviewer"}
+                      {phase.ownerAgentId || "unassigned"} - {phase.reviewerAgentId || "needs reviewer"}
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">

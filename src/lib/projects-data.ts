@@ -1,17 +1,22 @@
 import fs from "fs/promises";
 import path from "path";
-import type {
-  Project,
-  ProjectPhase,
-  ProjectPhaseExecutionMode,
-  ProjectPhaseLatestRun,
-  ProjectPhaseRunFields,
-  ProjectPhaseRunIntent,
-  ProjectPhaseRunKind,
-  ProjectPhaseRunStatus,
+import {
+  projects as seededProjects,
+  type Project,
+  type ProjectPhase,
+  type ProjectPhaseExecutionMode,
+  type ProjectPhaseLatestRun,
+  type ProjectPhaseRunFields,
+  type ProjectPhaseRunIntent,
+  type ProjectPhaseRunKind,
+  type ProjectPhaseRunStatus,
 } from "@/data/mockProjectsData";
+import { teamAgents } from "@/data/mockTeamData";
 
 const DATA_PATH = path.join(process.cwd(), "data", "projects.json");
+const TEAM_BY_ID = new Map(teamAgents.map((agent) => [agent.id, agent]));
+const TEAM_BY_NAME = new Map(teamAgents.map((agent) => [agent.name.trim().toLowerCase(), agent]));
+const SEEDED_PROJECTS_BY_ID = new Map(seededProjects.map((project) => [project.id, project]));
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
@@ -35,7 +40,7 @@ function normalizeProjectPriority(value: unknown): Project["priority"] {
 }
 
 function asNonEmptyString(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
 
 function normalizeProjectPhaseRunStatus(value: unknown): ProjectPhaseRunStatus | undefined {
@@ -61,6 +66,16 @@ function normalizeProjectPhaseRunIntent(value: unknown): ProjectPhaseRunIntent {
 
 function normalizeProjectPhaseExecutionMode(value: unknown): ProjectPhaseExecutionMode | undefined {
   return value === "manual" || value === "agent-run" ? value : undefined;
+}
+
+function resolveAgentRecord(id?: string, name?: string) {
+  if (id && TEAM_BY_ID.has(id)) {
+    return TEAM_BY_ID.get(id);
+  }
+  if (name) {
+    return TEAM_BY_NAME.get(name.trim().toLowerCase());
+  }
+  return undefined;
 }
 
 function normalizeProjectPhaseRunFields(value: unknown): ProjectPhaseRunFields | null {
@@ -139,6 +154,7 @@ function normalizeProjectPhase(phaseLike: unknown): ProjectPhase {
 export function normalizeProject(projectLike: unknown): Project {
   const project = asRecord(projectLike);
   const agent = asRecord(project.agent);
+  const canonicalAgent = resolveAgentRecord(asString(project.ownerAgentId), asString(agent.name));
 
   return {
     id: asString(project.id) || "",
@@ -147,11 +163,17 @@ export function normalizeProject(projectLike: unknown): Project {
     status: normalizeProjectStatus(project.status),
     progress: typeof project.progress === "number" ? project.progress : 0,
     priority: normalizeProjectPriority(project.priority),
-    agent: {
-      emoji: asString(agent.emoji) || "👤",
-      name: asString(agent.name) || "Unassigned",
-      color: asString(agent.color) || "#8E8E93",
-    },
+    agent: canonicalAgent
+      ? {
+          emoji: canonicalAgent.emoji,
+          name: canonicalAgent.name,
+          color: canonicalAgent.color,
+        }
+      : {
+          emoji: asString(agent.emoji) || "\u{1F464}",
+          name: asString(agent.name) || "Unassigned",
+          color: asString(agent.color) || "#8E8E93",
+        },
     updatedAgo: asString(project.updatedAgo) || "just now",
     updatedBy: asString(project.updatedBy) || "",
     ownerAgentId: asString(project.ownerAgentId),
@@ -160,14 +182,78 @@ export function normalizeProject(projectLike: unknown): Project {
   };
 }
 
+function samePhaseList(left: ProjectPhase[], right: ProjectPhase[]): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function migrateProject(project: Project): { project: Project; changed: boolean } {
+  const seeded = SEEDED_PROJECTS_BY_ID.get(project.id);
+  const ownerAgentId = project.ownerAgentId || resolveAgentRecord(undefined, project.agent.name)?.id || seeded?.ownerAgentId;
+  const canonicalOwner = resolveAgentRecord(ownerAgentId, project.agent.name);
+  const agent = canonicalOwner
+    ? {
+        emoji: canonicalOwner.emoji,
+        name: canonicalOwner.name,
+        color: canonicalOwner.color,
+      }
+    : project.agent;
+  const participatingAgentIds =
+    project.participatingAgentIds.length > 0
+      ? project.participatingAgentIds
+      : seeded?.participatingAgentIds?.length
+        ? [...seeded.participatingAgentIds]
+        : ownerAgentId
+          ? [ownerAgentId]
+          : [];
+  const phases =
+    project.phases.length > 0
+      ? project.phases
+      : seeded?.phases?.map((phase) => normalizeProjectPhase(phase)) || [];
+
+  const nextProject: Project = {
+    ...project,
+    ownerAgentId,
+    agent,
+    participatingAgentIds,
+    phases,
+  };
+
+  const changed =
+    nextProject.ownerAgentId !== project.ownerAgentId ||
+    nextProject.agent.name !== project.agent.name ||
+    nextProject.agent.emoji !== project.agent.emoji ||
+    nextProject.agent.color !== project.agent.color ||
+    JSON.stringify(nextProject.participatingAgentIds) !== JSON.stringify(project.participatingAgentIds) ||
+    !samePhaseList(nextProject.phases, project.phases);
+
+  return { project: nextProject, changed };
+}
+
 export async function getProjects(): Promise<Project[]> {
   try {
     const data = await fs.readFile(DATA_PATH, "utf-8");
     const parsed = JSON.parse(data) as unknown;
-    return Array.isArray(parsed) ? parsed.map((project) => normalizeProject(project)) : [];
+    const normalized = Array.isArray(parsed) ? parsed.map((project) => normalizeProject(project)) : [];
+
+    let didMigrate = false;
+    const nextProjects = normalized.map((project) => {
+      const migrated = migrateProject(project);
+      if (migrated.changed) {
+        didMigrate = true;
+      }
+      return migrated.project;
+    });
+
+    if (didMigrate) {
+      await saveProjects(nextProjects);
+    }
+
+    return nextProjects;
   } catch (error) {
     if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") {
-      return [];
+      const seeded = seededProjects.map((project) => normalizeProject(project));
+      await saveProjects(seeded);
+      return seeded;
     }
 
     throw error;
@@ -183,5 +269,6 @@ export async function saveProjects(projects: Project[]): Promise<void> {
     await fs.mkdir(dir, { recursive: true });
   }
 
-  await fs.writeFile(DATA_PATH, JSON.stringify(projects, null, 2));
+  const normalized = projects.map((project) => migrateProject(normalizeProject(project)).project);
+  await fs.writeFile(DATA_PATH, JSON.stringify(normalized, null, 2));
 }

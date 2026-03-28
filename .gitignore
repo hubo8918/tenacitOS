@@ -20,6 +20,9 @@
 # production
 /build
 
+# generated local test artifacts
+/output/
+
 # misc
 .DS_Store
 *.pem

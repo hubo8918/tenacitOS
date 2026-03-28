@@ -1,5 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
+import { tasks as seededTasks } from "@/data/mockTasksData";
+import { teamAgents } from "@/data/mockTeamData";
 import { getProjects } from "@/lib/projects-data";
 import { resolveProjectIdFromTaskProjectLabel } from "@/lib/project-task-linkage";
 
@@ -68,6 +70,9 @@ export interface AgentTask {
 }
 
 const DATA_PATH = path.join(process.cwd(), "data", "agent-tasks.json");
+const TEAM_BY_ID = new Map(teamAgents.map((agent) => [agent.id, agent]));
+const TEAM_BY_NAME = new Map(teamAgents.map((agent) => [agent.name.trim().toLowerCase(), agent]));
+const SEEDED_TASKS_BY_ID = new Map(seededTasks.map((task) => [task.id, task]));
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
@@ -78,7 +83,7 @@ function asString(value: unknown): string | undefined {
 }
 
 function asNonEmptyString(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
 
 function asStringArray(value: unknown): string[] {
@@ -180,11 +185,31 @@ function normalizeLatestRun(runLike: unknown): TaskLatestRun | null {
   };
 }
 
+function resolveAgentRecord(id?: string, name?: string) {
+  if (id && TEAM_BY_ID.has(id)) {
+    return TEAM_BY_ID.get(id);
+  }
+  if (name) {
+    return TEAM_BY_NAME.get(name.trim().toLowerCase());
+  }
+  return undefined;
+}
+
 function normalizeAgent(agentLike: unknown): TaskAgentRef {
   const agent = asRecord(agentLike);
+  const canonical = resolveAgentRecord(asString(agent.id), asString(agent.name));
+  if (canonical) {
+    return {
+      id: canonical.id,
+      emoji: canonical.emoji,
+      name: canonical.name,
+      color: canonical.color,
+    };
+  }
+
   return {
     id: asString(agent.id),
-    emoji: asString(agent.emoji) || "👤",
+    emoji: asString(agent.emoji) || "\u{1F464}",
     name: asString(agent.name) || "Unassigned",
     color: asString(agent.color) || "#8E8E93",
   };
@@ -214,6 +239,55 @@ export function normalizeAgentTask(taskLike: unknown): AgentTask {
   };
 }
 
+function sameTaskRun(left?: TaskLatestRun | null, right?: TaskLatestRun | null): boolean {
+  return JSON.stringify(left || null) === JSON.stringify(right || null);
+}
+
+function migrateTask(task: AgentTask): { task: AgentTask; changed: boolean } {
+  const seeded = SEEDED_TASKS_BY_ID.get(task.id);
+  const assigneeAgentId = task.assigneeAgentId || task.agent.id || seeded?.assigneeAgentId;
+  const canonicalAgent = resolveAgentRecord(assigneeAgentId, task.agent.name);
+  const agent: TaskAgentRef = canonicalAgent
+    ? {
+        id: canonicalAgent.id,
+        emoji: canonicalAgent.emoji,
+        name: canonicalAgent.name,
+        color: canonicalAgent.color,
+      }
+    : task.agent;
+
+  const nextTask: AgentTask = {
+    ...task,
+    agent,
+    assigneeAgentId,
+    reviewerAgentId: task.reviewerAgentId || seeded?.reviewerAgentId,
+    handoffToAgentId: task.handoffToAgentId || seeded?.handoffToAgentId,
+    blockedByTaskIds: task.blockedByTaskIds || [],
+    executionMode: task.executionMode || seeded?.executionMode || "manual",
+    runStatus:
+      task.runStatus !== "idle"
+        ? task.runStatus
+        : seeded?.runStatus || "idle",
+    deliverable: task.deliverable || seeded?.deliverable || "",
+    latestRun: task.latestRun || seeded?.latestRun || null,
+  };
+
+  const changed =
+    nextTask.agent.id !== task.agent.id ||
+    nextTask.agent.name !== task.agent.name ||
+    nextTask.agent.emoji !== task.agent.emoji ||
+    nextTask.agent.color !== task.agent.color ||
+    nextTask.assigneeAgentId !== task.assigneeAgentId ||
+    nextTask.reviewerAgentId !== task.reviewerAgentId ||
+    nextTask.handoffToAgentId !== task.handoffToAgentId ||
+    nextTask.executionMode !== task.executionMode ||
+    nextTask.runStatus !== task.runStatus ||
+    nextTask.deliverable !== task.deliverable ||
+    !sameTaskRun(nextTask.latestRun, task.latestRun);
+
+  return { task: nextTask, changed };
+}
+
 export async function getAgentTasks(): Promise<AgentTask[]> {
   try {
     const data = await fs.readFile(DATA_PATH, "utf-8");
@@ -221,8 +295,16 @@ export async function getAgentTasks(): Promise<AgentTask[]> {
     const tasks = Array.isArray(parsed) ? parsed.map((task) => normalizeAgentTask(task)) : [];
 
     const projects = await getProjects().catch(() => []);
-    let didBackfillProjectIds = false;
-    const nextTasks = tasks.map((task) => {
+    let didMigrate = false;
+    let nextTasks = tasks.map((task) => {
+      const migrated = migrateTask(task);
+      if (migrated.changed) {
+        didMigrate = true;
+      }
+      return migrated.task;
+    });
+
+    nextTasks = nextTasks.map((task) => {
       if (task.projectId) {
         return task;
       }
@@ -232,20 +314,27 @@ export async function getAgentTasks(): Promise<AgentTask[]> {
         return task;
       }
 
-      didBackfillProjectIds = true;
+      didMigrate = true;
       return {
         ...task,
         projectId: resolvedProjectId,
       };
     });
 
-    if (didBackfillProjectIds) {
+    if (didMigrate) {
       await saveAgentTasks(nextTasks);
     }
 
     return nextTasks;
-  } catch {
-    return [];
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | undefined)?.code;
+    if (code !== "ENOENT") {
+      return [];
+    }
+
+    const normalizedSeedTasks = seededTasks.map((task) => normalizeAgentTask(task));
+    await saveAgentTasks(normalizedSeedTasks);
+    return normalizedSeedTasks;
   }
 }
 
@@ -258,5 +347,6 @@ export async function saveAgentTasks(tasks: AgentTask[]): Promise<void> {
     await fs.mkdir(dir, { recursive: true });
   }
 
-  await fs.writeFile(DATA_PATH, JSON.stringify(tasks, null, 2));
+  const normalized = tasks.map((task) => migrateTask(normalizeAgentTask(task)).task);
+  await fs.writeFile(DATA_PATH, JSON.stringify(normalized, null, 2));
 }

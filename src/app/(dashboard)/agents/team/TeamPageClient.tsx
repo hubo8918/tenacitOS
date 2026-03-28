@@ -132,6 +132,8 @@ export default function TeamPageClient({
 
   const inboxItems = dashboardData?.items || [];
   const recentDecisions = dashboardData?.decisions || [];
+  const unassignedCount = dashboardData?.counts.unassigned || 0;
+  const hasInboxRoutingGap = inboxItems.length === 0 && unassignedCount > 0;
 
   const handleReviewDecision = async (
     item: WorkItemSummary,
@@ -278,6 +280,17 @@ export default function TeamPageClient({
             </div>
           )}
 
+          {unassignedCount > 0 && (
+            <div className="rounded-xl p-4" style={{ backgroundColor: "color-mix(in srgb, #0A84FF 10%, var(--surface-elevated))", border: "1px solid color-mix(in srgb, #0A84FF 22%, transparent)" }}>
+              <p className="text-sm font-semibold" style={{ color: "#0A84FF" }}>
+                {unassignedCount} review item{unassignedCount === 1 ? "" : "s"} still need routing
+              </p>
+              <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)", lineHeight: 1.6 }}>
+                If the inbox is quiet, switch the reviewer focus to <code>Unassigned</code> to route work, or assign a reviewer on the related task or phase.
+              </p>
+            </div>
+          )}
+
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
             <div className="space-y-3">
               {dashboardLoading && inboxItems.length === 0 ? (
@@ -289,7 +302,12 @@ export default function TeamPageClient({
               ) : inboxItems.length === 0 ? (
                 <div className="rounded-xl p-4" style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
                   <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                    No items are waiting for review right now.
+                    {hasInboxRoutingGap ? "No items are waiting for this reviewer right now." : "No items are waiting for review right now."}
+                  </p>
+                  <p className="mt-2 text-sm" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+                    If you expected work here, check that tasks or phases have an assigned reviewer and a current
+                    <code style={{ marginLeft: "4px", marginRight: "4px" }}>needs_review</code>
+                    run status. Use the <code style={{ marginLeft: "4px", marginRight: "4px" }}>Unassigned</code> focus to find items that still need routing.
                   </p>
                 </div>
               ) : (
@@ -303,7 +321,7 @@ export default function TeamPageClient({
                             {item.title}
                           </p>
                           <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
-                            {item.kind === "task" ? "Task" : "Phase"} · {item.parentTitle || "No parent"} · reviewer {item.reviewerAgentId || "unassigned"}
+                            {item.kind === "task" ? "Task" : "Phase"} - {item.parentTitle || "No parent"} - reviewer {item.reviewerAgentId || "unassigned"}
                           </p>
                         </div>
                         <Link href={item.deepLink.href} className="text-xs font-semibold" style={{ color: "#0A84FF" }}>
@@ -359,7 +377,7 @@ export default function TeamPageClient({
                             {decision.title}
                           </p>
                           <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
-                            {decision.kind === "task" ? "Task" : "Phase"} · {decision.parentTitle || "No parent"}
+                            {decision.kind === "task" ? "Task" : "Phase"} - {decision.parentTitle || "No parent"}
                           </p>
                           {decision.reviewerName && (
                             <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>

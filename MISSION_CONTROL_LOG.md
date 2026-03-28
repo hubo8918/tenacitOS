@@ -38,8 +38,23 @@ This file holds checkpoint summaries. Keep the active plan in `MISSION_CONTROL_P
 
 ## Recent Checkpoints
 
+### 2026-03-28
+
+- tightened Team inbox empty-state guidance so routing gaps now call out `Unassigned` review focus and explain that reviewer assignment plus `needs_review` is required before work can appear in Henry's queue
+- added a small routing-status banner so Team and Projects can distinguish "needs setup" records from genuinely empty queues
+- made Projects planning and phase-selection hints more explicit when a project has no phases, no reviewer, or no selected entity
+- surfaced the active workspace in Files with a small auto-selected badge so the first-run file browser reads as loaded and scoped rather than empty
+
 ### 2026-03-25
 
+- added persistent migration and normalization for legacy task and project JSON so runtime data now upgrades into the newer owner / reviewer / handoff / phase schema instead of only relying on loose type fallbacks
+- seeded real project phases plus review-capable tasks into the default data set, which gives Team Inbox, Projects, and recent decisions honest first-load work instead of "nothing here" empty states
+- simplified the Projects selection and draft state machine so project/phase clicks only hydrate drafts; dirty state now starts on actual edits, and create-phase drafts no longer lock the page
+- stabilized Files first paint with a `loading -> resolved -> selected` workspace flow so auto-selected workspaces render the browser directly instead of flashing the "Select a workspace" empty state
+- improved Team inbox empty-state guidance so it now explains the reviewer assignment plus `needs_review` run-status requirement
+- widened dev proxy and Next dev origin allowances around internal HMR and font routes, and added `npm run test:migrations` plus migration regression coverage for legacy disk data
+- verified fresh-start bootstrap behavior in a separate temp workspace so missing `projects.json` and `agent-tasks.json` now self-seed and persist without relying on cached module state
+- removed generated Playwright audit output from the repo root and added `/output/` to `.gitignore` so browser test artifacts stay out of release commits
 - introduced a shared file-system service so Files and Memory now resolve workspaces, paths, protection rules, uploads, downloads, and activity logging through one backend core
 - replaced route-local workspace maps with shared registry lookups across `/api/browse`, `/api/files/*`, and the legacy memory facade
 - standardized file API failures around `{ error, code }` so frontend error handling can distinguish invalid paths, missing paths, protected files, write denial, and workspace lookup failures
