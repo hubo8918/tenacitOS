@@ -3,6 +3,7 @@ import type { ReviewDecisionAgentOption } from "@/components/ReviewDecisionCompo
 import type { Task } from "@/data/mockTasksData";
 import { getAgentTasks } from "@/lib/agent-tasks-data";
 import { getAgentsSummary } from "@/lib/agents-data";
+import { applyDerivedProjectProgress } from "@/lib/project-progress";
 import { getProjects } from "@/lib/projects-data";
 
 export const dynamic = "force-dynamic";
@@ -44,10 +45,11 @@ export default async function ProjectsPage() {
     getInitialProjects(),
     getInitialTeam(),
   ]);
+  const hydratedProjects = applyDerivedProjectProgress(initialProjects, initialTasks);
 
   return (
     <ProjectsPageClient
-      initialProjects={initialProjects}
+      initialProjects={hydratedProjects}
       initialTeam={initialTeam}
       initialTasks={initialTasks}
       initialTasksAvailable={initialTasksAvailable}

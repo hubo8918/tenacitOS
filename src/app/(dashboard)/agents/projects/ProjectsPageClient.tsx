@@ -110,7 +110,6 @@ export default function ProjectsPageClient({
   const [projectDescription, setProjectDescription] = useState("");
   const [projectStatus, setProjectStatus] = useState<Project["status"]>("planning");
   const [projectPriority, setProjectPriority] = useState<Project["priority"]>("medium");
-  const [projectProgress, setProjectProgress] = useState(0);
   const [projectOwnerAgentId, setProjectOwnerAgentId] = useState("");
   const [projectParticipants, setProjectParticipants] = useState<string[]>([]);
   const [projectDraftDirty, setProjectDraftDirty] = useState(false);
@@ -132,6 +131,7 @@ export default function ProjectsPageClient({
   const [creatingPhase, setCreatingPhase] = useState(false);
   const [deletingPhase, setDeletingPhase] = useState(false);
 
+  const [requestingManagerAction, setRequestingManagerAction] = useState(false);
   const [requestingCoordinationPacket, setRequestingCoordinationPacket] = useState(false);
   const [requestingReviewPacket, setRequestingReviewPacket] = useState(false);
   const [phaseReviewPending, setPhaseReviewPending] = useState<"approve" | "rework" | "block" | null>(null);
@@ -192,7 +192,6 @@ export default function ProjectsPageClient({
       projectDescription !== selectedProject.description ||
       projectStatus !== selectedProject.status ||
       projectPriority !== selectedProject.priority ||
-      projectProgress !== selectedProject.progress ||
       projectOwnerAgentId !== (selectedProject.ownerAgentId || "") ||
       !sameStringList(projectParticipants, selectedProject.participatingAgentIds || [])
     );
@@ -201,7 +200,6 @@ export default function ProjectsPageClient({
     projectOwnerAgentId,
     projectParticipants,
     projectPriority,
-    projectProgress,
     projectStatus,
     projectTitle,
     projectDraftDirty,
@@ -262,7 +260,6 @@ export default function ProjectsPageClient({
     setProjectDescription(selectedProject.description);
     setProjectStatus(selectedProject.status);
     setProjectPriority(selectedProject.priority);
-    setProjectProgress(selectedProject.progress);
     setProjectOwnerAgentId(selectedProject.ownerAgentId || "");
     setProjectParticipants([...(selectedProject.participatingAgentIds || [])]);
     setProjectDraftDirty(false);
@@ -339,7 +336,6 @@ export default function ProjectsPageClient({
     setProjectDescription(selectedProject.description);
     setProjectStatus(selectedProject.status);
     setProjectPriority(selectedProject.priority);
-    setProjectProgress(selectedProject.progress);
     setProjectOwnerAgentId(selectedProject.ownerAgentId || "");
     setProjectParticipants([...(selectedProject.participatingAgentIds || [])]);
     setProjectDraftDirty(false);
@@ -441,7 +437,6 @@ export default function ProjectsPageClient({
           description: trimmedDescription,
           status: projectStatus,
           priority: projectPriority,
-          progress: projectProgress,
           ownerAgentId: owner?.id || undefined,
           participatingAgentIds: projectParticipants,
           agent: owner
@@ -674,6 +669,64 @@ export default function ProjectsPageClient({
       setPhasePacketError(packetError instanceof Error ? packetError.message : "Failed to request coordination packet");
     } finally {
       setRequestingCoordinationPacket(false);
+    }
+  };
+
+  const handleRequestManagerAction = async () => {
+    if (!selectedProject || !selectedPhase) return;
+    const managerAgentId = selectedProject.ownerAgentId || selectedPhase.ownerAgentId || "";
+    if (!managerAgentId) {
+      setPhasePacketError("Assign a project owner before requesting manager actions.");
+      return;
+    }
+
+    setRequestingManagerAction(true);
+    setPhasePacketError(null);
+
+    try {
+      const linkedTaskSummary = (projectLinkedTaskMap.get(selectedProject.id) || [])
+        .slice(0, 6)
+        .map((task) => `${task.title} (${task.assigneeAgentId || task.agent.id || "unassigned"})`)
+        .join(", ");
+      const response = await fetch("/api/team/actions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: managerAgentId,
+          action: "manage",
+          projectPhase: {
+            projectId: selectedProject.id,
+            projectTitle: selectedProject.title,
+            projectStatus: selectedProject.status,
+            projectPriority: selectedProject.priority,
+            projectOwner: selectedProject.agent.name !== "Unassigned" ? selectedProject.agent.name : null,
+            projectOwnerAgentId: selectedProject.ownerAgentId || null,
+            phaseId: selectedPhase.id,
+            phaseTitle: selectedPhase.title,
+            phaseStatus: selectedPhase.status,
+            phaseOwner: teamAgents.find((agent) => agent.id === selectedPhase.ownerAgentId)?.name || selectedPhase.ownerAgentId || null,
+            phaseOwnerAgentId: selectedPhase.ownerAgentId || null,
+            phaseReviewer: teamAgents.find((agent) => agent.id === selectedPhase.reviewerAgentId)?.name || selectedPhase.reviewerAgentId || null,
+            phaseReviewerAgentId: selectedPhase.reviewerAgentId || null,
+            phaseHandoff: teamAgents.find((agent) => agent.id === selectedPhase.handoffToAgentId)?.name || selectedPhase.handoffToAgentId || null,
+            phaseHandoffAgentId: selectedPhase.handoffToAgentId || null,
+            dependencies: phaseDependencyIds.map((phaseId) => selectedProject.phases.find((phase) => phase.id === phaseId)?.title || phaseId),
+            linkedTaskSummary: linkedTaskSummary || null,
+          },
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to request manager actions");
+      }
+
+      await Promise.all([refetch(), refetchTasks()]);
+      setInspectorRefreshNonce((current) => current + 1);
+    } catch (managerError) {
+      setPhasePacketError(managerError instanceof Error ? managerError.message : "Failed to request manager actions");
+    } finally {
+      setRequestingManagerAction(false);
     }
   };
 
@@ -1047,10 +1100,15 @@ export default function ProjectsPageClient({
                       ))}
                     </select>
                   </label>
-                  <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
-                    Progress
-                    <input type="number" min={0} max={100} value={projectProgress} onChange={(event) => { setProjectProgress(Number(event.target.value) || 0); setProjectDraftDirty(true); }} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }} />
-                  </label>
+                  <div className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                    <span>Derived progress</span>
+                    <div className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
+                      {selectedProject.progress}%
+                    </div>
+                    <p className="text-xs" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                      Computed from phase state and linked task status.
+                    </p>
+                  </div>
                   <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
                     Owner
                     <select value={projectOwnerAgentId} onChange={(event) => { setProjectOwnerAgentId(event.target.value); setProjectDraftDirty(true); }} className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
@@ -1259,6 +1317,9 @@ export default function ProjectsPageClient({
                     Coordination packets go to the phase owner or project owner fallback. Review packets go only to the explicitly assigned reviewer.
                   </p>
                   <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={handleRequestManagerAction} disabled={requestingManagerAction || hasDirtyPlanning || !selectedProject?.ownerAgentId} className="rounded-lg px-3 py-2 text-sm font-semibold" style={{ color: "#32D74B", border: "1px solid color-mix(in srgb, #32D74B 24%, transparent)", opacity: requestingManagerAction || hasDirtyPlanning || !selectedProject?.ownerAgentId ? 0.6 : 1 }}>
+                      {requestingManagerAction ? "Running..." : "Run manager action"}
+                    </button>
                     <button type="button" onClick={handleRequestCoordinationPacket} disabled={requestingCoordinationPacket || hasDirtyPlanning} className="rounded-lg px-3 py-2 text-sm font-semibold" style={{ backgroundColor: "var(--accent)", color: "#111", opacity: requestingCoordinationPacket || hasDirtyPlanning ? 0.6 : 1 }}>
                       {requestingCoordinationPacket ? "Requesting..." : "Request coordination packet"}
                     </button>

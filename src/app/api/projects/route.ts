@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Project } from "@/data/mockProjectsData";
 import { getAgentTasks, saveAgentTasks } from "@/lib/agent-tasks-data";
+import { applyDerivedProjectProgress } from "@/lib/project-progress";
 import { taskLinksToProject } from "@/lib/project-task-linkage";
 import { getProjects, normalizeProject, saveProjects } from "@/lib/projects-data";
 
@@ -21,6 +22,8 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status");
 
     let projects = await getProjects();
+    const tasks = await getAgentTasks().catch(() => []);
+    projects = applyDerivedProjectProgress(projects, tasks);
 
     if (status) {
       projects = projects.filter((p) => p.status === status);
@@ -70,8 +73,9 @@ export async function POST(request: NextRequest) {
 
     projects.unshift(newProject);
     await saveProjects(projects);
+    const tasks = await getAgentTasks().catch(() => []);
 
-    return NextResponse.json(newProject, { status: 201 });
+    return NextResponse.json(applyDerivedProjectProgress([newProject], tasks)[0], { status: 201 });
   } catch (error) {
     console.error("Failed to create project:", error);
     return NextResponse.json({ error: "Failed to create project" }, { status: 500 });
@@ -129,8 +133,9 @@ export async function PUT(request: NextRequest) {
 
     projects[index] = updatedProject;
     await saveProjects(projects);
+    const tasks = await getAgentTasks().catch(() => []);
 
-    return NextResponse.json(updatedProject);
+    return NextResponse.json(applyDerivedProjectProgress([updatedProject], tasks)[0]);
   } catch (error) {
     console.error("Failed to update project:", error);
     return NextResponse.json({ error: "Failed to update project" }, { status: 500 });

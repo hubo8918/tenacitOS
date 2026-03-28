@@ -3,8 +3,13 @@ import { spawnSync } from "child_process";
 import fs from "fs";
 import path from "path";
 
+import { getAgentTasks, normalizeAgentTask, saveAgentTasks, type AgentTask, type TaskRunIntent } from "@/lib/agent-tasks-data";
 import { getAgentsSummary, type AgentSummary } from "@/lib/agents-data";
+import { type Task } from "@/data/mockTasksData";
 import { recordProjectPhaseRun } from "@/lib/project-phase-runs-data";
+import { applyDerivedProjectProgress } from "@/lib/project-progress";
+import { getProjects, saveProjects } from "@/lib/projects-data";
+import { taskLinksToProject } from "@/lib/project-task-linkage";
 import { recordTaskRun } from "@/lib/task-runs-data";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +29,7 @@ const CLI_NOISE_PREFIXES = [
   "Bind:",
 ];
 
-type ActionName = "check-in" | "wake" | "review";
+type ActionName = "check-in" | "wake" | "review" | "manage";
 type ThinkingLevel = "minimal" | "low";
 
 interface TeamOverlayEntry {
@@ -47,6 +52,8 @@ interface ActionContext {
   reportsTo: string | null;
   canReviewFor: string[];
   canDelegateTo: string[];
+  canReviewForIds: string[];
+  canDelegateToIds: string[];
   model: string | null;
   workspace: string | null;
 }
@@ -80,14 +87,33 @@ interface ProjectPhasePromptContext {
   projectStatus: string | null;
   projectPriority: string | null;
   projectOwner: string | null;
+  projectOwnerAgentId: string | null;
   phaseId: string;
   phaseTitle: string;
   phaseStatus: string | null;
   phaseOwner: string | null;
+  phaseOwnerAgentId: string | null;
   phaseReviewer: string | null;
+  phaseReviewerAgentId: string | null;
   phaseHandoff: string | null;
+  phaseHandoffAgentId: string | null;
   dependencies: string[];
   linkedTaskSummary: string | null;
+}
+
+interface ManagerTaskMutation {
+  title: string;
+  assigneeAgentId: string | null;
+  reviewerAgentId: string | null;
+  handoffToAgentId: string | null;
+  priority: "high" | "medium" | "low";
+  dueDate: string | null;
+  deliverable: string | null;
+  dependsOnTitles: string[];
+}
+
+interface ManagerActionPlan {
+  createTasks: ManagerTaskMutation[];
 }
 
 function runOpenClaw(args: string[]): string {
@@ -234,7 +260,7 @@ function sanitizeAgentId(value: unknown): string | null {
 }
 
 function parseActionName(value: unknown): ActionName {
-  return value === "wake" || value === "review" ? value : "check-in";
+  return value === "wake" || value === "review" || value === "manage" ? value : "check-in";
 }
 
 function parseTaskPromptContext(value: unknown): TaskPromptContext | null {
@@ -325,6 +351,10 @@ function parseProjectPhasePromptContext(value: unknown): ProjectPhasePromptConte
       typeof phase.projectOwner === "string" && phase.projectOwner.trim().length > 0
         ? phase.projectOwner.trim()
         : null,
+    projectOwnerAgentId:
+      typeof phase.projectOwnerAgentId === "string" && phase.projectOwnerAgentId.trim().length > 0
+        ? phase.projectOwnerAgentId.trim()
+        : null,
     phaseId,
     phaseTitle,
     phaseStatus:
@@ -335,13 +365,25 @@ function parseProjectPhasePromptContext(value: unknown): ProjectPhasePromptConte
       typeof phase.phaseOwner === "string" && phase.phaseOwner.trim().length > 0
         ? phase.phaseOwner.trim()
         : null,
+    phaseOwnerAgentId:
+      typeof phase.phaseOwnerAgentId === "string" && phase.phaseOwnerAgentId.trim().length > 0
+        ? phase.phaseOwnerAgentId.trim()
+        : null,
     phaseReviewer:
       typeof phase.phaseReviewer === "string" && phase.phaseReviewer.trim().length > 0
         ? phase.phaseReviewer.trim()
         : null,
+    phaseReviewerAgentId:
+      typeof phase.phaseReviewerAgentId === "string" && phase.phaseReviewerAgentId.trim().length > 0
+        ? phase.phaseReviewerAgentId.trim()
+        : null,
     phaseHandoff:
       typeof phase.phaseHandoff === "string" && phase.phaseHandoff.trim().length > 0
         ? phase.phaseHandoff.trim()
+        : null,
+    phaseHandoffAgentId:
+      typeof phase.phaseHandoffAgentId === "string" && phase.phaseHandoffAgentId.trim().length > 0
+        ? phase.phaseHandoffAgentId.trim()
         : null,
     dependencies: Array.isArray(phase.dependencies)
       ? phase.dependencies.filter(
@@ -506,6 +548,8 @@ async function loadActionContext(agentId: string): Promise<ActionContext> {
         : null,
     canReviewFor: reviewTargets,
     canDelegateTo: delegateTargets,
+    canReviewForIds: normalizeLabelList(overlay?.canReviewFor).filter((id) => AGENT_ID_RE.test(id)),
+    canDelegateToIds: normalizeLabelList(overlay?.canDelegateTo).filter((id) => AGENT_ID_RE.test(id)),
     model: summary?.model || null,
     workspace: summary?.workspace || null,
   };
@@ -530,18 +574,24 @@ function buildPrompt(
       ? "Mission Control needs a structured operator check-in."
       : action === "review"
       ? "Mission Control needs a structured review decision."
+      : action === "manage"
+      ? "Mission Control needs a manager action plan with concrete task mutations."
       : "Mission Control needs a structured readiness ping.";
   const statusInstruction =
     action === "check-in"
       ? "STATUS: one short sentence about your current state."
       : action === "review"
       ? "STATUS: one short sentence about review confidence or risk."
+      : action === "manage"
+      ? "STATUS: one short sentence about the project coordination state."
       : "STATUS: start with READY or BLOCKED, then add one short sentence.";
   const focusInstruction =
     action === "check-in"
       ? "FOCUS: current work or repo area you own right now."
       : action === "review"
       ? "FOCUS: the deliverable, risk, or handoff boundary you reviewed."
+      : action === "manage"
+      ? "FOCUS: the phase or delivery slice you are decomposing right now."
       : "FOCUS: first repo area you will pick up next if ready.";
   const packetLines = taskContext
     ? [
@@ -586,6 +636,15 @@ function buildPrompt(
       ? [
           "DECISION: APPROVED, CHANGES_REQUESTED, BLOCKED, or NOT_READY.",
           "HANDOFF_TO: next owner after review, or NONE.",
+        ]
+      : action === "manage"
+      ? [
+          "Return an ACTIONS_JSON line with one compact JSON object.",
+          'ACTIONS_JSON schema: {"createTasks":[{"title":"...","assigneeAgentId":"...","reviewerAgentId":"...","handoffToAgentId":"...","priority":"high|medium|low","dueDate":"YYYY-MM-DD","deliverable":"...","dependsOnTitles":["..."]}]}',
+          "Create at most 3 tasks.",
+          "Every assigneeAgentId must be a real agent id. Prefer delegates from your likely handoffs list when assigning to others.",
+          "Do not invent project ids, phase ids, or dependency ids. Use dependsOnTitles only when referencing other tasks you created in the same ACTIONS_JSON.",
+          "If no task should be created, return ACTIONS_JSON: {\"createTasks\":[]}.",
         ]
       : [];
 
@@ -676,6 +735,164 @@ function parseStructuredActionFields(text: string): StructuredActionFields | nul
   return foundStructuredField ? parsed : null;
 }
 
+function parseManagerActionPlan(text: string): ManagerActionPlan {
+  const line = text
+    .split(/\r?\n/)
+    .map((entry) => entry.trim())
+    .find((entry) => entry.startsWith("ACTIONS_JSON:"));
+  if (!line) {
+    return { createTasks: [] };
+  }
+
+  const rawJson = line.slice("ACTIONS_JSON:".length).trim();
+  if (!rawJson) {
+    return { createTasks: [] };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawJson);
+  } catch {
+    throw new Error("Manager action returned invalid ACTIONS_JSON.");
+  }
+
+  const createTasks = Array.isArray((parsed as { createTasks?: unknown })?.createTasks)
+    ? ((parsed as { createTasks: unknown[] }).createTasks)
+        .map((entry) => {
+          if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
+          const task = entry as Record<string, unknown>;
+          const title = typeof task.title === "string" ? task.title.trim() : "";
+          if (!title) return null;
+          return {
+            title,
+            assigneeAgentId: sanitizeAgentId(task.assigneeAgentId),
+            reviewerAgentId: sanitizeAgentId(task.reviewerAgentId),
+            handoffToAgentId: sanitizeAgentId(task.handoffToAgentId),
+            priority:
+              task.priority === "high" || task.priority === "low" ? task.priority : "medium",
+            dueDate:
+              typeof task.dueDate === "string" && task.dueDate.trim().length > 0
+                ? task.dueDate.trim()
+                : null,
+            deliverable:
+              typeof task.deliverable === "string" && task.deliverable.trim().length > 0
+                ? task.deliverable.trim()
+                : null,
+            dependsOnTitles: Array.isArray(task.dependsOnTitles)
+              ? task.dependsOnTitles.filter(
+                  (value): value is string => typeof value === "string" && value.trim().length > 0
+                )
+              : [],
+          } satisfies ManagerTaskMutation;
+        })
+        .filter((entry): entry is ManagerTaskMutation => Boolean(entry))
+        .slice(0, 3)
+    : [];
+
+  return { createTasks };
+}
+
+function generateManagedTaskId(tasks: AgentTask[]): string {
+  const nums = tasks
+    .map((task) => parseInt(task.id.replace("task-", ""), 10))
+    .filter((value) => !Number.isNaN(value));
+  const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
+  return `task-${String(next).padStart(3, "0")}`;
+}
+
+async function applyManagerActionPlan(
+  plan: ManagerActionPlan,
+  context: ActionContext,
+  phaseContext: ProjectPhasePromptContext
+): Promise<{ createdTasks: Task[]; progress: number | null }> {
+  if (plan.createTasks.length === 0) {
+    const tasks = await getAgentTasks();
+    const projects = applyDerivedProjectProgress(await getProjects(), tasks);
+    return {
+      createdTasks: [],
+      progress: projects.find((project) => project.id === phaseContext.projectId)?.progress ?? null,
+    };
+  }
+
+  const [tasks, projects] = await Promise.all([getAgentTasks(), getProjects()]);
+  const project = projects.find((entry) => entry.id === phaseContext.projectId);
+  if (!project) {
+    throw new Error(`Project "${phaseContext.projectId}" was not found.`);
+  }
+
+  const linkedTasks = tasks.filter((task) => taskLinksToProject(task, project));
+  const taskTitles = new Set(linkedTasks.map((task) => task.title.trim().toLowerCase()));
+  const createdTasks: AgentTask[] = [];
+
+  for (const mutation of plan.createTasks) {
+    const normalizedTitle = mutation.title.trim().toLowerCase();
+    if (!normalizedTitle) continue;
+    if (taskTitles.has(normalizedTitle)) {
+      continue;
+    }
+
+    const assigneeAgentId =
+      mutation.assigneeAgentId || phaseContext.phaseOwnerAgentId || phaseContext.projectOwnerAgentId;
+    if (!assigneeAgentId) {
+      throw new Error(`Manager action for "${mutation.title}" is missing an assignee.`);
+    }
+    if (
+      context.canDelegateToIds.length > 0 &&
+      assigneeAgentId !== context.id &&
+      !context.canDelegateToIds.includes(assigneeAgentId)
+    ) {
+      throw new Error(`Manager action cannot assign "${mutation.title}" to ${assigneeAgentId}; not in canDelegateTo.`);
+    }
+    if (mutation.reviewerAgentId && mutation.reviewerAgentId === assigneeAgentId) {
+      throw new Error(`Manager action set the same owner and reviewer for "${mutation.title}".`);
+    }
+
+    const taskId = generateManagedTaskId([...tasks, ...createdTasks]);
+    const dependsOnIds = mutation.dependsOnTitles
+      .map((title) =>
+        createdTasks.find((task) => task.title.trim().toLowerCase() === title.trim().toLowerCase())?.id ||
+        linkedTasks.find((task) => task.title.trim().toLowerCase() === title.trim().toLowerCase())?.id
+      )
+      .filter((value): value is string => Boolean(value));
+
+    const newTask = normalizeAgentTask({
+      id: taskId,
+      title: mutation.title,
+      status: "pending",
+      priority: mutation.priority,
+      agent: { id: assigneeAgentId, emoji: "\u{1F464}", name: assigneeAgentId, color: "#8E8E93" },
+      project: project.title,
+      projectId: project.id,
+      dueDate: mutation.dueDate || "",
+      assigneeAgentId,
+      reviewerAgentId: mutation.reviewerAgentId || phaseContext.phaseReviewerAgentId || undefined,
+      handoffToAgentId: mutation.handoffToAgentId || phaseContext.phaseHandoffAgentId || undefined,
+      blockedByTaskIds: dependsOnIds,
+      executionMode: "agent-run",
+      runStatus: "queued",
+      deliverable: mutation.deliverable || "",
+    });
+
+    createdTasks.push(newTask);
+    taskTitles.add(normalizedTitle);
+  }
+
+  if (createdTasks.length > 0) {
+    await saveAgentTasks([...tasks, ...createdTasks]);
+  }
+
+  const nextProjects = applyDerivedProjectProgress(projects, [...tasks, ...createdTasks]);
+  const nextProject = nextProjects.find((entry) => entry.id === phaseContext.projectId) || null;
+  if (nextProject) {
+    await saveProjects(nextProjects);
+  }
+
+  return {
+    createdTasks: createdTasks as Task[],
+    progress: nextProject?.progress ?? null,
+  };
+}
+
 function derivePacketRunStatus(
   action: ActionName,
   fields: StructuredActionFields | null,
@@ -709,6 +926,13 @@ function derivePacketRunStatus(
     return "running";
   }
 
+  if (action === "manage") {
+    if (fields?.blockers || fields?.needsFromHuman || signalText.includes("blocked")) {
+      return "needs_review";
+    }
+    return "running";
+  }
+
   if (fields?.blockers || fields?.needsFromHuman || signalText.includes("blocked")) {
     return "needs_review";
   }
@@ -731,6 +955,20 @@ function buildPacketDeliverableSummary(
 
   const summary = parts.length > 0 ? parts.join(" | ") : fallbackText;
   return summary.length > 500 ? `${summary.slice(0, 500)}...` : summary;
+}
+
+function toStoredRunIntent(action: ActionName): TaskRunIntent {
+  if (action === "check-in") return "agent_check_in";
+  if (action === "wake") return "agent_wake";
+  if (action === "review") return "review";
+  return "debug";
+}
+
+function toStoredRunAction(action: ActionName): "check-in" | "wake" | "review" | undefined {
+  if (action === "check-in" || action === "wake" || action === "review") {
+    return action;
+  }
+  return undefined;
 }
 
 function toStoredActionFields(fields: StructuredActionFields | null) {
@@ -792,7 +1030,22 @@ export async function POST(request: NextRequest) {
     const parsed = parseJsonFromCliOutput(output);
     const summary = summarizeAgentRun(parsed, output);
     const fields = parseStructuredActionFields(summary.text);
+    const managerPlan = action === "manage" ? parseManagerActionPlan(summary.text) : null;
     const timestamp = new Date().toISOString();
+    const managerResult =
+      action === "manage" && projectPhaseContext
+        ? await applyManagerActionPlan(managerPlan || { createTasks: [] }, context, projectPhaseContext)
+        : null;
+
+    const runDeliverable =
+      action === "manage" && managerResult
+        ? buildPacketDeliverableSummary(
+            fields,
+            managerResult.createdTasks.length > 0
+              ? `Created ${managerResult.createdTasks.length} managed task(s): ${managerResult.createdTasks.map((task) => task.title).join(", ")}`
+              : "Manager action completed without creating new tasks."
+          )
+        : buildPacketDeliverableSummary(fields, summary.text);
 
     if (taskContext) {
       await recordTaskRun({
@@ -801,12 +1054,12 @@ export async function POST(request: NextRequest) {
         userAgent: request.headers.get("user-agent") || undefined,
         run: {
           kind: "agent_packet",
-          intent: action === "check-in" ? "agent_check_in" : action === "wake" ? "agent_wake" : "review",
-          action,
+          intent: toStoredRunIntent(action),
+          action: toStoredRunAction(action),
           timestamp,
           runStatus: derivePacketRunStatus(action, fields, summary.text),
           executionMode: "agent-run",
-          deliverable: buildPacketDeliverableSummary(fields, summary.text),
+          deliverable: runDeliverable,
           text: summary.text,
           agentId: context.id,
           agentName: context.name,
@@ -828,12 +1081,12 @@ export async function POST(request: NextRequest) {
         userAgent: request.headers.get("user-agent") || undefined,
         run: {
           kind: "agent_packet",
-          intent: action === "check-in" ? "agent_check_in" : action === "wake" ? "agent_wake" : "review",
-          action,
+          intent: toStoredRunIntent(action),
+          action: toStoredRunAction(action),
           timestamp,
           runStatus: derivePacketRunStatus(action, fields, summary.text),
           executionMode: "agent-run",
-          deliverable: buildPacketDeliverableSummary(fields, summary.text),
+          deliverable: runDeliverable,
           text: summary.text,
           agentId: context.id,
           agentName: context.name,
@@ -853,6 +1106,18 @@ export async function POST(request: NextRequest) {
       thinking,
       ...summary,
       fields,
+      appliedMutations:
+        managerResult
+          ? {
+              createdTasks: managerResult.createdTasks.map((task) => ({
+                id: task.id,
+                title: task.title,
+                assigneeAgentId: task.assigneeAgentId || null,
+                reviewerAgentId: task.reviewerAgentId || null,
+              })),
+              projectProgress: managerResult.progress,
+            }
+          : null,
       durationMs: summary.durationMs ?? Date.now() - startedAt,
       timestamp,
       taskId: taskContext?.id || null,
