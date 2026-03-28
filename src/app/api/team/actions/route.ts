@@ -147,6 +147,43 @@ interface ManagerActionPlan {
   } | null;
 }
 
+function deriveProjectParticipantIds(
+  project: {
+    ownerAgentId?: string;
+    participatingAgentIds?: string[];
+    phases: Array<{
+      ownerAgentId?: string;
+      reviewerAgentId?: string;
+      handoffToAgentId?: string;
+    }>;
+  },
+  linkedTasks: Array<{
+    assigneeAgentId?: string | null;
+    reviewerAgentId?: string | null;
+    handoffToAgentId?: string | null;
+    agent?: { id?: string };
+  }>
+): string[] {
+  return Array.from(
+    new Set(
+      [
+        project.ownerAgentId || "",
+        ...(project.participatingAgentIds || []),
+        ...project.phases.flatMap((phase) => [
+          phase.ownerAgentId || "",
+          phase.reviewerAgentId || "",
+          phase.handoffToAgentId || "",
+        ]),
+        ...linkedTasks.flatMap((task) => [
+          task.assigneeAgentId || task.agent?.id || "",
+          task.reviewerAgentId || "",
+          task.handoffToAgentId || "",
+        ]),
+      ].filter((value): value is string => Boolean(value))
+    )
+  );
+}
+
 function runOpenClaw(args: string[]): string {
   const execOptions = {
     encoding: "utf-8" as BufferEncoding,
@@ -1154,7 +1191,19 @@ export async function applyManagerActionPlan(
     };
   }
 
-  const nextProjects = applyDerivedProjectProgress(nextProjectsBase, [...tasks, ...createdTasks]);
+  const nextTasks = [...tasks, ...createdTasks];
+  const nextProjectsWithParticipants = nextProjectsBase.map((entry) =>
+    entry.id === project.id
+      ? {
+          ...entry,
+          participatingAgentIds: deriveProjectParticipantIds(
+            entry,
+            nextTasks.filter((task) => taskLinksToProject(task, entry))
+          ),
+        }
+      : entry
+  );
+  const nextProjects = applyDerivedProjectProgress(nextProjectsWithParticipants, nextTasks);
   const nextProject = nextProjects.find((entry) => entry.id === phaseContext.projectId) || null;
   if (nextProject) {
     await saveProjects(nextProjects);

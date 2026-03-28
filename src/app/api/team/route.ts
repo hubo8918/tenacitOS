@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import { spawnSync } from "child_process";
+import { getAgentTasks } from "@/lib/agent-tasks-data";
 import { getAgentsSummary, type AgentSummary } from "@/lib/agents-data";
+import { getProjects } from "@/lib/projects-data";
 
 const DATA_PATH = path.join(process.cwd(), "data", "team.json");
 const ACTIVE_WINDOW_MS = 15 * 60 * 1000;
@@ -51,6 +53,13 @@ interface TeamAgent {
   model: string;
   workspace: string;
   identitySource?: string;
+  workload?: {
+    ownedProjects: number;
+    activePhases: number;
+    activeTasks: number;
+    reviewQueue: number;
+    blockedItems: number;
+  };
 }
 
 interface OpenClawAgent {
@@ -607,6 +616,7 @@ async function buildMergedTeam(): Promise<TeamBuildResult> {
     }
   }
 
+  const enriched = await attachTeamWorkload(merged);
   const mergeMs = Date.now() - mergeStart;
   const totalMs = Date.now() - totalStart;
 
@@ -628,14 +638,57 @@ async function buildMergedTeam(): Promise<TeamBuildResult> {
 
   logTeamTrace("build.completed", trace);
 
-  return { team: merged, trace };
+  return { team: enriched, trace };
 }
 
 function cloneTeam(team: TeamAgent[]): TeamAgent[] {
   return team.map((agent) => ({
     ...agent,
     tags: agent.tags.map((tag) => ({ ...tag })),
+    workload: agent.workload ? { ...agent.workload } : undefined,
   }));
+}
+
+async function attachTeamWorkload(team: TeamAgent[]): Promise<TeamAgent[]> {
+  try {
+    const [tasks, projects] = await Promise.all([getAgentTasks(), getProjects()]);
+
+    return team.map((agent) => {
+      const ownedProjects = projects.filter((project) => project.ownerAgentId === agent.id).length;
+      const phases = projects.flatMap((project) => project.phases);
+      const activePhases = phases.filter(
+        (phase) => phase.ownerAgentId === agent.id && phase.status === "in_progress"
+      ).length;
+      const blockedPhases = phases.filter(
+        (phase) => phase.ownerAgentId === agent.id && phase.status === "blocked"
+      ).length;
+      const activeTasks = tasks.filter(
+        (task) => (task.assigneeAgentId || task.agent.id) === agent.id && task.status === "in_progress"
+      ).length;
+      const blockedTasks = tasks.filter(
+        (task) => (task.assigneeAgentId || task.agent.id) === agent.id && task.status === "blocked"
+      ).length;
+      const reviewTaskCount = tasks.filter(
+        (task) => task.reviewerAgentId === agent.id && task.runStatus === "needs_review"
+      ).length;
+      const reviewPhaseCount = phases.filter(
+        (phase) => phase.reviewerAgentId === agent.id && phase.latestRun?.runStatus === "needs_review"
+      ).length;
+
+      return {
+        ...agent,
+        workload: {
+          ownedProjects,
+          activePhases,
+          activeTasks,
+          reviewQueue: reviewTaskCount + reviewPhaseCount,
+          blockedItems: blockedTasks + blockedPhases,
+        },
+      };
+    });
+  } catch {
+    return team;
+  }
 }
 
 function getFreshTeamCache(): TeamAgent[] | null {

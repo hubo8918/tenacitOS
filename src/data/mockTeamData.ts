@@ -17,6 +17,13 @@ export interface TeamAgent {
   model?: string;
   workspace?: string;
   identitySource?: string;
+  workload?: {
+    ownedProjects: number;
+    activePhases: number;
+    activeTasks: number;
+    reviewQueue: number;
+    blockedItems: number;
+  };
 }
 
 export interface TierConfig {

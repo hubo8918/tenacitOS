@@ -151,6 +151,7 @@ test("manager actions can update existing linked tasks by task id", async () => 
       phaseHandoffAgentId: "scout",
       dependencies: [],
       linkedTaskSummary: "Track launch readiness",
+      linkedTasks: [],
     }
   );
 
@@ -240,8 +241,91 @@ test("manager actions reject task updates that violate routing policy", async ()
           phaseHandoffAgentId: "scout",
           dependencies: [],
           linkedTaskSummary: "Track launch readiness",
+          linkedTasks: [],
         }
       ),
     /not configured to review work for/
+  );
+});
+
+test("manager actions sync project participants from phase and task routing", async () => {
+  await writeBaselineData();
+
+  await applyManagerActionPlan(
+    {
+      createTasks: [
+        {
+          title: "Ship operator dashboard",
+          assigneeAgentId: "ralph",
+          reviewerAgentId: "scout",
+          handoffToAgentId: "quill",
+          priority: "high",
+          dueDate: "2026-04-02",
+          deliverable: "Dashboard rollout plan",
+          dependsOnTitles: [],
+        },
+      ],
+      updateTasks: [],
+      phaseUpdate: {
+        ownerAgentId: "codex",
+        reviewerAgentId: "ralph",
+        handoffToAgentId: "scout",
+      },
+    },
+    {
+      id: "henry",
+      name: "Henry",
+      role: "Chief of Staff",
+      description: "Coordinates work",
+      tags: [],
+      reportsTo: null,
+      canReviewFor: [],
+      canDelegateTo: ["codex", "ralph", "scout", "quill"],
+      canReviewForIds: [],
+      canDelegateToIds: ["codex", "ralph", "scout", "quill"],
+      model: "openai-codex/gpt-5.4",
+      workspace: "workspace",
+    },
+    {
+      projectId: "project-mission-control",
+      projectTitle: "Mission Control",
+      projectStatus: "active",
+      projectPriority: "medium",
+      projectOwner: "Henry",
+      projectOwnerAgentId: "henry",
+      phaseId: "phase-plan",
+      phaseTitle: "Planning",
+      phaseStatus: "in_progress",
+      phaseOwner: "Henry",
+      phaseOwnerAgentId: "henry",
+      phaseReviewer: "Ralph",
+      phaseReviewerAgentId: "ralph",
+      phaseHandoff: "Scout",
+      phaseHandoffAgentId: "scout",
+      dependencies: [],
+      linkedTaskSummary: "Track launch readiness",
+      linkedTasks: [
+        {
+          id: "task-001",
+          title: "Track launch readiness",
+          ownerAgentId: "codex",
+          reviewerAgentId: "henry",
+          handoffToAgentId: "charlie",
+          status: "pending",
+        },
+      ],
+    }
+  );
+
+  const { getProjects } = await import(
+    pathToFileURL(path.join(REPO_ROOT, "src/lib/projects-data.ts")).href
+  );
+  const projects = await getProjects();
+  const project = projects.find((entry) => entry.id === "project-mission-control");
+
+  assert.ok(project);
+  assert.deepEqual(
+    [...(project?.participatingAgentIds || [])].sort(),
+    ["charlie", "codex", "henry", "quill", "ralph", "scout"].sort()
   );
 });

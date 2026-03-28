@@ -23,6 +23,13 @@ interface TeamAgent {
   model?: string;
   workspace?: string;
   identitySource?: string;
+  workload?: {
+    ownedProjects: number;
+    activePhases: number;
+    activeTasks: number;
+    reviewQueue: number;
+    blockedItems: number;
+  };
 }
 
 interface AgentActionResult {
@@ -212,6 +219,13 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
   const delegateToNames = (agent.canDelegateTo || [])
     .map((candidateId) => allAgents.find((candidate) => candidate.id === candidateId)?.name || candidateId)
     .filter(Boolean);
+  const workloadStats = [
+    { label: "Projects", value: agent.workload?.ownedProjects ?? 0 },
+    { label: "Active phases", value: agent.workload?.activePhases ?? 0 },
+    { label: "Active tasks", value: agent.workload?.activeTasks ?? 0 },
+    { label: "Review queue", value: agent.workload?.reviewQueue ?? 0 },
+  ];
+  const blockedItems = agent.workload?.blockedItems ?? 0;
 
   const toggleReviewTarget = (agentId: string) => {
     setCanReviewFor((current) =>
@@ -671,6 +685,30 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
               {tag.label}
             </span>
           ))}
+        </div>
+
+        <div
+          className="mb-3 grid grid-cols-2 gap-2 rounded-lg p-3"
+          style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}
+        >
+          {workloadStats.map((stat) => (
+            <div key={stat.label}>
+              <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                {stat.label}
+              </p>
+              <p className="mt-1 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                {stat.value}
+              </p>
+            </div>
+          ))}
+          <div className="col-span-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+              Blocked items
+            </p>
+            <p className="mt-1 text-sm font-semibold" style={{ color: blockedItems > 0 ? "#FF9F0A" : "var(--text-primary)" }}>
+              {blockedItems}
+            </p>
+          </div>
         </div>
 
         {(reportsToName || reviewForNames.length > 0 || delegateToNames.length > 0) && (
