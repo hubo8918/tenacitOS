@@ -10,7 +10,12 @@ import {
   type ReviewDecisionSubmitPayload,
 } from "@/components/ReviewDecisionComposer";
 import { useFetch } from "@/lib/useFetch";
-import type { WorkItemHistoryEntry, WorkItemKind, WorkItemSummary } from "@/lib/work-item-types";
+import type {
+  WorkItemHistoryEntry,
+  WorkItemKind,
+  WorkItemRunFields,
+  WorkItemSummary,
+} from "@/lib/work-item-types";
 
 interface WorkItemInspectorData {
   item: WorkItemSummary | null;
@@ -63,6 +68,38 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
       <p className="mt-1 text-sm" style={{ color: "var(--text-primary)" }}>
         {value}
       </p>
+    </div>
+  );
+}
+
+function renderAuditChips(fields?: WorkItemRunFields | null) {
+  if (!fields?.managerAction) return null;
+
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      <span className="rounded-full px-2 py-1 text-[10px] font-medium" style={{ color: "#64D2FF", backgroundColor: "color-mix(in srgb, #64D2FF 12%, transparent)" }}>
+        Manager action
+      </span>
+      {fields.createdTasks && (
+        <span className="rounded-full px-2 py-1 text-[10px] font-medium" style={{ color: "#32D74B", backgroundColor: "color-mix(in srgb, #32D74B 12%, transparent)" }}>
+          Created: {fields.createdTasks}
+        </span>
+      )}
+      {fields.updatedTasks && (
+        <span className="rounded-full px-2 py-1 text-[10px] font-medium" style={{ color: "#0A84FF", backgroundColor: "color-mix(in srgb, #0A84FF 12%, transparent)" }}>
+          Updated: {fields.updatedTasks}
+        </span>
+      )}
+      {fields.phaseUpdate && (
+        <span className="rounded-full px-2 py-1 text-[10px] font-medium" style={{ color: "#FF9F0A", backgroundColor: "color-mix(in srgb, #FF9F0A 12%, transparent)" }}>
+          Phase: {fields.phaseUpdate}
+        </span>
+      )}
+      {fields.projectProgress && (
+        <span className="rounded-full px-2 py-1 text-[10px] font-medium" style={{ color: "#BF5AF2", backgroundColor: "color-mix(in srgb, #BF5AF2 12%, transparent)" }}>
+          Progress: {fields.projectProgress}
+        </span>
+      )}
     </div>
   );
 }
@@ -194,6 +231,26 @@ export function WorkItemInspector({
                 )}
               </div>
             )}
+
+            {item.latestRun?.fields?.managerAction && (
+              <div
+                className="mt-4 rounded-lg px-3 py-3"
+                style={{
+                  backgroundColor: "var(--card)",
+                  border: "1px solid color-mix(in srgb, #BF5AF2 20%, var(--border))",
+                }}
+              >
+                <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                  Manager mutation
+                </p>
+                {item.latestRun.fields.mutationSummary && (
+                  <p className="mt-1 text-sm" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+                    {item.latestRun.fields.mutationSummary}
+                  </p>
+                )}
+                {renderAuditChips(item.latestRun.fields)}
+              </div>
+            )}
           </>
         ) : null}
       </section>
@@ -278,6 +335,11 @@ export function WorkItemInspector({
                     {entry.text}
                   </p>
                 )}
+                {entry.fields?.mutationSummary && (
+                  <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)", lineHeight: 1.6 }}>
+                    {entry.fields.mutationSummary}
+                  </p>
+                )}
                 {entry.fields && (
                   <div className="mt-3 flex flex-wrap gap-2">
                     {entry.fields.decision && (
@@ -302,6 +364,7 @@ export function WorkItemInspector({
                     )}
                   </div>
                 )}
+                {renderAuditChips(entry.fields)}
               </div>
             ))}
           </div>

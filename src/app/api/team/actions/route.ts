@@ -67,6 +67,12 @@ interface StructuredActionFields {
   needsFromHuman: string | null;
   decision: string | null;
   handoffTo: string | null;
+  managerAction?: string | null;
+  mutationSummary?: string | null;
+  createdTasks?: string | null;
+  updatedTasks?: string | null;
+  phaseUpdate?: string | null;
+  projectProgress?: string | null;
 }
 
 interface TaskPromptContext {
@@ -114,6 +120,7 @@ interface ManagerTaskMutation {
 }
 
 interface ManagerTaskUpdateMutation {
+  taskId: string | null;
   title: string;
   assigneeAgentId: string | null;
   reviewerAgentId: string | null;
@@ -656,7 +663,7 @@ function buildPrompt(
       : action === "manage"
       ? [
           "Return an ACTIONS_JSON line with one compact JSON object.",
-          'ACTIONS_JSON schema: {"createTasks":[{"title":"...","assigneeAgentId":"...","reviewerAgentId":"...","handoffToAgentId":"...","priority":"high|medium|low","dueDate":"YYYY-MM-DD","deliverable":"...","dependsOnTitles":["..."]}],"updateTasks":[{"title":"...","assigneeAgentId":"...","reviewerAgentId":"...","handoffToAgentId":"...","status":"pending|in_progress|blocked|completed"}],"phaseUpdate":{"status":"pending|in_progress|blocked|completed","ownerAgentId":"...","reviewerAgentId":"...","handoffToAgentId":"..."}}',
+          'ACTIONS_JSON schema: {"createTasks":[{"title":"...","assigneeAgentId":"...","reviewerAgentId":"...","handoffToAgentId":"...","priority":"high|medium|low","dueDate":"YYYY-MM-DD","deliverable":"...","dependsOnTitles":["..."]}],"updateTasks":[{"taskId":"...","title":"...","assigneeAgentId":"...","reviewerAgentId":"...","handoffToAgentId":"...","status":"pending|in_progress|blocked|completed"}],"phaseUpdate":{"status":"pending|in_progress|blocked|completed","ownerAgentId":"...","reviewerAgentId":"...","handoffToAgentId":"..."}}',
           "Create at most 3 tasks.",
           "Use updateTasks to reassign or reroute existing linked tasks instead of creating duplicates.",
           "Use phaseUpdate when you need to reassign the phase, set its reviewer, change handoff, or close/advance the phase.",
@@ -816,6 +823,7 @@ function parseManagerActionPlan(text: string): ManagerActionPlan {
           if (!title) return null;
           return {
             title,
+            taskId: typeof task.taskId === "string" && task.taskId.trim().length > 0 ? task.taskId.trim() : null,
             assigneeAgentId: sanitizeAgentId(task.assigneeAgentId),
             reviewerAgentId: sanitizeAgentId(task.reviewerAgentId),
             handoffToAgentId: sanitizeAgentId(task.handoffToAgentId),
@@ -864,7 +872,7 @@ function generateManagedTaskId(tasks: AgentTask[]): string {
   return `task-${String(next).padStart(3, "0")}`;
 }
 
-async function applyManagerActionPlan(
+export async function applyManagerActionPlan(
   plan: ManagerActionPlan,
   context: ActionContext,
   phaseContext: ProjectPhasePromptContext
@@ -962,9 +970,12 @@ async function applyManagerActionPlan(
 
   for (const mutation of plan.updateTasks) {
     const normalizedTitle = mutation.title.trim().toLowerCase();
-    if (!normalizedTitle) continue;
+    const normalizedTaskId = mutation.taskId?.trim() || null;
+    if (!normalizedTitle && !normalizedTaskId) continue;
 
-    const existingTask = linkedTasks.find((task) => task.title.trim().toLowerCase() === normalizedTitle);
+    const existingTask =
+      (normalizedTaskId ? linkedTasks.find((task) => task.id === normalizedTaskId) : null) ||
+      linkedTasks.find((task) => task.title.trim().toLowerCase() === normalizedTitle);
     if (!existingTask) {
       continue;
     }
@@ -983,6 +994,7 @@ async function applyManagerActionPlan(
 
     const nextReviewerAgentId = mutation.reviewerAgentId || existingTask.reviewerAgentId || undefined;
     const nextHandoffToAgentId = mutation.handoffToAgentId || existingTask.handoffToAgentId || undefined;
+    const nextStatus = mutation.status || existingTask.status;
     const policyValidationError = await validateRoutingPolicy({
       ownerAgentId: nextAssigneeAgentId,
       reviewerAgentId: nextReviewerAgentId,
@@ -994,7 +1006,7 @@ async function applyManagerActionPlan(
 
     const nextTask = normalizeAgentTask({
       ...existingTask,
-      status: mutation.status || existingTask.status,
+      status: nextStatus,
       assigneeAgentId: nextAssigneeAgentId,
       reviewerAgentId: nextReviewerAgentId,
       handoffToAgentId: nextHandoffToAgentId,
@@ -1003,6 +1015,16 @@ async function applyManagerActionPlan(
           ? existingTask.agent
           : { id: nextAssigneeAgentId, emoji: existingTask.agent.emoji, name: nextAssigneeAgentId, color: existingTask.agent.color },
     });
+
+    const taskChanged =
+      nextTask.status !== existingTask.status ||
+      nextTask.assigneeAgentId !== existingTask.assigneeAgentId ||
+      nextTask.reviewerAgentId !== existingTask.reviewerAgentId ||
+      nextTask.handoffToAgentId !== existingTask.handoffToAgentId ||
+      nextTask.agent.id !== existingTask.agent.id;
+    if (!taskChanged) {
+      continue;
+    }
 
     const nextIndex = tasks.findIndex((task) => task.id === existingTask.id);
     if (nextIndex >= 0) {
@@ -1185,6 +1207,61 @@ function toStoredActionFields(fields: StructuredActionFields | null) {
   return Object.values(normalized).some(Boolean) ? normalized : null;
 }
 
+function buildManagerAuditFields(
+  managerResult: {
+    createdTasks: Array<{ title: string }>;
+    updatedTasks: Array<{ title: string; status: string; handoffToAgentId?: string }>;
+    progress: number | null;
+    phaseUpdateApplied: ManagerActionPlan["phaseUpdate"];
+  },
+  mutationSummary: string
+) {
+  return {
+    managerAction: "manage",
+    mutationSummary,
+    createdTasks:
+      managerResult.createdTasks.length > 0
+        ? managerResult.createdTasks.map((task) => task.title).join(", ")
+        : undefined,
+    updatedTasks:
+      managerResult.updatedTasks.length > 0
+        ? managerResult.updatedTasks.map((task) => task.title).join(", ")
+        : undefined,
+    phaseUpdate: managerResult.phaseUpdateApplied
+      ? [
+          managerResult.phaseUpdateApplied.status
+            ? `status=${managerResult.phaseUpdateApplied.status}`
+            : null,
+          managerResult.phaseUpdateApplied.ownerAgentId
+            ? `owner=${managerResult.phaseUpdateApplied.ownerAgentId}`
+            : null,
+          managerResult.phaseUpdateApplied.reviewerAgentId
+            ? `reviewer=${managerResult.phaseUpdateApplied.reviewerAgentId}`
+            : null,
+          managerResult.phaseUpdateApplied.handoffToAgentId
+            ? `handoff=${managerResult.phaseUpdateApplied.handoffToAgentId}`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(", ")
+      : undefined,
+    projectProgress:
+      typeof managerResult.progress === "number" ? `${managerResult.progress}%` : undefined,
+  };
+}
+
+function mergeStoredActionFields(
+  baseFields: ReturnType<typeof toStoredActionFields>,
+  extraFields: ReturnType<typeof buildManagerAuditFields> | null
+) {
+  if (!baseFields && !extraFields) return null;
+  const merged = {
+    ...(baseFields || {}),
+    ...(extraFields || {}),
+  };
+  return Object.values(merged).some(Boolean) ? merged : null;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
@@ -1257,6 +1334,10 @@ export async function POST(request: NextRequest) {
               .join(" | ")
           )
         : buildPacketDeliverableSummary(fields, summary.text);
+    const managerAuditFields =
+      action === "manage" && managerResult
+        ? buildManagerAuditFields(managerResult, runDeliverable)
+        : null;
 
     if (taskContext) {
       await recordTaskRun({
@@ -1278,7 +1359,7 @@ export async function POST(request: NextRequest) {
           sessionId: summary.sessionId || undefined,
           runId: summary.runId || undefined,
           thinking,
-          fields: toStoredActionFields(fields),
+          fields: mergeStoredActionFields(toStoredActionFields(fields), managerAuditFields),
         },
       });
     }
@@ -1305,7 +1386,7 @@ export async function POST(request: NextRequest) {
           sessionId: summary.sessionId || undefined,
           runId: summary.runId || undefined,
           thinking,
-          fields: toStoredActionFields(fields),
+          fields: mergeStoredActionFields(toStoredActionFields(fields), managerAuditFields),
         },
       });
     }
@@ -1331,9 +1412,12 @@ export async function POST(request: NextRequest) {
                 title: task.title,
                 assigneeAgentId: task.assigneeAgentId || null,
                 reviewerAgentId: task.reviewerAgentId || null,
+                handoffToAgentId: task.handoffToAgentId || null,
+                status: task.status,
               })),
               phaseUpdate: managerResult.phaseUpdateApplied,
               projectProgress: managerResult.progress,
+              mutationSummary: runDeliverable,
             }
           : null,
       durationMs: summary.durationMs ?? Date.now() - startedAt,

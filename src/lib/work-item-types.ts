@@ -26,6 +26,12 @@ export interface WorkItemRunFields {
   handoffTo?: string;
   reviewerAgentId?: string;
   reviewerName?: string;
+  managerAction?: string;
+  mutationSummary?: string;
+  createdTasks?: string;
+  updatedTasks?: string;
+  phaseUpdate?: string;
+  projectProgress?: string;
 }
 
 export interface WorkItemDeepLink {

@@ -73,6 +73,24 @@ function normalizeRunFields(value: unknown): WorkItemRunFields | null {
   if (typeof fields.reviewerName === "string" && fields.reviewerName.trim()) {
     nextFields.reviewerName = fields.reviewerName.trim();
   }
+  if (typeof fields.managerAction === "string" && fields.managerAction.trim()) {
+    nextFields.managerAction = fields.managerAction.trim();
+  }
+  if (typeof fields.mutationSummary === "string" && fields.mutationSummary.trim()) {
+    nextFields.mutationSummary = fields.mutationSummary.trim();
+  }
+  if (typeof fields.createdTasks === "string" && fields.createdTasks.trim()) {
+    nextFields.createdTasks = fields.createdTasks.trim();
+  }
+  if (typeof fields.updatedTasks === "string" && fields.updatedTasks.trim()) {
+    nextFields.updatedTasks = fields.updatedTasks.trim();
+  }
+  if (typeof fields.phaseUpdate === "string" && fields.phaseUpdate.trim()) {
+    nextFields.phaseUpdate = fields.phaseUpdate.trim();
+  }
+  if (typeof fields.projectProgress === "string" && fields.projectProgress.trim()) {
+    nextFields.projectProgress = fields.projectProgress.trim();
+  }
 
   return Object.keys(nextFields).length > 0 ? nextFields : null;
 }

@@ -730,6 +730,7 @@ export default function ProjectsPageClient({
             handoffToAgentId?: string | null;
           } | null;
           projectProgress?: number | null;
+          mutationSummary?: string | null;
         } | null;
       } | null;
       if (!response.ok) {
@@ -743,7 +744,9 @@ export default function ProjectsPageClient({
         ?.map((task) => task.title)
         .filter((title): title is string => Boolean(title));
       const phaseUpdate = payload?.appliedMutations?.phaseUpdate;
+      const mutationSummary = payload?.appliedMutations?.mutationSummary;
       const summaryParts = [
+        mutationSummary ? mutationSummary : null,
         createdTitles && createdTitles.length > 0
           ? `Created ${createdTitles.length} task${createdTitles.length === 1 ? "" : "s"}: ${createdTitles.join(", ")}.`
           : null,

@@ -13,6 +13,12 @@ export interface ProjectPhaseRunFields {
   handoffTo?: string;
   reviewerAgentId?: string;
   reviewerName?: string;
+  managerAction?: string;
+  mutationSummary?: string;
+  createdTasks?: string;
+  updatedTasks?: string;
+  phaseUpdate?: string;
+  projectProgress?: string;
 }
 
 export interface ProjectPhaseLatestRun {

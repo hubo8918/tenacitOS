@@ -103,6 +103,24 @@ function normalizeProjectPhaseRunFields(value: unknown): ProjectPhaseRunFields |
   if (asNonEmptyString(fields.reviewerName)) {
     normalized.reviewerName = asNonEmptyString(fields.reviewerName);
   }
+  if (asNonEmptyString(fields.managerAction)) {
+    normalized.managerAction = asNonEmptyString(fields.managerAction);
+  }
+  if (asNonEmptyString(fields.mutationSummary)) {
+    normalized.mutationSummary = asNonEmptyString(fields.mutationSummary);
+  }
+  if (asNonEmptyString(fields.createdTasks)) {
+    normalized.createdTasks = asNonEmptyString(fields.createdTasks);
+  }
+  if (asNonEmptyString(fields.updatedTasks)) {
+    normalized.updatedTasks = asNonEmptyString(fields.updatedTasks);
+  }
+  if (asNonEmptyString(fields.phaseUpdate)) {
+    normalized.phaseUpdate = asNonEmptyString(fields.phaseUpdate);
+  }
+  if (asNonEmptyString(fields.projectProgress)) {
+    normalized.projectProgress = asNonEmptyString(fields.projectProgress);
+  }
 
   return Object.keys(normalized).length > 0 ? normalized : null;
 }

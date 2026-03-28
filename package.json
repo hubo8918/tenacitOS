@@ -9,7 +9,7 @@
     "lint": "eslint",
     "test:files": "node --import tsx --test tests/files-routes.test.ts",
     "test:migrations": "node --import tsx --test tests/data-migrations.test.ts",
-    "test:work-items": "node --import tsx --test tests/work-items-review.test.ts"
+    "test:work-items": "node --import tsx --test tests/work-items-review.test.ts tests/manager-action-audit.test.ts"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

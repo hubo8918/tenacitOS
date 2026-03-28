@@ -38,6 +38,12 @@ export interface Task {
       needsFromHuman?: string;
       decision?: string;
       handoffTo?: string;
+      managerAction?: string;
+      mutationSummary?: string;
+      createdTasks?: string;
+      updatedTasks?: string;
+      phaseUpdate?: string;
+      projectProgress?: string;
     } | null;
   } | null;
 }
