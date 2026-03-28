@@ -628,6 +628,14 @@ export default function ProjectsPageClient({
     setPhasePacketError(null);
 
     try {
+      const linkedTasks = (projectLinkedTaskMap.get(selectedProject.id) || []).slice(0, 12).map((task) => ({
+        id: task.id,
+        title: task.title,
+        ownerAgentId: task.assigneeAgentId || task.agent.id || null,
+        reviewerAgentId: task.reviewerAgentId || null,
+        handoffToAgentId: task.handoffToAgentId || null,
+        status: task.status,
+      }));
       const linkedTaskSummary = (projectLinkedTaskMap.get(selectedProject.id) || [])
         .slice(0, 4)
         .map((task) => task.title)
@@ -655,6 +663,7 @@ export default function ProjectsPageClient({
             phaseHandoff: handoffName,
             dependencies: phaseDependencyIds.map((phaseId) => selectedProject.phases.find((phase) => phase.id === phaseId)?.title || phaseId),
             linkedTaskSummary: linkedTaskSummary || null,
+            linkedTasks,
           },
         }),
       });
@@ -686,6 +695,14 @@ export default function ProjectsPageClient({
     setManagerActionSummary(null);
 
     try {
+      const linkedTasks = (projectLinkedTaskMap.get(selectedProject.id) || []).slice(0, 12).map((task) => ({
+        id: task.id,
+        title: task.title,
+        ownerAgentId: task.assigneeAgentId || task.agent.id || null,
+        reviewerAgentId: task.reviewerAgentId || null,
+        handoffToAgentId: task.handoffToAgentId || null,
+        status: task.status,
+      }));
       const linkedTaskSummary = (projectLinkedTaskMap.get(selectedProject.id) || [])
         .slice(0, 6)
         .map((task) => `${task.title} (${task.assigneeAgentId || task.agent.id || "unassigned"})`)
@@ -714,6 +731,7 @@ export default function ProjectsPageClient({
             phaseHandoffAgentId: selectedPhase.handoffToAgentId || null,
             dependencies: phaseDependencyIds.map((phaseId) => selectedProject.phases.find((phase) => phase.id === phaseId)?.title || phaseId),
             linkedTaskSummary: linkedTaskSummary || null,
+            linkedTasks,
           },
         }),
       });
@@ -782,6 +800,14 @@ export default function ProjectsPageClient({
     setPhasePacketError(null);
 
     try {
+      const linkedTasks = (projectLinkedTaskMap.get(selectedProject.id) || []).slice(0, 12).map((task) => ({
+        id: task.id,
+        title: task.title,
+        ownerAgentId: task.assigneeAgentId || task.agent.id || null,
+        reviewerAgentId: task.reviewerAgentId || null,
+        handoffToAgentId: task.handoffToAgentId || null,
+        status: task.status,
+      }));
       const linkedTaskSummary = (projectLinkedTaskMap.get(selectedProject.id) || [])
         .slice(0, 4)
         .map((task) => task.title)
@@ -809,6 +835,7 @@ export default function ProjectsPageClient({
             phaseHandoff: handoffName,
             dependencies: phaseDependencyIds.map((phaseId) => selectedProject.phases.find((phase) => phase.id === phaseId)?.title || phaseId),
             linkedTaskSummary: linkedTaskSummary || null,
+            linkedTasks,
           },
         }),
       });

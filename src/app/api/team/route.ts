@@ -572,7 +572,7 @@ async function buildMergedTeam(): Promise<TeamBuildResult> {
   const agentsStart = Date.now();
   let realAgents: AgentSummary[] = [];
   try {
-    realAgents = (await getAgentsSummary()).filter((agent) => agent.id !== "main");
+    realAgents = await getAgentsSummary();
   } catch {
     realAgents = [];
   }

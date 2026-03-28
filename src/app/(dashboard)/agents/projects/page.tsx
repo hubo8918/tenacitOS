@@ -29,7 +29,6 @@ async function getInitialTeam(): Promise<ReviewDecisionAgentOption[]> {
   try {
     const agents = await getAgentsSummary();
     return agents
-      .filter((agent) => agent.id !== "main")
       .map((agent) => ({
         id: agent.id,
         name: agent.name || agent.id,

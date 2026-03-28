@@ -106,6 +106,14 @@ interface ProjectPhasePromptContext {
   phaseHandoffAgentId: string | null;
   dependencies: string[];
   linkedTaskSummary: string | null;
+  linkedTasks: Array<{
+    id: string;
+    title: string;
+    ownerAgentId: string | null;
+    reviewerAgentId: string | null;
+    handoffToAgentId: string | null;
+    status: string | null;
+  }>;
 }
 
 interface ManagerTaskMutation {
@@ -417,6 +425,42 @@ function parseProjectPhasePromptContext(value: unknown): ProjectPhasePromptConte
       typeof phase.linkedTaskSummary === "string" && phase.linkedTaskSummary.trim().length > 0
         ? phase.linkedTaskSummary.trim()
         : null,
+    linkedTasks: Array.isArray(phase.linkedTasks)
+      ? phase.linkedTasks
+          .map((entry) => {
+            if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
+            const task = entry as Record<string, unknown>;
+            const id = typeof task.id === "string" && task.id.trim().length > 0 ? task.id.trim() : null;
+            const title =
+              typeof task.title === "string" && task.title.trim().length > 0
+                ? task.title.trim()
+                : null;
+            if (!id || !title) return null;
+            return {
+              id,
+              title,
+              ownerAgentId:
+                typeof task.ownerAgentId === "string" && task.ownerAgentId.trim().length > 0
+                  ? task.ownerAgentId.trim()
+                  : null,
+              reviewerAgentId:
+                typeof task.reviewerAgentId === "string" && task.reviewerAgentId.trim().length > 0
+                  ? task.reviewerAgentId.trim()
+                  : null,
+              handoffToAgentId:
+                typeof task.handoffToAgentId === "string" && task.handoffToAgentId.trim().length > 0
+                  ? task.handoffToAgentId.trim()
+                  : null,
+              status:
+                typeof task.status === "string" && task.status.trim().length > 0
+                  ? task.status.trim()
+                  : null,
+            };
+          })
+          .filter(
+            (entry): entry is ProjectPhasePromptContext["linkedTasks"][number] => Boolean(entry)
+          )
+      : [],
   };
 }
 
@@ -647,6 +691,17 @@ function buildPrompt(
         `PHASE_HANDOFF: ${projectPhaseContext.phaseHandoff || "NONE"}`,
         `PHASE_DEPENDENCIES: ${formatListForPrompt(projectPhaseContext.dependencies)}`,
         `LINKED_TASKS: ${projectPhaseContext.linkedTaskSummary || "NONE"}`,
+        ...(
+          projectPhaseContext.linkedTasks.length > 0
+            ? [
+                "LINKED_TASK_DETAILS:",
+                ...projectPhaseContext.linkedTasks.map(
+                  (task) =>
+                    `- TASK_ID=${task.id}; TITLE=${task.title}; OWNER=${task.ownerAgentId || "NONE"}; REVIEWER=${task.reviewerAgentId || "NONE"}; HANDOFF=${task.handoffToAgentId || "NONE"}; STATUS=${task.status || "UNKNOWN"}`
+                ),
+              ]
+            : []
+        ),
         action === "review"
           ? "Anchor your reply to this phase first. Provide a review decision and make the next handoff explicit."
           : "Anchor your reply to this phase first. If you mention work, make it the next concrete coordination or implementation step for this phase.",
@@ -1191,20 +1246,13 @@ function toStoredRunAction(action: ActionName): "check-in" | "wake" | "review" |
   return undefined;
 }
 
-function toStoredActionFields(fields: StructuredActionFields | null) {
-  if (!fields) return null;
-
-  const normalized = {
-    status: fields.status || undefined,
-    focus: fields.focus || undefined,
-    next: fields.next || undefined,
-    blockers: fields.blockers || undefined,
-    needsFromHuman: fields.needsFromHuman || undefined,
-    decision: fields.decision || undefined,
-    handoffTo: fields.handoffTo || undefined,
-  };
-
-  return Object.values(normalized).some(Boolean) ? normalized : null;
+interface ManagerAuditFields {
+  managerAction?: string;
+  mutationSummary?: string;
+  createdTasks?: string;
+  updatedTasks?: string;
+  phaseUpdate?: string;
+  projectProgress?: string;
 }
 
 function buildManagerAuditFields(
@@ -1215,7 +1263,7 @@ function buildManagerAuditFields(
     phaseUpdateApplied: ManagerActionPlan["phaseUpdate"];
   },
   mutationSummary: string
-) {
+): ManagerAuditFields {
   return {
     managerAction: "manage",
     mutationSummary,
@@ -1250,16 +1298,26 @@ function buildManagerAuditFields(
   };
 }
 
-function mergeStoredActionFields(
-  baseFields: ReturnType<typeof toStoredActionFields>,
-  extraFields: ReturnType<typeof buildManagerAuditFields> | null
-) {
-  if (!baseFields && !extraFields) return null;
-  const merged = {
-    ...(baseFields || {}),
-    ...(extraFields || {}),
+function toStoredActionFields(fields: StructuredActionFields | null, managerAudit?: ManagerAuditFields | null) {
+  if (!fields && !managerAudit) return null;
+
+  const normalized = {
+    status: fields?.status || undefined,
+    focus: fields?.focus || undefined,
+    next: fields?.next || undefined,
+    blockers: fields?.blockers || undefined,
+    needsFromHuman: fields?.needsFromHuman || undefined,
+    decision: fields?.decision || undefined,
+    handoffTo: fields?.handoffTo || undefined,
+    managerAction: fields?.managerAction || managerAudit?.managerAction || undefined,
+    mutationSummary: fields?.mutationSummary || managerAudit?.mutationSummary || undefined,
+    createdTasks: fields?.createdTasks || managerAudit?.createdTasks || undefined,
+    updatedTasks: fields?.updatedTasks || managerAudit?.updatedTasks || undefined,
+    phaseUpdate: fields?.phaseUpdate || managerAudit?.phaseUpdate || undefined,
+    projectProgress: fields?.projectProgress || managerAudit?.projectProgress || undefined,
   };
-  return Object.values(merged).some(Boolean) ? merged : null;
+
+  return Object.values(normalized).some(Boolean) ? normalized : null;
 }
 
 export async function POST(request: NextRequest) {
@@ -1359,7 +1417,7 @@ export async function POST(request: NextRequest) {
           sessionId: summary.sessionId || undefined,
           runId: summary.runId || undefined,
           thinking,
-          fields: mergeStoredActionFields(toStoredActionFields(fields), managerAuditFields),
+          fields: toStoredActionFields(fields, managerAuditFields),
         },
       });
     }
@@ -1386,7 +1444,7 @@ export async function POST(request: NextRequest) {
           sessionId: summary.sessionId || undefined,
           runId: summary.runId || undefined,
           thinking,
-          fields: mergeStoredActionFields(toStoredActionFields(fields), managerAuditFields),
+          fields: toStoredActionFields(fields, managerAuditFields),
         },
       });
     }
