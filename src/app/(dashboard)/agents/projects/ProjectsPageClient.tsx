@@ -175,6 +175,10 @@ export default function ProjectsPageClient({
     () => selectedProject?.phases.find((phase) => phase.id === selectedPhaseId) || null,
     [selectedPhaseId, selectedProject]
   );
+  const selectedProjectHealth = useMemo(
+    () => (selectedProject ? projectHealthMap.get(selectedProject.id) || null : null),
+    [projectHealthMap, selectedProject]
+  );
   const selectedProjectLinkedTasks = useMemo(
     () => (selectedProject ? projectLinkedTaskMap.get(selectedProject.id) || [] : []),
     [projectLinkedTaskMap, selectedProject]
@@ -1251,7 +1255,7 @@ export default function ProjectsPageClient({
             </p>
             {selectedProject ? (
               <div className="mt-3 space-y-4">
-                {projectHealthMap.get(selectedProject.id) ? (
+                {selectedProjectHealth ? (
                   <div
                     className="grid gap-3 md:grid-cols-4"
                     style={{ color: "var(--text-secondary)" }}
@@ -1261,7 +1265,7 @@ export default function ProjectsPageClient({
                         Phase completion
                       </p>
                       <p className="mt-1 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                        {projectHealthMap.get(selectedProject.id)?.completedPhaseCount}/{projectHealthMap.get(selectedProject.id)?.phaseCount}
+                        {selectedProjectHealth.completedPhaseCount}/{selectedProjectHealth.phaseCount}
                       </p>
                     </div>
                     <div className="rounded-lg px-3 py-2" style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}>
@@ -1269,7 +1273,7 @@ export default function ProjectsPageClient({
                         Tasks in flight
                       </p>
                       <p className="mt-1 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                        {projectHealthMap.get(selectedProject.id)?.inProgressTaskCount || 0}
+                        {selectedProjectHealth.inProgressTaskCount}
                       </p>
                     </div>
                     <div className="rounded-lg px-3 py-2" style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}>
@@ -1277,7 +1281,7 @@ export default function ProjectsPageClient({
                         Waiting review
                       </p>
                       <p className="mt-1 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                        {projectHealthMap.get(selectedProject.id)?.needsReviewPhaseCount || 0}
+                        {selectedProjectHealth.needsReviewPhaseCount}
                       </p>
                     </div>
                     <div className="rounded-lg px-3 py-2" style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}>
@@ -1285,7 +1289,7 @@ export default function ProjectsPageClient({
                         Blocked items
                       </p>
                       <p className="mt-1 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                        {(projectHealthMap.get(selectedProject.id)?.blockedPhaseCount || 0) + (projectHealthMap.get(selectedProject.id)?.blockedTaskCount || 0)}
+                        {selectedProjectHealth.blockedPhaseCount + selectedProjectHealth.blockedTaskCount}
                       </p>
                     </div>
                   </div>
