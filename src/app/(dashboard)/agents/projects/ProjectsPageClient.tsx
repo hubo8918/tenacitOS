@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
@@ -33,6 +34,9 @@ interface ProjectAttentionItem {
   title: string;
   reason: string;
   severity: "high" | "medium";
+  phaseId?: string | null;
+  actionLabel: string;
+  actionHref?: string | null;
 }
 
 interface ManagerActionResultSummary {
@@ -257,6 +261,8 @@ export default function ProjectsPageClient({
           title: project.title,
           reason: "No manager agent is assigned yet.",
           severity: "high",
+          phaseId: currentPhase?.id || null,
+          actionLabel: "Open metadata",
         });
       }
 
@@ -266,6 +272,7 @@ export default function ProjectsPageClient({
           title: project.title,
           reason: "Project has no phases, so manager actions cannot advance delivery.",
           severity: "high",
+          actionLabel: "Add first phase",
         });
       }
 
@@ -277,6 +284,9 @@ export default function ProjectsPageClient({
             health.blockedPhaseCount + health.blockedTaskCount === 1 ? "" : "s"
           } need manager attention.`,
           severity: "high",
+          phaseId: currentPhase?.id || null,
+          actionLabel: "Open blocked tasks",
+          actionHref: `/agents/tasks?projectId=${encodeURIComponent(project.id)}`,
         });
       }
 
@@ -286,6 +296,11 @@ export default function ProjectsPageClient({
           title: project.title,
           reason: `${health.needsReviewPhaseCount} phase review packet${health.needsReviewPhaseCount === 1 ? "" : "s"} still need a reviewer decision.`,
           severity: "medium",
+          phaseId: currentPhase?.id || null,
+          actionLabel: currentPhase?.reviewerAgentId ? "Open reviewer inbox" : "Fix reviewer routing",
+          actionHref: currentPhase?.reviewerAgentId
+            ? `/agents/team?view=inbox&reviewer=${encodeURIComponent(currentPhase.reviewerAgentId)}`
+            : null,
         });
       }
 
@@ -295,6 +310,8 @@ export default function ProjectsPageClient({
           title: project.title,
           reason: `Current phase "${currentPhase.title}" has no execution owner.`,
           severity: "high",
+          phaseId: currentPhase.id,
+          actionLabel: "Fix phase owner",
         });
       }
 
@@ -304,6 +321,8 @@ export default function ProjectsPageClient({
           title: project.title,
           reason: `Current phase "${currentPhase.title}" has no explicit reviewer.`,
           severity: "medium",
+          phaseId: currentPhase.id,
+          actionLabel: "Fix reviewer routing",
         });
       }
 
@@ -313,6 +332,8 @@ export default function ProjectsPageClient({
           title: project.title,
           reason: "Linked tasks exist, but the participant roster is still empty.",
           severity: "medium",
+          phaseId: currentPhase?.id || null,
+          actionLabel: "Review routing",
         });
       }
     });
@@ -1367,11 +1388,9 @@ export default function ProjectsPageClient({
               </div>
               <div className="mt-3 space-y-2">
                 {projectAttentionQueue.map((item) => (
-                  <button
+                  <div
                     key={`${item.projectId}-${item.reason}`}
-                    type="button"
-                    onClick={() => attemptSelect(item.projectId, getCurrentPhase(projectMap.get(item.projectId) || null)?.id || null)}
-                    className="w-full rounded-lg p-3 text-left"
+                    className="rounded-lg p-3"
                     style={{
                       backgroundColor:
                         item.severity === "high"
@@ -1405,7 +1424,35 @@ export default function ProjectsPageClient({
                         {item.severity}
                       </span>
                     </div>
-                  </button>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => attemptSelect(item.projectId, item.phaseId || getCurrentPhase(projectMap.get(item.projectId) || null)?.id || null)}
+                        className="rounded-lg px-3 py-2 text-xs font-semibold"
+                        style={{ color: "var(--text-primary)", border: "1px solid var(--border)" }}
+                      >
+                        Open project
+                      </button>
+                      {item.actionHref ? (
+                        <Link
+                          href={item.actionHref}
+                          className="rounded-lg px-3 py-2 text-xs font-semibold"
+                          style={{ color: "#0A84FF", border: "1px solid color-mix(in srgb, #0A84FF 24%, transparent)" }}
+                        >
+                          {item.actionLabel}
+                        </Link>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => attemptSelect(item.projectId, item.phaseId || getCurrentPhase(projectMap.get(item.projectId) || null)?.id || null)}
+                          className="rounded-lg px-3 py-2 text-xs font-semibold"
+                          style={{ color: "#32D74B", border: "1px solid color-mix(in srgb, #32D74B 24%, transparent)" }}
+                        >
+                          {item.actionLabel}
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
