@@ -28,7 +28,15 @@ interface ProjectAgentOption extends ReviewDecisionAgentOption {
   canDelegateTo: string[];
 }
 
-function getCurrentPhase(project: Project): ProjectPhase | null {
+interface ProjectAttentionItem {
+  projectId: string;
+  title: string;
+  reason: string;
+  severity: "high" | "medium";
+}
+
+function getCurrentPhase(project: Project | null): ProjectPhase | null {
+  if (!project) return null;
   return (
     project.phases.find((phase) => phase.status === "in_progress") ||
     project.phases.find((phase) => phase.status === "pending") ||
@@ -91,6 +99,10 @@ export default function ProjectsPageClient({
   const teamAgentMap = useMemo(
     () => new Map(teamAgents.map((agent) => [agent.id, agent])),
     [teamAgents]
+  );
+  const projectMap = useMemo(
+    () => new Map(projects.map((project) => [project.id, project])),
+    [projects]
   );
 
   const scopedProjects = useMemo(() => {
@@ -198,6 +210,88 @@ export default function ProjectsPageClient({
   const focusedOwnerAgentName = focusedOwnerAgentId
     ? teamAgentMap.get(focusedOwnerAgentId)?.name || focusedOwnerAgentId
     : "";
+  const projectAttentionQueue = useMemo(() => {
+    const items: ProjectAttentionItem[] = [];
+
+    scopedProjects.forEach((project) => {
+      const health = projectHealthMap.get(project.id);
+      const currentPhase = getCurrentPhase(project);
+      const linkedTasks = projectLinkedTaskMap.get(project.id) || [];
+
+      if (!project.ownerAgentId) {
+        items.push({
+          projectId: project.id,
+          title: project.title,
+          reason: "No manager agent is assigned yet.",
+          severity: "high",
+        });
+      }
+
+      if (project.phases.length === 0) {
+        items.push({
+          projectId: project.id,
+          title: project.title,
+          reason: "Project has no phases, so manager actions cannot advance delivery.",
+          severity: "high",
+        });
+      }
+
+      if (health && (health.blockedPhaseCount > 0 || health.blockedTaskCount > 0)) {
+        items.push({
+          projectId: project.id,
+          title: project.title,
+          reason: `${health.blockedPhaseCount + health.blockedTaskCount} blocked item${
+            health.blockedPhaseCount + health.blockedTaskCount === 1 ? "" : "s"
+          } need manager attention.`,
+          severity: "high",
+        });
+      }
+
+      if (health && health.needsReviewPhaseCount > 0) {
+        items.push({
+          projectId: project.id,
+          title: project.title,
+          reason: `${health.needsReviewPhaseCount} phase review packet${health.needsReviewPhaseCount === 1 ? "" : "s"} still need a reviewer decision.`,
+          severity: "medium",
+        });
+      }
+
+      if (currentPhase && !currentPhase.ownerAgentId && !project.ownerAgentId) {
+        items.push({
+          projectId: project.id,
+          title: project.title,
+          reason: `Current phase "${currentPhase.title}" has no execution owner.`,
+          severity: "high",
+        });
+      }
+
+      if (currentPhase && !currentPhase.reviewerAgentId) {
+        items.push({
+          projectId: project.id,
+          title: project.title,
+          reason: `Current phase "${currentPhase.title}" has no explicit reviewer.`,
+          severity: "medium",
+        });
+      }
+
+      if (project.participatingAgentIds.length === 0 && linkedTasks.length > 0) {
+        items.push({
+          projectId: project.id,
+          title: project.title,
+          reason: "Linked tasks exist, but the participant roster is still empty.",
+          severity: "medium",
+        });
+      }
+    });
+
+    return items
+      .sort((left, right) => {
+        const severityOrder = left.severity === right.severity ? 0 : left.severity === "high" ? -1 : 1;
+        if (severityOrder !== 0) return severityOrder;
+        return left.title.localeCompare(right.title);
+      })
+      .slice(0, 8);
+  }, [projectHealthMap, projectLinkedTaskMap, scopedProjects]);
   const projectRoutingWarnings = useMemo(() => {
     if (!selectedProject) return [];
 
@@ -1209,6 +1303,67 @@ export default function ProjectsPageClient({
               style={{ backgroundColor: "color-mix(in srgb, #32D74B 10%, var(--surface-elevated))", border: "1px solid color-mix(in srgb, #32D74B 22%, transparent)", color: "var(--text-secondary)" }}
             >
               Showing projects managed by {focusedOwnerAgentName}.
+            </div>
+          )}
+
+          {projectAttentionQueue.length > 0 && (
+            <div className="rounded-xl p-4" style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                    Manager Queue
+                  </p>
+                  <p className="mt-1 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                    Projects that need intervention
+                  </p>
+                </div>
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  {projectAttentionQueue.length} priority item{projectAttentionQueue.length === 1 ? "" : "s"}
+                </p>
+              </div>
+              <div className="mt-3 space-y-2">
+                {projectAttentionQueue.map((item) => (
+                  <button
+                    key={`${item.projectId}-${item.reason}`}
+                    type="button"
+                    onClick={() => attemptSelect(item.projectId, getCurrentPhase(projectMap.get(item.projectId) || null)?.id || null)}
+                    className="w-full rounded-lg p-3 text-left"
+                    style={{
+                      backgroundColor:
+                        item.severity === "high"
+                          ? "color-mix(in srgb, #FF453A 8%, var(--card))"
+                          : "color-mix(in srgb, #FF9F0A 10%, var(--card))",
+                      border:
+                        item.severity === "high"
+                          ? "1px solid color-mix(in srgb, #FF453A 22%, transparent)"
+                          : "1px solid color-mix(in srgb, #FF9F0A 22%, transparent)",
+                    }}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                          {item.title}
+                        </p>
+                        <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)", lineHeight: 1.6 }}>
+                          {item.reason}
+                        </p>
+                      </div>
+                      <span
+                        className="rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wider"
+                        style={{
+                          color: item.severity === "high" ? "#FF453A" : "#FF9F0A",
+                          border:
+                            item.severity === "high"
+                              ? "1px solid color-mix(in srgb, #FF453A 24%, transparent)"
+                              : "1px solid color-mix(in srgb, #FF9F0A 24%, transparent)",
+                        }}
+                      >
+                        {item.severity}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
