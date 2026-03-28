@@ -169,3 +169,51 @@ test("missing startup data is bootstrapped from seeded projects and tasks", asyn
     await rm(bootstrapRoot, { recursive: true, force: true });
   }
 });
+
+test("corrupted startup data throws instead of pretending everything is empty", async () => {
+  const corruptedRoot = await mkdtemp(path.join(os.tmpdir(), "mission-control-corrupted-"));
+
+  try {
+    await mkdir(path.join(corruptedRoot, "data"), { recursive: true });
+    await writeFile(path.join(corruptedRoot, "data", "projects.json"), "{ not valid json", "utf-8");
+    await writeFile(path.join(corruptedRoot, "data", "agent-tasks.json"), "{ not valid json", "utf-8");
+
+    const script = `
+      const projectsModule = await import(${JSON.stringify(pathToFileURL(path.join(REPO_ROOT, "src/lib/projects-data.ts")).href)});
+      const tasksModule = await import(${JSON.stringify(pathToFileURL(path.join(REPO_ROOT, "src/lib/agent-tasks-data.ts")).href)});
+      await Promise.all([
+        projectsModule.default.getProjects().then(() => {
+          throw new Error("projects should have failed");
+        }, (error) => {
+          if (!(error instanceof Error) || !error.message.includes("corrupted JSON")) {
+            throw error;
+          }
+        }),
+        tasksModule.default.getAgentTasks().then(() => {
+          throw new Error("tasks should have failed");
+        }, (error) => {
+          if (!(error instanceof Error) || !error.message.includes("corrupted JSON")) {
+            throw error;
+          }
+        }),
+      ]);
+    `;
+
+    const result = spawnSync(
+      process.execPath,
+      ["--import", TSX_ENTRY, "--input-type=module", "--eval", script],
+      {
+        cwd: corruptedRoot,
+        encoding: "utf-8",
+        env: {
+          ...process.env,
+          TSX_TSCONFIG_PATH: path.join(REPO_ROOT, "tsconfig.json"),
+        },
+      }
+    );
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+  } finally {
+    await rm(corruptedRoot, { recursive: true, force: true });
+  }
+});

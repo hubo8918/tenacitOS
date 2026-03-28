@@ -74,6 +74,10 @@ const TEAM_BY_ID = new Map(teamAgents.map((agent) => [agent.id, agent]));
 const TEAM_BY_NAME = new Map(teamAgents.map((agent) => [agent.name.trim().toLowerCase(), agent]));
 const SEEDED_TASKS_BY_ID = new Map(seededTasks.map((task) => [task.id, task]));
 
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return typeof error === "object" && error !== null;
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
 }
@@ -291,7 +295,15 @@ function migrateTask(task: AgentTask): { task: AgentTask; changed: boolean } {
 export async function getAgentTasks(): Promise<AgentTask[]> {
   try {
     const data = await fs.readFile(DATA_PATH, "utf-8");
-    const parsed = JSON.parse(data) as unknown;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(data) as unknown;
+    } catch (error) {
+      throw new Error(
+        `Failed to parse ${DATA_PATH}. Fix or replace the corrupted JSON before Mission Control can load tasks.`,
+        { cause: error }
+      );
+    }
     const tasks = Array.isArray(parsed) ? parsed.map((task) => normalizeAgentTask(task)) : [];
 
     const projects = await getProjects().catch(() => []);
@@ -327,9 +339,9 @@ export async function getAgentTasks(): Promise<AgentTask[]> {
 
     return nextTasks;
   } catch (error) {
-    const code = (error as NodeJS.ErrnoException | undefined)?.code;
+    const code = isNodeError(error) ? error.code : undefined;
     if (code !== "ENOENT") {
-      return [];
+      throw error;
     }
 
     const normalizedSeedTasks = seededTasks.map((task) => normalizeAgentTask(task));

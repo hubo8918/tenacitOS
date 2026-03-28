@@ -18,6 +18,10 @@ const TEAM_BY_ID = new Map(teamAgents.map((agent) => [agent.id, agent]));
 const TEAM_BY_NAME = new Map(teamAgents.map((agent) => [agent.name.trim().toLowerCase(), agent]));
 const SEEDED_PROJECTS_BY_ID = new Map(seededProjects.map((project) => [project.id, project]));
 
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return typeof error === "object" && error !== null;
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
 }
@@ -232,7 +236,15 @@ function migrateProject(project: Project): { project: Project; changed: boolean 
 export async function getProjects(): Promise<Project[]> {
   try {
     const data = await fs.readFile(DATA_PATH, "utf-8");
-    const parsed = JSON.parse(data) as unknown;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(data) as unknown;
+    } catch (error) {
+      throw new Error(
+        `Failed to parse ${DATA_PATH}. Fix or replace the corrupted JSON before Mission Control can load projects.`,
+        { cause: error }
+      );
+    }
     const normalized = Array.isArray(parsed) ? parsed.map((project) => normalizeProject(project)) : [];
 
     let didMigrate = false;
@@ -250,7 +262,7 @@ export async function getProjects(): Promise<Project[]> {
 
     return nextProjects;
   } catch (error) {
-    if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") {
+    if (isNodeError(error) && error.code === "ENOENT") {
       const seeded = seededProjects.map((project) => normalizeProject(project));
       await saveProjects(seeded);
       return seeded;
