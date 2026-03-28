@@ -132,6 +132,7 @@ export default function ProjectsPageClient({
   const [deletingPhase, setDeletingPhase] = useState(false);
 
   const [requestingManagerAction, setRequestingManagerAction] = useState(false);
+  const [managerActionSummary, setManagerActionSummary] = useState<string | null>(null);
   const [requestingCoordinationPacket, setRequestingCoordinationPacket] = useState(false);
   const [requestingReviewPacket, setRequestingReviewPacket] = useState(false);
   const [phaseReviewPending, setPhaseReviewPending] = useState<"approve" | "rework" | "block" | null>(null);
@@ -682,6 +683,7 @@ export default function ProjectsPageClient({
 
     setRequestingManagerAction(true);
     setPhasePacketError(null);
+    setManagerActionSummary(null);
 
     try {
       const linkedTaskSummary = (projectLinkedTaskMap.get(selectedProject.id) || [])
@@ -716,9 +718,26 @@ export default function ProjectsPageClient({
         }),
       });
 
-      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      const payload = (await response.json().catch(() => null)) as {
+        error?: string;
+        appliedMutations?: {
+          createdTasks?: Array<{ title?: string | null }>;
+          projectProgress?: number | null;
+        } | null;
+      } | null;
       if (!response.ok) {
         throw new Error(payload?.error || "Failed to request manager actions");
+      }
+
+      const createdTitles = payload?.appliedMutations?.createdTasks
+        ?.map((task) => task.title)
+        .filter((title): title is string => Boolean(title));
+      if (createdTitles && createdTitles.length > 0) {
+        setManagerActionSummary(
+          `Created ${createdTitles.length} task${createdTitles.length === 1 ? "" : "s"}: ${createdTitles.join(", ")}.`
+        );
+      } else {
+        setManagerActionSummary("Manager action completed without creating new tasks.");
       }
 
       await Promise.all([refetch(), refetchTasks()]);
@@ -1330,6 +1349,11 @@ export default function ProjectsPageClient({
                   {phasePacketError && (
                     <p className="text-sm" style={{ color: "var(--status-blocked)" }}>
                       {phasePacketError}
+                    </p>
+                  )}
+                  {managerActionSummary && !phasePacketError && (
+                    <p className="text-sm" style={{ color: "#32D74B" }}>
+                      {managerActionSummary}
                     </p>
                   )}
                 </div>

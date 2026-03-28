@@ -5,6 +5,7 @@ import path from "path";
 
 import { getAgentTasks, normalizeAgentTask, saveAgentTasks, type AgentTask, type TaskRunIntent } from "@/lib/agent-tasks-data";
 import { getAgentsSummary, type AgentSummary } from "@/lib/agents-data";
+import { validateRoutingPolicy } from "@/lib/agent-routing-policy";
 import { type Task } from "@/data/mockTasksData";
 import { recordProjectPhaseRun } from "@/lib/project-phase-runs-data";
 import { applyDerivedProjectProgress } from "@/lib/project-progress";
@@ -843,8 +844,15 @@ async function applyManagerActionPlan(
     ) {
       throw new Error(`Manager action cannot assign "${mutation.title}" to ${assigneeAgentId}; not in canDelegateTo.`);
     }
-    if (mutation.reviewerAgentId && mutation.reviewerAgentId === assigneeAgentId) {
-      throw new Error(`Manager action set the same owner and reviewer for "${mutation.title}".`);
+    const reviewerAgentId = mutation.reviewerAgentId || phaseContext.phaseReviewerAgentId || undefined;
+    const handoffToAgentId = mutation.handoffToAgentId || phaseContext.phaseHandoffAgentId || undefined;
+    const policyValidationError = await validateRoutingPolicy({
+      ownerAgentId: assigneeAgentId,
+      reviewerAgentId,
+      handoffToAgentId,
+    });
+    if (policyValidationError) {
+      throw new Error(`Manager action for "${mutation.title}" failed policy validation: ${policyValidationError}`);
     }
 
     const taskId = generateManagedTaskId([...tasks, ...createdTasks]);
@@ -865,8 +873,8 @@ async function applyManagerActionPlan(
       projectId: project.id,
       dueDate: mutation.dueDate || "",
       assigneeAgentId,
-      reviewerAgentId: mutation.reviewerAgentId || phaseContext.phaseReviewerAgentId || undefined,
-      handoffToAgentId: mutation.handoffToAgentId || phaseContext.phaseHandoffAgentId || undefined,
+      reviewerAgentId,
+      handoffToAgentId,
       blockedByTaskIds: dependsOnIds,
       executionMode: "agent-run",
       runStatus: "queued",

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Project } from "@/data/mockProjectsData";
 import { getAgentTasks, saveAgentTasks } from "@/lib/agent-tasks-data";
+import { validateRoutingPolicy } from "@/lib/agent-routing-policy";
 import { applyDerivedProjectProgress } from "@/lib/project-progress";
 import { taskLinksToProject } from "@/lib/project-task-linkage";
 import { getProjects, normalizeProject, saveProjects } from "@/lib/projects-data";
@@ -71,6 +72,17 @@ export async function POST(request: NextRequest) {
       phases: body.phases,
     });
 
+    for (const phase of newProject.phases) {
+      const policyValidationError = await validateRoutingPolicy({
+        ownerAgentId: phase.ownerAgentId,
+        reviewerAgentId: phase.reviewerAgentId,
+        handoffToAgentId: phase.handoffToAgentId,
+      });
+      if (policyValidationError) {
+        return NextResponse.json({ error: `${phase.title}: ${policyValidationError}` }, { status: 400 });
+      }
+    }
+
     projects.unshift(newProject);
     await saveProjects(projects);
     const tasks = await getAgentTasks().catch(() => []);
@@ -130,6 +142,17 @@ export async function PUT(request: NextRequest) {
         body.participatingAgentIds !== undefined ? body.participatingAgentIds : currentProject.participatingAgentIds,
       phases: body.phases !== undefined ? body.phases : currentProject.phases,
     });
+
+    for (const phase of updatedProject.phases) {
+      const policyValidationError = await validateRoutingPolicy({
+        ownerAgentId: phase.ownerAgentId,
+        reviewerAgentId: phase.reviewerAgentId,
+        handoffToAgentId: phase.handoffToAgentId,
+      });
+      if (policyValidationError) {
+        return NextResponse.json({ error: `${phase.title}: ${policyValidationError}` }, { status: 400 });
+      }
+    }
 
     projects[index] = updatedProject;
     await saveProjects(projects);

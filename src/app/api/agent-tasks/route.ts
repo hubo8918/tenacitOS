@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import { getAgentTasks, normalizeAgentTask, type AgentTask } from "@/lib/agent-tasks-data";
+import { validateRoutingPolicy } from "@/lib/agent-routing-policy";
 import { getProjects } from "@/lib/projects-data";
 import { resolveProjectIdFromTaskProjectLabel } from "@/lib/project-task-linkage";
 
@@ -152,6 +153,14 @@ export async function POST(request: NextRequest) {
     if (routingValidationError) {
       return NextResponse.json({ error: routingValidationError }, { status: 400 });
     }
+    const policyValidationError = await validateRoutingPolicy({
+      ownerAgentId: asOptionalString(body.assigneeAgentId),
+      reviewerAgentId: asOptionalString(body.reviewerAgentId),
+      handoffToAgentId: asOptionalString(body.handoffToAgentId),
+    });
+    if (policyValidationError) {
+      return NextResponse.json({ error: policyValidationError }, { status: 400 });
+    }
 
     const tasks = await getAgentTasks();
     const dependencyValidationError = getTaskDependencyValidationError(body, tasks);
@@ -202,6 +211,15 @@ export async function PUT(request: NextRequest) {
     }
 
     const tasks = await getAgentTasks();
+    const currentTask = tasks.find((t) => t.id === body.id);
+    const policyValidationError = await validateRoutingPolicy({
+      ownerAgentId: asOptionalString(body.assigneeAgentId) || currentTask?.assigneeAgentId || currentTask?.agent.id,
+      reviewerAgentId: asOptionalString(body.reviewerAgentId) || currentTask?.reviewerAgentId,
+      handoffToAgentId: asOptionalString(body.handoffToAgentId) || currentTask?.handoffToAgentId,
+    });
+    if (policyValidationError) {
+      return NextResponse.json({ error: policyValidationError }, { status: 400 });
+    }
     const dependencyValidationError = getTaskDependencyValidationError(body, tasks);
     if (dependencyValidationError) {
       return NextResponse.json({ error: dependencyValidationError }, { status: 400 });
