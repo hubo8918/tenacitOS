@@ -2,7 +2,7 @@
   {
     "id": "task-mc-team-scout-brief",
     "title": "Scout: define the first live Mission Control task packet",
-    "status": "in_progress",
+    "status": "completed",
     "priority": "high",
     "agent": {
       "id": "scout",
@@ -18,30 +18,31 @@
     "handoffToAgentId": "forge",
     "blockedByTaskIds": [],
     "executionMode": "agent-run",
-    "runStatus": "running",
+    "runStatus": "done",
     "deliverable": "One concise brief naming the first improvement, why now, success check, rollback point, and handoff notes for Forge.",
     "latestRun": {
-      "id": "task-mc-team-scout-brief-start",
-      "kind": "manual",
-      "intent": "start",
-      "timestamp": "2026-04-12T15:21:00.000Z",
-      "runStatus": "running",
+      "id": "task-mc-team-scout-brief-complete",
+      "kind": "agent_packet",
+      "intent": "agent_check_in",
+      "action": "check-in",
+      "timestamp": "2026-04-12T15:56:00.000Z",
+      "runStatus": "done",
       "executionMode": "agent-run",
-      "deliverable": "One concise brief naming the first improvement, why now, success check, rollback point, and handoff notes for Forge.",
-      "text": "Task opened and assigned to Scout.",
-      "agentId": "henry",
-      "agentName": "Henry",
+      "deliverable": "Concrete brief approved: disable fake Settings quick actions in QuickActions.tsx.",
+      "text": "Brief accepted and handed to Forge.",
+      "agentId": "scout",
+      "agentName": "Scout",
       "fields": {
-        "status": "running",
-        "focus": "Find the right first real execution target for the new team.",
-        "next": "Hand off an implementation-ready brief to Forge."
+        "status": "done",
+        "next": "Forge executes the approved single-file change.",
+        "handoffTo": "forge"
       }
     }
   },
   {
     "id": "task-mc-team-forge-ship",
     "title": "Forge: implement the first approved Mission Control improvement",
-    "status": "pending",
+    "status": "completed",
     "priority": "high",
     "agent": {
       "id": "forge",
@@ -59,30 +60,31 @@
       "task-mc-team-scout-brief"
     ],
     "executionMode": "agent-run",
-    "runStatus": "queued",
+    "runStatus": "done",
     "deliverable": "A small validated implementation with diff, checks, and rollback point.",
     "latestRun": {
-      "id": "task-mc-team-forge-queued",
-      "kind": "manual",
+      "id": "task-mc-team-forge-ship-complete",
+      "kind": "agent_packet",
       "intent": "start",
-      "timestamp": "2026-04-12T15:21:00.000Z",
-      "runStatus": "queued",
+      "timestamp": "2026-04-12T16:00:00.000Z",
+      "runStatus": "done",
       "executionMode": "agent-run",
-      "deliverable": "A small validated implementation with diff, checks, and rollback point.",
-      "text": "Queued behind Scout brief.",
-      "agentId": "henry",
-      "agentName": "Henry",
+      "deliverable": "Updated QuickActions.tsx so placeholder Settings actions are disabled and honest.",
+      "text": "Restart Gateway and View Gateway Logs no longer trigger fake success toasts.",
+      "agentId": "forge",
+      "agentName": "Forge",
       "fields": {
-        "status": "queued",
-        "blockers": "Waiting on Scout brief.",
-        "next": "Implement once task packet is approved."
+        "status": "done",
+        "mutationSummary": "Single-file UI trust fix in QuickActions.tsx.",
+        "next": "Audit verifies scope and release recommendation.",
+        "handoffTo": "audit"
       }
     }
   },
   {
     "id": "task-mc-team-audit-signoff",
     "title": "Audit: verify the first improvement and produce signoff",
-    "status": "pending",
+    "status": "completed",
     "priority": "high",
     "agent": {
       "id": "audit",
@@ -99,23 +101,24 @@
       "task-mc-team-forge-ship"
     ],
     "executionMode": "agent-run",
-    "runStatus": "queued",
+    "runStatus": "done",
     "deliverable": "A short verification note covering pass/fail, remaining risk, and release recommendation.",
     "latestRun": {
-      "id": "task-mc-team-audit-queued",
-      "kind": "manual",
-      "intent": "start",
-      "timestamp": "2026-04-12T15:21:00.000Z",
-      "runStatus": "queued",
+      "id": "task-mc-team-audit-signoff-complete",
+      "kind": "agent_packet",
+      "intent": "review",
+      "action": "review",
+      "timestamp": "2026-04-12T16:01:00.000Z",
+      "runStatus": "done",
       "executionMode": "agent-run",
-      "deliverable": "A short verification note covering pass/fail, remaining risk, and release recommendation.",
-      "text": "Queued behind Forge implementation.",
-      "agentId": "henry",
-      "agentName": "Henry",
+      "deliverable": "Pass. Scope respected, release approved within packet scope.",
+      "text": "Known unrelated typecheck issue remains outside this packet.",
+      "agentId": "audit",
+      "agentName": "Audit",
       "fields": {
-        "status": "queued",
-        "blockers": "Waiting on Forge output.",
-        "next": "Review implementation once delivered."
+        "status": "done",
+        "decision": "pass",
+        "next": "Henry closes packet one and can queue the next approved task."
       }
     }
   }

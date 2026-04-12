@@ -4,7 +4,7 @@
     "title": "Mission Control Agent Team v1 Activation",
     "description": "Stand up the new Henry-led specialist team inside Mission Control, run the first live operating cycle, and prove the handoff path from research to execution to review.",
     "status": "active",
-    "progress": 12,
+    "progress": 34,
     "priority": "high",
     "agent": {
       "emoji": "👔",
@@ -24,50 +24,89 @@
       {
         "id": "scout-brief",
         "title": "Scout creates execution brief",
-        "status": "in_progress",
+        "status": "completed",
         "ownerAgentId": "scout",
         "reviewerAgentId": "henry",
         "handoffToAgentId": "forge",
         "dependsOnPhaseIds": [],
         "latestRun": {
-          "id": "phase-scout-brief-start",
-          "kind": "manual",
-          "intent": "start",
-          "timestamp": "2026-04-12T15:21:00.000Z",
-          "runStatus": "running",
+          "id": "phase-scout-brief-complete",
+          "kind": "agent_packet",
+          "intent": "agent_check_in",
+          "action": "check-in",
+          "timestamp": "2026-04-12T15:56:00.000Z",
+          "runStatus": "done",
           "executionMode": "agent-run",
-          "deliverable": "Research brief with recommended first improvement, scope, validation, and handoff notes.",
-          "text": "Execution started. Scout is gathering the first implementation brief for Forge.",
-          "agentId": "henry",
-          "agentName": "Henry",
+          "deliverable": "Approved first execution brief for Forge: disable fake Settings quick actions in QuickActions.tsx.",
+          "text": "Brief accepted. Forge can execute the trust fix.",
+          "agentId": "scout",
+          "agentName": "Scout",
           "fields": {
-            "status": "running",
-            "focus": "Pick the first worthy Mission Control improvement for the new team to execute.",
-            "next": "Hand a concrete brief to Forge.",
-            "needsFromHuman": "None unless scope changes."
+            "status": "done",
+            "focus": "First trust-fix packet for the new team.",
+            "next": "Forge implements the approved QuickActions change.",
+            "handoffTo": "forge"
           }
         }
       },
       {
         "id": "forge-implement",
         "title": "Forge executes the first improvement",
-        "status": "pending",
+        "status": "completed",
         "ownerAgentId": "forge",
         "reviewerAgentId": "audit",
         "handoffToAgentId": "audit",
         "dependsOnPhaseIds": [
           "scout-brief"
-        ]
+        ],
+        "latestRun": {
+          "id": "phase-forge-implement-complete",
+          "kind": "agent_packet",
+          "intent": "start",
+          "timestamp": "2026-04-12T16:00:00.000Z",
+          "runStatus": "done",
+          "executionMode": "agent-run",
+          "deliverable": "QuickActions trust fix shipped in src/components/QuickActions.tsx.",
+          "text": "Placeholder success actions were replaced with disabled unavailable states.",
+          "agentId": "forge",
+          "agentName": "Forge",
+          "fields": {
+            "status": "done",
+            "focus": "Remove fake success behavior from Settings quick actions.",
+            "next": "Audit verifies scope and release recommendation.",
+            "mutationSummary": "Updated QuickActions.tsx only; disabled Restart Gateway and View Gateway Logs placeholders.",
+            "handoffTo": "audit"
+          }
+        }
       },
       {
         "id": "audit-review",
         "title": "Audit verifies and signs off",
-        "status": "pending",
+        "status": "completed",
         "ownerAgentId": "audit",
         "reviewerAgentId": "henry",
         "dependsOnPhaseIds": [
           "forge-implement"
-        ]
+        ],
+        "latestRun": {
+          "id": "phase-audit-review-complete",
+          "kind": "agent_packet",
+          "intent": "review",
+          "action": "review",
+          "timestamp": "2026-04-12T16:01:00.000Z",
+          "runStatus": "done",
+          "executionMode": "agent-run",
+          "deliverable": "Pass. Scope confirmed and packet approved for release.",
+          "text": "Approved within scope. Known repo-wide typecheck issue remains baseline debt, not packet fallout.",
+          "agentId": "audit",
+          "agentName": "Audit",
+          "fields": {
+            "status": "done",
+            "decision": "pass",
+            "next": "Henry can close packet one and queue packet two.",
+            "needsFromHuman": "Optional approval to schedule the next packet."
+          }
+        }
       }
     ]
   }
