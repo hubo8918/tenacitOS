@@ -1,3 +1,8 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 const defaultDevOrigins = [
   "http://localhost:3000",
   "http://127.0.0.1:3000",
@@ -31,6 +36,18 @@ const nextConfig = {
   transpilePackages: ['three', '@react-three/fiber', '@react-three/drei'],
   allowedDevOrigins: Array.from(new Set([...defaultDevOrigins, ...envDevOrigins])),
   serverExternalPackages: ["better-sqlite3"],
+  turbopack: {
+    root: __dirname,
+    resolveAlias: {
+      tailwindcss: path.join(__dirname, "node_modules", "tailwindcss"),
+      "@tailwindcss/typography": path.join(
+        __dirname,
+        "node_modules",
+        "@tailwindcss",
+        "typography"
+      ),
+    },
+  },
   async redirects() {
     return devRedirects;
   },

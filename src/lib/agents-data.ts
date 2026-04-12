@@ -93,6 +93,10 @@ const DEFAULT_AGENT_CONFIG: Record<string, { emoji: string; color: string; name?
   },
 };
 
+function isMissionControlVisibleAgent(agentId: string): boolean {
+  return agentId !== "main";
+}
+
 interface AgentCacheEntry {
   agents: AgentSummary[];
   updatedAt: number;
@@ -278,7 +282,9 @@ function loadAgentsFromConfig(): AgentSummary[] {
           },
         ];
 
-  return normalizedAgents.map((agent) => {
+  return normalizedAgents
+    .filter((agent) => isMissionControlVisibleAgent(agent.id))
+    .map((agent) => {
     const agentInfo = getAgentDisplayInfo(agent.id, agent);
     const telegramAccount = config.channels?.telegram?.accounts?.[agent.id];
     const botToken = telegramAccount?.botToken;
@@ -338,7 +344,7 @@ function loadAgentsFromConfig(): AgentSummary[] {
       workTypes: capabilityProfile.workTypes,
       capabilityProfileConfigured: capabilityProfile.configured,
     } satisfies AgentSummary;
-  });
+    });
 }
 
 export function invalidateAgentsCache(): void {

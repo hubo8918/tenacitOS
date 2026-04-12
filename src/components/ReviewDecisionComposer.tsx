@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 export type ReviewDecision = "approve" | "rework" | "block";
 
@@ -92,14 +92,6 @@ export function ReviewDecisionComposer({
         .sort((left, right) => left.name.localeCompare(right.name)),
     [agentOptions]
   );
-
-  useEffect(() => {
-    if (!activeDecision) {
-      setHandoffToAgentId(defaultHandoffToAgentId || "");
-      setNote("");
-      setLocalError(null);
-    }
-  }, [activeDecision, defaultHandoffToAgentId]);
 
   const openComposer = (decision: ReviewDecision) => {
     if (!canEdit) return;
