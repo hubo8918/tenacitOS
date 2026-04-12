@@ -1,0 +1,122 @@
+[
+  {
+    "id": "task-mc-team-scout-brief",
+    "title": "Scout: define the first live Mission Control task packet",
+    "status": "in_progress",
+    "priority": "high",
+    "agent": {
+      "id": "scout",
+      "emoji": "🔎",
+      "name": "Scout",
+      "color": "#0A84FF"
+    },
+    "project": "Mission Control Agent Team v1 Activation",
+    "projectId": "mc-agent-team-v1",
+    "dueDate": "2026-04-12",
+    "assigneeAgentId": "scout",
+    "reviewerAgentId": "henry",
+    "handoffToAgentId": "forge",
+    "blockedByTaskIds": [],
+    "executionMode": "agent-run",
+    "runStatus": "running",
+    "deliverable": "One concise brief naming the first improvement, why now, success check, rollback point, and handoff notes for Forge.",
+    "latestRun": {
+      "id": "task-mc-team-scout-brief-start",
+      "kind": "manual",
+      "intent": "start",
+      "timestamp": "2026-04-12T15:21:00.000Z",
+      "runStatus": "running",
+      "executionMode": "agent-run",
+      "deliverable": "One concise brief naming the first improvement, why now, success check, rollback point, and handoff notes for Forge.",
+      "text": "Task opened and assigned to Scout.",
+      "agentId": "henry",
+      "agentName": "Henry",
+      "fields": {
+        "status": "running",
+        "focus": "Find the right first real execution target for the new team.",
+        "next": "Hand off an implementation-ready brief to Forge."
+      }
+    }
+  },
+  {
+    "id": "task-mc-team-forge-ship",
+    "title": "Forge: implement the first approved Mission Control improvement",
+    "status": "pending",
+    "priority": "high",
+    "agent": {
+      "id": "forge",
+      "emoji": "🛠️",
+      "name": "Forge",
+      "color": "#30D158"
+    },
+    "project": "Mission Control Agent Team v1 Activation",
+    "projectId": "mc-agent-team-v1",
+    "dueDate": "2026-04-12",
+    "assigneeAgentId": "forge",
+    "reviewerAgentId": "audit",
+    "handoffToAgentId": "audit",
+    "blockedByTaskIds": [
+      "task-mc-team-scout-brief"
+    ],
+    "executionMode": "agent-run",
+    "runStatus": "queued",
+    "deliverable": "A small validated implementation with diff, checks, and rollback point.",
+    "latestRun": {
+      "id": "task-mc-team-forge-queued",
+      "kind": "manual",
+      "intent": "start",
+      "timestamp": "2026-04-12T15:21:00.000Z",
+      "runStatus": "queued",
+      "executionMode": "agent-run",
+      "deliverable": "A small validated implementation with diff, checks, and rollback point.",
+      "text": "Queued behind Scout brief.",
+      "agentId": "henry",
+      "agentName": "Henry",
+      "fields": {
+        "status": "queued",
+        "blockers": "Waiting on Scout brief.",
+        "next": "Implement once task packet is approved."
+      }
+    }
+  },
+  {
+    "id": "task-mc-team-audit-signoff",
+    "title": "Audit: verify the first improvement and produce signoff",
+    "status": "pending",
+    "priority": "high",
+    "agent": {
+      "id": "audit",
+      "emoji": "🧪",
+      "name": "Audit",
+      "color": "#FF9F0A"
+    },
+    "project": "Mission Control Agent Team v1 Activation",
+    "projectId": "mc-agent-team-v1",
+    "dueDate": "2026-04-12",
+    "assigneeAgentId": "audit",
+    "reviewerAgentId": "henry",
+    "blockedByTaskIds": [
+      "task-mc-team-forge-ship"
+    ],
+    "executionMode": "agent-run",
+    "runStatus": "queued",
+    "deliverable": "A short verification note covering pass/fail, remaining risk, and release recommendation.",
+    "latestRun": {
+      "id": "task-mc-team-audit-queued",
+      "kind": "manual",
+      "intent": "start",
+      "timestamp": "2026-04-12T15:21:00.000Z",
+      "runStatus": "queued",
+      "executionMode": "agent-run",
+      "deliverable": "A short verification note covering pass/fail, remaining risk, and release recommendation.",
+      "text": "Queued behind Forge implementation.",
+      "agentId": "henry",
+      "agentName": "Henry",
+      "fields": {
+        "status": "queued",
+        "blockers": "Waiting on Forge output.",
+        "next": "Review implementation once delivered."
+      }
+    }
+  }
+]
