@@ -383,7 +383,7 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
 
   return (
     <div
-      className="rounded-xl overflow-hidden transition-all duration-200 hover:scale-[1.02] relative"
+      className="rounded-xl overflow-hidden transition-all duration-200 hover:scale-[1.02]"
       style={{
         backgroundColor: "var(--card)",
         border: "1px solid var(--border)",
@@ -398,11 +398,10 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
       }}
     >
       <div className="p-4 md:p-5">
-        {/* Edit overlay */}
         {editing && (
           <div
-            className="absolute inset-0 z-10 rounded-xl p-4 md:p-5 flex flex-col gap-3 overflow-y-auto"
-            style={{ backgroundColor: "var(--card)" }}
+            className="flex flex-col gap-3"
+            style={{ minHeight: "100%" }}
           >
             <div className="flex items-center justify-between mb-1">
               <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
@@ -604,264 +603,267 @@ export function AgentCard({ agent, allAgents, onUpdate }: AgentCardProps) {
           </div>
         )}
 
-        {/* Top row */}
-        <div className="flex items-start gap-3 mb-3">
-          <div
-            className="flex-shrink-0 flex items-center justify-center rounded-xl text-2xl"
-            style={{
-              width: "48px",
-              height: "48px",
-              backgroundColor: `${agent.color}20`,
-              border: `2px solid ${agent.color}40`,
-            }}
-          >
-            {agent.emoji}
-          </div>
-
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h3
-                className="text-base font-bold truncate"
+        {!editing && (
+          <>
+            <div className="flex items-start gap-3 mb-3">
+              <div
+                className="flex-shrink-0 flex items-center justify-center rounded-xl text-2xl"
                 style={{
-                  fontFamily: "var(--font-heading)",
-                  color: "var(--text-primary)",
+                  width: "48px",
+                  height: "48px",
+                  backgroundColor: `${agent.color}20`,
+                  border: `2px solid ${agent.color}40`,
                 }}
               >
-                {agent.name}
-              </h3>
-              {agent.specialBadge && (
+                {agent.emoji}
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3
+                    className="text-base font-bold truncate"
+                    style={{
+                      fontFamily: "var(--font-heading)",
+                      color: "var(--text-primary)",
+                    }}
+                  >
+                    {agent.name}
+                  </h3>
+                  {agent.specialBadge && (
+                    <span
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap"
+                      style={{
+                        backgroundColor: `${agent.color}25`,
+                        color: agent.color,
+                        border: `1px solid ${agent.color}40`,
+                      }}
+                    >
+                      {agent.specialBadge}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <p className="text-sm" style={{ color: agent.color, fontWeight: 500 }}>
+                    {agent.role}
+                  </p>
+                  <span
+                    className="text-[10px] px-1.5 py-0.5 rounded-md"
+                    style={{
+                      color: presence.color,
+                      border: `1px solid ${presence.color}55`,
+                      backgroundColor: `${presence.color}15`,
+                    }}
+                  >
+                    {presence.label}
+                  </span>
+                </div>
+              </div>
+
+              <div
+                className="flex-shrink-0 w-2.5 h-2.5 rounded-full mt-1"
+                style={{
+                  backgroundColor: presence.color,
+                  boxShadow: presence.glow,
+                }}
+              />
+            </div>
+
+            <p className="text-sm mb-3 line-clamp-2" style={{ color: "var(--text-secondary)" }}>
+              {agent.description}
+            </p>
+
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {agent.tags.map((tag) => (
                 <span
-                  className="text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap"
+                  key={tag.label}
+                  className="text-[10px] font-semibold px-2 py-0.5 rounded"
                   style={{
-                    backgroundColor: `${agent.color}25`,
-                    color: agent.color,
-                    border: `1px solid ${agent.color}40`,
+                    backgroundColor: `color-mix(in srgb, ${tag.color} 15%, transparent)`,
+                    color: tag.color,
                   }}
                 >
-                  {agent.specialBadge}
+                  {tag.label}
                 </span>
-              )}
+              ))}
             </div>
-            <div className="flex items-center gap-2 mt-0.5">
-              <p className="text-sm" style={{ color: agent.color, fontWeight: 500 }}>
-                {agent.role}
-              </p>
-              <span
-                className="text-[10px] px-1.5 py-0.5 rounded-md"
-                style={{
-                  color: presence.color,
-                  border: `1px solid ${presence.color}55`,
-                  backgroundColor: `${presence.color}15`,
-                }}
-              >
-                {presence.label}
-              </span>
-            </div>
-          </div>
 
-          <div
-            className="flex-shrink-0 w-2.5 h-2.5 rounded-full mt-1"
-            style={{
-              backgroundColor: presence.color,
-              boxShadow: presence.glow,
-            }}
-          />
-        </div>
-
-        <p className="text-sm mb-3 line-clamp-2" style={{ color: "var(--text-secondary)" }}>
-          {agent.description}
-        </p>
-
-        <div className="flex flex-wrap gap-1.5 mb-3">
-          {agent.tags.map((tag) => (
-            <span
-              key={tag.label}
-              className="text-[10px] font-semibold px-2 py-0.5 rounded"
-              style={{
-                backgroundColor: `color-mix(in srgb, ${tag.color} 15%, transparent)`,
-                color: tag.color,
-              }}
+            <div
+              className="mb-3 grid grid-cols-2 gap-2 rounded-lg p-3"
+              style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}
             >
-              {tag.label}
-            </span>
-          ))}
-        </div>
-
-        <div
-          className="mb-3 grid grid-cols-2 gap-2 rounded-lg p-3"
-          style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border)" }}
-        >
-          {workloadStats.map((stat) => (
-            <div key={stat.label}>
-              <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
-                {stat.label}
-              </p>
-              <p className="mt-1 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                {stat.value}
-              </p>
-            </div>
-          ))}
-          <div className="col-span-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
-              Blocked items
-            </p>
-            <p className="mt-1 text-sm font-semibold" style={{ color: blockedItems > 0 ? "#FF9F0A" : "var(--text-primary)" }}>
-              {blockedItems}
-            </p>
-          </div>
-        </div>
-
-        <div className="mb-3 flex flex-wrap gap-2 text-xs font-semibold">
-          <Link
-            href={`/agents/projects?ownerAgentId=${encodeURIComponent(agent.id)}`}
-            className="rounded-full px-3 py-1.5"
-            style={{ color: "#32D74B", border: "1px solid color-mix(in srgb, #32D74B 24%, transparent)" }}
-          >
-            Open projects
-          </Link>
-          <Link
-            href={`/agents/tasks?agentId=${encodeURIComponent(agent.id)}`}
-            className="rounded-full px-3 py-1.5"
-            style={{ color: "#0A84FF", border: "1px solid color-mix(in srgb, #0A84FF 24%, transparent)" }}
-          >
-            Open tasks
-          </Link>
-          <Link
-            href={`/agents/team?view=inbox&reviewer=${encodeURIComponent(agent.id)}`}
-            className="rounded-full px-3 py-1.5"
-            style={{ color: "#F59E0B", border: "1px solid color-mix(in srgb, #F59E0B 24%, transparent)" }}
-          >
-            Open review queue
-          </Link>
-        </div>
-
-        {(reportsToName || reviewForNames.length > 0 || delegateToNames.length > 0) && (
-          <div className="mb-3 flex flex-wrap gap-1.5">
-            {reportsToName && (
-              <span
-                className="text-[10px] font-semibold px-2 py-0.5 rounded"
-                style={{
-                  backgroundColor: `${agent.color}12`,
-                  color: "var(--text-secondary)",
-                  border: "1px solid var(--border)",
-                }}
-              >
-                reports to {reportsToName}
-              </span>
-            )}
-            {reviewForNames.length > 0 && (
-              <span
-                className="text-[10px] font-semibold px-2 py-0.5 rounded"
-                style={{
-                  backgroundColor: `${agent.color}12`,
-                  color: "var(--text-secondary)",
-                  border: "1px solid var(--border)",
-                }}
-              >
-                reviews for {reviewForNames.join(", ")}
-              </span>
-            )}
-            {delegateToNames.length > 0 && (
-              <span
-                className="text-[10px] font-semibold px-2 py-0.5 rounded"
-                style={{
-                  backgroundColor: `${agent.color}12`,
-                  color: "var(--text-secondary)",
-                  border: "1px solid var(--border)",
-                }}
-              >
-                delegates to {delegateToNames.join(", ")}
-              </span>
-            )}
-          </div>
-        )}
-
-        <div className="flex items-start justify-between gap-3">
-          <div className="text-[11px] leading-tight max-w-[240px]" style={{ color: "var(--text-muted)" }}>
-            <p className="font-semibold uppercase tracking-[0.08em]" style={{ color: "var(--text-muted)" }}>
-              Presence record
-            </p>
-            <p style={{ color: "var(--text-secondary)" }}>{describePresence(agent)}</p>
-            <Link
-              href={`/agents#agent-card-${agent.id}`}
-              className="inline-block mt-1"
-              style={{ color: "var(--accent)", fontWeight: 600 }}
-            >
-              Runtime details on Agents →
-            </Link>
-          </div>
-
-          <div className="flex flex-col items-end gap-2">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => runAgentAction("wake")}
-                disabled={Boolean(actionRunning) || editing}
-                className="text-[11px] px-2 py-1 rounded-md"
-                style={{
-                  color: "var(--text-secondary)",
-                  border: "1px solid var(--border)",
-                  opacity: actionRunning ? 0.6 : 1,
-                }}
-              >
-                {actionRunning === "wake" ? "prompting..." : "ready ping"}
-              </button>
-
-              <button
-                onClick={() => runAgentAction("check-in")}
-                disabled={Boolean(actionRunning) || editing}
-                className="text-[11px] px-2 py-1 rounded-md"
-                style={{
-                  color: "var(--text-secondary)",
-                  border: "1px solid var(--border)",
-                  opacity: actionRunning ? 0.6 : 1,
-                }}
-              >
-                {actionRunning === "check-in" ? "checking..." : "quick check-in"}
-              </button>
-
-              <button
-                onClick={() => {
-                  resetDraftFromAgent();
-                  setEditing(true);
-                }}
-                className="flex items-center gap-1 text-xs transition-colors"
-                style={{ color: "var(--text-muted)" }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = "var(--text-secondary)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = "var(--text-muted)";
-                }}
-              >
-                <Edit3 className="w-3 h-3" />
-                edit profile
-              </button>
-            </div>
-
-            <p className="text-[10px] max-w-[290px] text-right" style={{ color: "var(--text-muted)", lineHeight: 1.35 }}>
-              One-off prompts only. These do not change runtime state.
-            </p>
-
-            {actionResult && (
-              <div className="text-[11px] max-w-[290px] text-right" style={{ color: "var(--text-muted)", lineHeight: 1.35 }}>
-                <p className="font-semibold" style={{ color: "var(--text-secondary)" }}>
-                  {actionLabel(actionResult.action)}
+              {workloadStats.map((stat) => (
+                <div key={stat.label}>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                    {stat.label}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                    {stat.value}
+                  </p>
+                </div>
+              ))}
+              <div className="col-span-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                  Blocked items
                 </p>
-                {actionFieldEntries.length > 0 ? (
-                  actionFieldEntries.map((entry) => (
-                    <p key={entry.label}>
-                      <span className="uppercase tracking-[0.08em]">{entry.label}:</span>{" "}
-                      {entry.value}
-                    </p>
-                  ))
-                ) : (
-                  <p title={actionResult.text}>{actionResult.text}</p>
+                <p className="mt-1 text-sm font-semibold" style={{ color: blockedItems > 0 ? "#FF9F0A" : "var(--text-primary)" }}>
+                  {blockedItems}
+                </p>
+              </div>
+            </div>
+
+            <div className="mb-3 flex flex-wrap gap-2 text-xs font-semibold">
+              <Link
+                href={`/agents/projects?ownerAgentId=${encodeURIComponent(agent.id)}`}
+                className="rounded-full px-3 py-1.5"
+                style={{ color: "#32D74B", border: "1px solid color-mix(in srgb, #32D74B 24%, transparent)" }}
+              >
+                Open projects
+              </Link>
+              <Link
+                href={`/agents/tasks?agentId=${encodeURIComponent(agent.id)}`}
+                className="rounded-full px-3 py-1.5"
+                style={{ color: "#0A84FF", border: "1px solid color-mix(in srgb, #0A84FF 24%, transparent)" }}
+              >
+                Open tasks
+              </Link>
+              <Link
+                href={`/agents/team?view=inbox&reviewer=${encodeURIComponent(agent.id)}`}
+                className="rounded-full px-3 py-1.5"
+                style={{ color: "#F59E0B", border: "1px solid color-mix(in srgb, #F59E0B 24%, transparent)" }}
+              >
+                Open review queue
+              </Link>
+            </div>
+
+            {(reportsToName || reviewForNames.length > 0 || delegateToNames.length > 0) && (
+              <div className="mb-3 flex flex-wrap gap-1.5">
+                {reportsToName && (
+                  <span
+                    className="text-[10px] font-semibold px-2 py-0.5 rounded"
+                    style={{
+                      backgroundColor: `${agent.color}12`,
+                      color: "var(--text-secondary)",
+                      border: "1px solid var(--border)",
+                    }}
+                  >
+                    reports to {reportsToName}
+                  </span>
                 )}
-                {actionDetailParts.length > 0 && <p>{actionDetailParts.join(" · ")}</p>}
+                {reviewForNames.length > 0 && (
+                  <span
+                    className="text-[10px] font-semibold px-2 py-0.5 rounded"
+                    style={{
+                      backgroundColor: `${agent.color}12`,
+                      color: "var(--text-secondary)",
+                      border: "1px solid var(--border)",
+                    }}
+                  >
+                    reviews for {reviewForNames.join(", ")}
+                  </span>
+                )}
+                {delegateToNames.length > 0 && (
+                  <span
+                    className="text-[10px] font-semibold px-2 py-0.5 rounded"
+                    style={{
+                      backgroundColor: `${agent.color}12`,
+                      color: "var(--text-secondary)",
+                      border: "1px solid var(--border)",
+                    }}
+                  >
+                    delegates to {delegateToNames.join(", ")}
+                  </span>
+                )}
               </div>
             )}
-          </div>
-        </div>
+
+            <div className="flex items-start justify-between gap-3">
+              <div className="text-[11px] leading-tight max-w-[240px]" style={{ color: "var(--text-muted)" }}>
+                <p className="font-semibold uppercase tracking-[0.08em]" style={{ color: "var(--text-muted)" }}>
+                  Presence record
+                </p>
+                <p style={{ color: "var(--text-secondary)" }}>{describePresence(agent)}</p>
+                <Link
+                  href={`/agents#agent-card-${agent.id}`}
+                  className="inline-block mt-1"
+                  style={{ color: "var(--accent)", fontWeight: 600 }}
+                >
+                  Runtime details on Agents →
+                </Link>
+              </div>
+
+              <div className="flex flex-col items-end gap-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => runAgentAction("wake")}
+                    disabled={Boolean(actionRunning) || editing}
+                    className="text-[11px] px-2 py-1 rounded-md"
+                    style={{
+                      color: "var(--text-secondary)",
+                      border: "1px solid var(--border)",
+                      opacity: actionRunning ? 0.6 : 1,
+                    }}
+                  >
+                    {actionRunning === "wake" ? "prompting..." : "ready ping"}
+                  </button>
+
+                  <button
+                    onClick={() => runAgentAction("check-in")}
+                    disabled={Boolean(actionRunning) || editing}
+                    className="text-[11px] px-2 py-1 rounded-md"
+                    style={{
+                      color: "var(--text-secondary)",
+                      border: "1px solid var(--border)",
+                      opacity: actionRunning ? 0.6 : 1,
+                    }}
+                  >
+                    {actionRunning === "check-in" ? "checking..." : "quick check-in"}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      resetDraftFromAgent();
+                      setEditing(true);
+                    }}
+                    className="flex items-center gap-1 text-xs transition-colors"
+                    style={{ color: "var(--text-muted)" }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.color = "var(--text-secondary)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = "var(--text-muted)";
+                    }}
+                  >
+                    <Edit3 className="w-3 h-3" />
+                    edit profile
+                  </button>
+                </div>
+
+                <p className="text-[10px] max-w-[290px] text-right" style={{ color: "var(--text-muted)", lineHeight: 1.35 }}>
+                  One-off prompts only. These do not change runtime state.
+                </p>
+
+                {actionResult && (
+                  <div className="text-[11px] max-w-[290px] text-right" style={{ color: "var(--text-muted)", lineHeight: 1.35 }}>
+                    <p className="font-semibold" style={{ color: "var(--text-secondary)" }}>
+                      {actionLabel(actionResult.action)}
+                    </p>
+                    {actionFieldEntries.length > 0 ? (
+                      actionFieldEntries.map((entry) => (
+                        <p key={entry.label}>
+                          <span className="uppercase tracking-[0.08em]">{entry.label}:</span>{" "}
+                          {entry.value}
+                        </p>
+                      ))
+                    ) : (
+                      <p title={actionResult.text}>{actionResult.text}</p>
+                    )}
+                    {actionDetailParts.length > 0 && <p>{actionDetailParts.join(" · ")}</p>}
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

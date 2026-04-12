@@ -85,7 +85,7 @@ export function ChangePasswordModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
@@ -93,7 +93,7 @@ export function ChangePasswordModal({
       />
 
       {/* Modal */}
-      <div className="relative bg-gray-900 rounded-xl border border-gray-700 shadow-xl w-full max-w-md mx-4 p-6">
+      <div className="relative bg-gray-900 rounded-xl border border-gray-700 shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">

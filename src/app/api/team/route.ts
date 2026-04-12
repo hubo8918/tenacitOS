@@ -3,8 +3,9 @@ import fs from "fs/promises";
 import path from "path";
 import { spawnSync } from "child_process";
 import { getAgentTasks } from "@/lib/agent-tasks-data";
-import { getAgentsSummary, type AgentSummary } from "@/lib/agents-data";
+import { getAgentsSummary, invalidateAgentsCache, type AgentSummary } from "@/lib/agents-data";
 import { getProjects } from "@/lib/projects-data";
+import { OPENCLAW_CONFIG, OPENCLAW_DIR } from "@/lib/paths";
 
 const DATA_PATH = path.join(process.cwd(), "data", "team.json");
 const ACTIVE_WINDOW_MS = 15 * 60 * 1000;
@@ -70,6 +71,37 @@ interface OpenClawAgent {
   identitySource?: string;
   workspace?: string;
   model?: string;
+}
+
+interface OpenClawConfigAgent {
+  id: string;
+  name?: string;
+  workspace?: string;
+  agentDir?: string;
+  identity?: {
+    name?: string;
+    emoji?: string;
+    theme?: string;
+    avatar?: string;
+  };
+  subagents?: {
+    allowAgents?: string[];
+  };
+}
+
+interface OpenClawConfigFile {
+  agents?: {
+    list?: OpenClawConfigAgent[];
+    defaults?: {
+      workspace?: string;
+      model?: {
+        primary?: string;
+      };
+    };
+  };
+  bindings?: Array<{
+    agentId?: string;
+  }>;
 }
 
 interface OpenClawSessionsPayload {
@@ -348,6 +380,136 @@ function listOpenClawAgents(): OpenClawAgent[] {
   });
 }
 
+function agentSummaryToOpenClawAgent(agent: AgentSummary): OpenClawAgent {
+  return {
+    id: agent.id,
+    name: agent.name,
+    identityName: agent.name,
+    identityEmoji: agent.emoji,
+    identitySource: "summary",
+    workspace: agent.workspace,
+    model: agent.model,
+  };
+}
+
+async function getOpenClawAgentsForMutations(): Promise<OpenClawAgent[]> {
+  try {
+    return listOpenClawAgents();
+  } catch (error) {
+    console.warn("[team-api] Falling back to Mission Control agent summaries for mutations:", error);
+  }
+
+  const summaries = await getAgentsSummary();
+  return summaries.map(agentSummaryToOpenClawAgent);
+}
+
+async function loadOpenClawConfigFile(): Promise<OpenClawConfigFile> {
+  const raw = await fs.readFile(OPENCLAW_CONFIG, "utf-8");
+  return JSON.parse(raw) as OpenClawConfigFile;
+}
+
+async function saveOpenClawConfigFile(config: OpenClawConfigFile): Promise<void> {
+  await fs.writeFile(OPENCLAW_CONFIG, JSON.stringify(config, null, 2));
+  invalidateAgentsCache();
+}
+
+function defaultAgentDirFor(agentId: string): string {
+  return path.join(OPENCLAW_DIR, "agents", agentId, "agent");
+}
+
+async function createAgentViaConfigFallback(
+  agentId: string,
+  name: string,
+  workspace: string,
+  emoji?: string
+): Promise<OpenClawAgent> {
+  const config = await loadOpenClawConfigFile();
+  const agentsSection = config.agents ?? (config.agents = {});
+  const list = Array.isArray(agentsSection.list) ? [...agentsSection.list] : [];
+  const agentDir = defaultAgentDirFor(agentId);
+  const existingIndex = list.findIndex((entry) => entry.id === agentId);
+  const existing = existingIndex >= 0 ? list[existingIndex] : undefined;
+
+  const nextEntry: OpenClawConfigAgent = {
+    ...existing,
+    id: agentId,
+    name,
+    workspace,
+    agentDir,
+    identity: {
+      ...existing?.identity,
+      name,
+      ...(emoji ? { emoji } : {}),
+    },
+  };
+
+  if (existingIndex >= 0) {
+    list[existingIndex] = nextEntry;
+  } else {
+    list.push(nextEntry);
+  }
+
+  agentsSection.list = list;
+  await saveOpenClawConfigFile(config);
+  await Promise.all([
+    fs.mkdir(workspace, { recursive: true }),
+    fs.mkdir(agentDir, { recursive: true }),
+  ]);
+
+  return {
+    id: agentId,
+    name,
+    identityName: name,
+    identityEmoji: emoji,
+    identitySource: "config",
+    workspace,
+  };
+}
+
+async function syncAgentIdentityViaConfigFallback(
+  realAgent: OpenClawAgent,
+  name?: string,
+  emoji?: string
+): Promise<void> {
+  const config = await loadOpenClawConfigFile();
+  const agentsSection = config.agents;
+  if (!agentsSection || !Array.isArray(agentsSection.list)) {
+    return;
+  }
+
+  const index = agentsSection.list.findIndex((entry) => entry.id === realAgent.id);
+  if (index === -1) {
+    return;
+  }
+
+  const existing = agentsSection.list[index];
+  agentsSection.list[index] = {
+    ...existing,
+    name: name ?? existing.name ?? realAgent.name,
+    identity: {
+      ...existing.identity,
+      name: name ?? existing.identity?.name ?? existing.name ?? realAgent.name,
+      ...(emoji ? { emoji } : {}),
+    },
+  };
+
+  await saveOpenClawConfigFile(config);
+}
+
+async function deleteAgentViaConfigFallback(agentId: string): Promise<void> {
+  const config = await loadOpenClawConfigFile();
+
+  if (config.agents?.list) {
+    config.agents.list = config.agents.list.filter((entry) => entry.id !== agentId);
+  }
+
+  if (Array.isArray(config.bindings)) {
+    config.bindings = config.bindings.filter((entry) => entry.agentId !== agentId);
+  }
+
+  await saveOpenClawConfigFile(config);
+}
+
 function listOpenClawSessions(): OpenClawSessionsPayload {
   const output = runOpenClaw(["sessions", "--all-agents", "--json"], 5000);
   const parsed = JSON.parse(output);
@@ -531,8 +693,7 @@ function mergeTeamAgentFromSummary(
 }
 
 function defaultWorkspaceFor(agentId: string): string {
-  const home = process.env.USERPROFILE || process.env.HOME || process.cwd();
-  return path.join(home, ".openclaw", `workspace-${agentId}`);
+  return path.join(OPENCLAW_DIR, `workspace-${agentId}`);
 }
 
 function sanitizeAgentId(value: unknown): string | null {
@@ -547,7 +708,7 @@ function coerceString(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-function syncAgentIdentity(realAgent: OpenClawAgent, name?: string, emoji?: string): void {
+async function syncAgentIdentity(realAgent: OpenClawAgent, name?: string, emoji?: string): Promise<void> {
   const identityName = name || realAgent.identityName || realAgent.name || realAgent.id;
   const workspace = realAgent.workspace || defaultWorkspaceFor(realAgent.id);
 
@@ -567,7 +728,12 @@ function syncAgentIdentity(realAgent: OpenClawAgent, name?: string, emoji?: stri
     args.push("--emoji", emoji);
   }
 
-  runOpenClaw(args);
+  try {
+    runOpenClaw(args);
+  } catch (error) {
+    console.warn(`[team-api] Falling back to config identity sync for ${realAgent.id}:`, error);
+    await syncAgentIdentityViaConfigFallback(realAgent, identityName, emoji);
+  }
 }
 
 async function buildMergedTeam(): Promise<TeamBuildResult> {
@@ -792,33 +958,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Agent with this ID already exists in team overlay" }, { status: 409 });
     }
 
-    const realAgents = listOpenClawAgents();
+    const realAgents = await getOpenClawAgentsForMutations();
     let real = realAgents.find((agent) => agent.id === id);
 
     if (!real) {
       const workspace = defaultWorkspaceFor(id);
-      runOpenClaw(["agents", "add", id, "--workspace", workspace, "--non-interactive", "--json"]);
-
       const emoji = coerceString(body.emoji);
-      const identityArgs = [
-        "agents",
-        "set-identity",
-        "--agent",
-        id,
-        "--workspace",
-        workspace,
-        "--name",
-        name,
-        "--json",
-      ];
 
-      if (emoji) {
-        identityArgs.push("--emoji", emoji);
+      try {
+        runOpenClaw(["agents", "add", id, "--workspace", workspace, "--non-interactive", "--json"]);
+
+        const identityArgs = [
+          "agents",
+          "set-identity",
+          "--agent",
+          id,
+          "--workspace",
+          workspace,
+          "--name",
+          name,
+          "--json",
+        ];
+
+        if (emoji) {
+          identityArgs.push("--emoji", emoji);
+        }
+
+        runOpenClaw(identityArgs);
+
+        real = { id, identityName: name, identityEmoji: emoji, workspace };
+      } catch (error) {
+        console.warn(`[team-api] Falling back to config-backed agent create for ${id}:`, error);
+        real = await createAgentViaConfigFallback(id, name, workspace, emoji);
       }
-
-      runOpenClaw(identityArgs);
-
-      real = { id, identityName: name, identityEmoji: emoji, workspace };
     }
 
     const requestedReportsTo = sanitizeAgentId(body.reportsTo);
@@ -896,7 +1068,8 @@ export async function POST(request: NextRequest) {
         status: 201,
       }
     );
-  } catch {
+  } catch (error) {
+    console.error("[team-api] Failed to create agent:", error);
     return NextResponse.json({ error: "Failed to create agent" }, { status: 500 });
   }
 }
@@ -914,7 +1087,7 @@ export async function PUT(request: NextRequest) {
     const overlays = await loadTeamOverlay();
     const index = overlays.findIndex((entry) => entry.id === id);
 
-    const realAgents = listOpenClawAgents();
+    const realAgents = await getOpenClawAgentsForMutations();
     const real = realAgents.find((agent) => agent.id === id);
 
     if (!real) {
@@ -989,7 +1162,11 @@ export async function PUT(request: NextRequest) {
 
     const shouldSyncIdentity = requestedName !== undefined || requestedEmoji !== undefined;
     if (shouldSyncIdentity) {
-      syncAgentIdentity(real, nextOverlay.name, nextOverlay.emoji);
+      try {
+        await syncAgentIdentity(real, nextOverlay.name, nextOverlay.emoji);
+      } catch (error) {
+        console.warn(`[team-api] Failed to sync identity for ${id}; overlay update will continue.`, error);
+      }
     }
 
     if (index === -1) {
@@ -1009,7 +1186,8 @@ export async function PUT(request: NextRequest) {
         sessionStatsMap.get(id) || { activeSessions: 0, lastActiveAt: null }
       )
     );
-  } catch {
+  } catch (error) {
+    console.error("[team-api] Failed to update agent:", error);
     return NextResponse.json({ error: "Failed to update agent" }, { status: 500 });
   }
 }
@@ -1033,13 +1211,19 @@ export async function DELETE(request: NextRequest) {
     await saveTeamOverlay(next);
     invalidateTeamCache();
 
-    const realAgents = listOpenClawAgents();
+    const realAgents = await getOpenClawAgentsForMutations();
     if (realAgents.some((agent) => agent.id === id)) {
-      runOpenClaw(["agents", "delete", id, "--force", "--json"]);
+      try {
+        runOpenClaw(["agents", "delete", id, "--force", "--json"]);
+      } catch (error) {
+        console.warn(`[team-api] Falling back to config-backed delete for ${id}:`, error);
+        await deleteAgentViaConfigFallback(id);
+      }
     }
 
     return NextResponse.json({ success: true });
-  } catch {
+  } catch (error) {
+    console.error("[team-api] Failed to delete agent:", error);
     return NextResponse.json({ error: "Failed to delete agent" }, { status: 500 });
   }
 }

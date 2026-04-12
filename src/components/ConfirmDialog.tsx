@@ -43,6 +43,8 @@ export function ConfirmDialog({
           padding: "1.5rem",
           maxWidth: "420px",
           width: "100%",
+          maxHeight: "calc(100vh - 2rem)",
+          overflowY: "auto",
           border: "1px solid var(--border)",
         }}
       >
