@@ -21,8 +21,9 @@ interface ActionButton {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   color: "emerald" | "blue" | "yellow" | "red";
-  action: () => Promise<void> | void;
-  placeholder?: boolean;
+  action?: () => Promise<void> | void;
+  disabled?: boolean;
+  statusLabel?: string;
 }
 
 export function QuickActions({ onActionComplete }: QuickActionsProps) {
@@ -36,11 +37,6 @@ export function QuickActions({ onActionComplete }: QuickActionsProps) {
   const showNotification = (type: "success" | "error", message: string) => {
     setNotification({ type, message });
     setTimeout(() => setNotification(null), 3000);
-  };
-
-  const handleRestartGateway = async () => {
-    // Placeholder - would call openclaw gateway restart
-    showNotification("success", "Gateway restart command sent (placeholder)");
   };
 
   const handleClearActivityLog = async () => {
@@ -63,19 +59,14 @@ export function QuickActions({ onActionComplete }: QuickActionsProps) {
     }
   };
 
-  const handleViewLogs = async () => {
-    // Placeholder - would open gateway logs
-    showNotification("success", "Opening gateway logs... (placeholder)");
-  };
-
   const actions: ActionButton[] = [
     {
       id: "restart",
       label: "Restart Gateway",
       icon: RefreshCw,
       color: "blue",
-      action: handleRestartGateway,
-      placeholder: true,
+      disabled: true,
+      statusLabel: "Unavailable",
     },
     {
       id: "clear_log",
@@ -89,8 +80,8 @@ export function QuickActions({ onActionComplete }: QuickActionsProps) {
       label: "View Gateway Logs",
       icon: FileText,
       color: "emerald",
-      action: handleViewLogs,
-      placeholder: true,
+      disabled: true,
+      statusLabel: "Unavailable",
     },
     {
       id: "change_password",
@@ -140,15 +131,18 @@ export function QuickActions({ onActionComplete }: QuickActionsProps) {
           {actions.map((action) => {
             const Icon = action.icon;
             const isLoading = loadingAction === action.id;
+            const isDisabled = isLoading || action.disabled;
 
             return (
               <button
                 key={action.id}
-                onClick={() => action.action()}
-                disabled={isLoading}
-                className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                  colorClasses[action.color]
-                }`}
+                onClick={() => action.action?.()}
+                disabled={isDisabled}
+                className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border transition-colors disabled:cursor-not-allowed ${
+                  action.disabled
+                    ? "bg-gray-800 text-gray-500 border-gray-700"
+                    : colorClasses[action.color]
+                } ${isDisabled ? "opacity-60" : ""}`}
               >
                 {isLoading ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -156,8 +150,8 @@ export function QuickActions({ onActionComplete }: QuickActionsProps) {
                   <Icon className="w-4 h-4" />
                 )}
                 <span className="font-medium">{action.label}</span>
-                {action.placeholder && (
-                  <span className="text-xs opacity-50">(placeholder)</span>
+                {action.statusLabel && (
+                  <span className="text-xs opacity-70">({action.statusLabel})</span>
                 )}
               </button>
             );

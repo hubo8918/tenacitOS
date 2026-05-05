@@ -6,6 +6,7 @@ interface UseFetchOptions<T> {
   timeoutMs?: number;
   initialData?: T | null;
   fetchOnMount?: boolean;
+  refreshIntervalMs?: number;
 }
 
 interface UseFetchResult<T> {
@@ -23,6 +24,7 @@ function normalizeError(err: unknown): string {
 export function useFetch<T>(url: string, options?: UseFetchOptions<T>): UseFetchResult<T> {
   const timeoutMs = options?.timeoutMs ?? 10_000;
   const fetchOnMount = options?.fetchOnMount ?? true;
+  const refreshIntervalMs = options?.refreshIntervalMs;
 
   const [data, setData] = useState<T | null>(options?.initialData ?? null);
   const [loading, setLoading] = useState(fetchOnMount && !options?.initialData);
@@ -92,6 +94,18 @@ export function useFetch<T>(url: string, options?: UseFetchOptions<T>): UseFetch
     if (!fetchOnMount) return;
     fetchData();
   }, [fetchData, fetchOnMount]);
+
+  useEffect(() => {
+    if (!refreshIntervalMs || refreshIntervalMs <= 0) return;
+
+    const intervalId = window.setInterval(() => {
+      fetchData();
+    }, refreshIntervalMs);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [fetchData, refreshIntervalMs]);
 
   return { data, loading, error, refetch: fetchData };
 }

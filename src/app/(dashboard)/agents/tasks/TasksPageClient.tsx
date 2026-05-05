@@ -64,10 +64,12 @@ export default function TasksPageClient({
   const { data, loading, error, refetch } = useFetch<{ tasks: Task[] }>("/api/agent-tasks", {
     initialData: initialTasks.length > 0 ? { tasks: initialTasks } : null,
     fetchOnMount: initialTasks.length === 0,
+    refreshIntervalMs: 15_000,
   });
   const { data: projectsData } = useFetch<{ projects: Project[] }>("/api/projects", {
     initialData: initialProjects.length > 0 ? { projects: initialProjects } : null,
     fetchOnMount: initialProjects.length === 0,
+    refreshIntervalMs: 15_000,
   });
 
   const tasks = useMemo(() => data?.tasks || [], [data]);

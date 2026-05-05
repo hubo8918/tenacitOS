@@ -1,8 +1,10 @@
+import { useMemo } from 'react';
+
 // Habbo Hotel style isometric room with floor tiles and walls
 
 export function HabboRoom() {
-  // Generate isometric floor tiles
-  const generateFloorTiles = () => {
+  // Memoized isometric floor tiles - cached to avoid recalculating on every render
+  const floorTiles = useMemo(() => {
     const tiles = [];
     const gridSize = 12; // 12x12 grid
     
@@ -38,7 +40,7 @@ export function HabboRoom() {
       }
     }
     return tiles;
-  };
+  }, []);
 
   return (
     <div
@@ -149,7 +151,7 @@ export function HabboRoom() {
 
         {/* Floor tiles */}
         <g transform="translate(0, 50)">
-          {generateFloorTiles()}
+          {floorTiles}
         </g>
 
         {/* Floor shadow overlay for depth */}

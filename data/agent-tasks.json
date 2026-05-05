@@ -121,5 +121,195 @@
         "next": "Henry closes packet one and can queue the next approved task."
       }
     }
+  },
+  {
+    "id": "task-mc-perf-scout-brief",
+    "title": "Scout: define the first page-performance fix packet",
+    "status": "completed",
+    "priority": "high",
+    "agent": {
+      "id": "scout",
+      "emoji": "🔎",
+      "name": "Scout",
+      "color": "#0A84FF"
+    },
+    "project": "Mission Control Page Performance v1",
+    "projectId": "mc-page-performance-v1",
+    "dueDate": "2026-04-12",
+    "assigneeAgentId": "scout",
+    "reviewerAgentId": "henry",
+    "handoffToAgentId": "forge",
+    "blockedByTaskIds": [],
+    "executionMode": "agent-run",
+    "runStatus": "done",
+    "deliverable": "A concise performance-fix brief with files, why now, success check, rollback point, and handoff notes.",
+    "latestRun": {
+      "id": "task-mc-perf-scout-brief-done",
+      "kind": "agent_packet",
+      "intent": "start",
+      "timestamp": "2026-04-12T18:15:00.000Z",
+      "runStatus": "done",
+      "executionMode": "agent-run",
+      "deliverable": "useMemo optimization for HabboRoom floor tiles",
+      "text": "144 SVG tiles cached to avoid recalculation on every render",
+      "agentId": "scout",
+      "agentName": "Scout",
+      "fields": {
+        "status": "done",
+        "focus": "Performance optimization identified: HabboRoom SVG recalculation",
+        "next": "Forge implements the useMemo optimization"
+      }
+    }
+  },
+  {
+    "id": "task-mc-perf-forge-ship",
+    "title": "Forge: implement the first approved page-performance fix",
+    "status": "completed",
+    "priority": "high",
+    "agent": {
+      "id": "forge",
+      "emoji": "🛠️",
+      "name": "Forge",
+      "color": "#30D158"
+    },
+    "project": "Mission Control Page Performance v1",
+    "projectId": "mc-page-performance-v1",
+    "dueDate": "2026-04-12",
+    "assigneeAgentId": "forge",
+    "reviewerAgentId": "audit",
+    "handoffToAgentId": "audit",
+    "blockedByTaskIds": [
+      "task-mc-perf-scout-brief"
+    ],
+    "executionMode": "agent-run",
+    "runStatus": "done",
+    "deliverable": "A small validated performance improvement with evidence and rollback point.",
+    "latestRun": {
+      "id": "task-mc-perf-forge-ship-done",
+      "kind": "agent_packet",
+      "intent": "start",
+      "timestamp": "2026-04-12T18:15:00.000Z",
+      "runStatus": "done",
+      "executionMode": "agent-run",
+      "deliverable": "useMemo added to HabboRoom.tsx - 144 tiles now cached",
+      "text": "Re-renders no longer recalculate isometric floor grid",
+      "agentId": "forge",
+      "agentName": "Forge",
+      "fields": {
+        "status": "done",
+        "focus": "Reduce re-calculation of static grid",
+        "next": "Audit verify and move to next page optimization"
+      }
+    }
+  },
+  {
+    "id": "task-mc-perf-audit-signoff",
+    "title": "Audit: verify the first page-performance fix",
+    "status": "completed",
+    "priority": "high",
+    "agent": {
+      "id": "audit",
+      "emoji": "🧪",
+      "name": "Audit",
+      "color": "#FF9F0A"
+    },
+    "project": "Mission Control Page Performance v1",
+    "projectId": "mc-page-performance-v1",
+    "dueDate": "2026-04-12",
+    "assigneeAgentId": "audit",
+    "reviewerAgentId": "henry",
+    "blockedByTaskIds": [
+      "task-mc-perf-forge-ship"
+    ],
+    "executionMode": "agent-run",
+    "runStatus": "done",
+    "deliverable": "A short signoff note covering pass/fail, remaining risk, and release recommendation.",
+    "latestRun": {
+      "id": "task-mc-perf-audit-signoff-done",
+      "kind": "agent_packet",
+      "intent": "review",
+      "timestamp": "2026-04-12T19:40:00.000Z",
+      "runStatus": "done",
+      "executionMode": "agent-run",
+      "deliverable": "Pass. Scope respected. First optimization complete.",
+      "text": "useMemo added to HabboRoom.tsx. Now ready for next page analysis.",
+      "agentId": "audit",
+      "agentName": "Audit",
+      "fields": {
+        "status": "done",
+        "decision": "pass",
+        "next": "Henry continues full-page performance analysis",
+        "remainingTasks": "Analyze Tasks, Projects, Dashboard pages"
+      }
+    }
+  },
+  {
+    "id": "task-mc-slack-routing-scout-brief",
+    "title": "Scout: define official Slack multi-agent routing packet",
+    "status": "in_progress",
+    "priority": "high",
+    "agent": {
+      "id": "scout",
+      "emoji": "🔎",
+      "name": "Scout",
+      "color": "#0A84FF"
+    },
+    "project": "Official Slack Multi-Agent Routing v1",
+    "projectId": "mc-slack-multi-agent-official-v1",
+    "dueDate": "2026-04-12",
+    "assigneeAgentId": "scout",
+    "reviewerAgentId": "henry",
+    "handoffToAgentId": "forge",
+    "blockedByTaskIds": [],
+    "executionMode": "agent-run",
+    "runStatus": "running",
+    "deliverable": "A concrete official Slack routing brief with bindings, account needs, success check, and rollback point."
+  },
+  {
+    "id": "task-mc-slack-routing-forge-config",
+    "title": "Forge: prepare official Slack multi-agent config changes",
+    "status": "pending",
+    "priority": "high",
+    "agent": {
+      "id": "forge",
+      "emoji": "🛠️",
+      "name": "Forge",
+      "color": "#30D158"
+    },
+    "project": "Official Slack Multi-Agent Routing v1",
+    "projectId": "mc-slack-multi-agent-official-v1",
+    "dueDate": "2026-04-12",
+    "assigneeAgentId": "forge",
+    "reviewerAgentId": "audit",
+    "handoffToAgentId": "audit",
+    "blockedByTaskIds": [
+      "task-mc-slack-routing-scout-brief"
+    ],
+    "executionMode": "agent-run",
+    "runStatus": "queued",
+    "deliverable": "A minimal config patch and setup checklist for official Slack multi-agent routing."
+  },
+  {
+    "id": "task-mc-slack-routing-audit-review",
+    "title": "Audit: verify official Slack routing alignment",
+    "status": "pending",
+    "priority": "high",
+    "agent": {
+      "id": "audit",
+      "emoji": "🧪",
+      "name": "Audit",
+      "color": "#FF9F0A"
+    },
+    "project": "Official Slack Multi-Agent Routing v1",
+    "projectId": "mc-slack-multi-agent-official-v1",
+    "dueDate": "2026-04-12",
+    "assigneeAgentId": "audit",
+    "reviewerAgentId": "henry",
+    "blockedByTaskIds": [
+      "task-mc-slack-routing-forge-config"
+    ],
+    "executionMode": "agent-run",
+    "runStatus": "queued",
+    "deliverable": "A short signoff note covering official-doc alignment, gaps, and release recommendation."
   }
 ]

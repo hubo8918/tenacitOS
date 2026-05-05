@@ -109,6 +109,7 @@ export default function ProjectsPageClient({
   const { data, loading, error, refetch } = useFetch<{ projects: Project[] }>("/api/projects", {
     initialData: initialProjects.length > 0 ? { projects: initialProjects } : null,
     fetchOnMount: initialProjects.length === 0,
+    refreshIntervalMs: 15_000,
   });
   const {
     data: tasksData,
@@ -117,6 +118,7 @@ export default function ProjectsPageClient({
   } = useFetch<{ tasks: Task[] }>("/api/agent-tasks", {
     initialData: initialTasksAvailable ? { tasks: initialTasks } : null,
     fetchOnMount: !initialTasksAvailable,
+    refreshIntervalMs: 15_000,
   });
 
   const projects = useMemo(() => data?.projects || [], [data]);

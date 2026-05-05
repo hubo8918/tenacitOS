@@ -109,5 +109,149 @@
         }
       }
     ]
+  },
+  {
+    "id": "mc-page-performance-v1",
+    "title": "Mission Control Page Performance v1",
+    "description": "Diagnose and deliver the first small, high-leverage performance fix for slow-loading Mission Control pages under the Henry-led agent workflow.",
+    "status": "active",
+    "progress": 50,
+    "priority": "high",
+    "agent": {
+      "emoji": "👔",
+      "name": "Henry",
+      "color": "#FFD700"
+    },
+    "updatedAgo": "just now",
+    "updatedBy": "Henry",
+    "ownerAgentId": "henry",
+    "participatingAgentIds": [
+      "henry",
+      "scout",
+      "forge",
+      "audit"
+    ],
+    "phases": [
+      {
+        "id": "perf-brief",
+        "title": "Scout defines the first performance fix",
+        "status": "completed",
+        "ownerAgentId": "scout",
+        "reviewerAgentId": "henry",
+        "handoffToAgentId": "forge",
+        "dependsOnPhaseIds": [],
+        "latestRun": {
+          "id": "phase-perf-brief-done",
+          "kind": "agent_packet",
+          "intent": "start",
+          "timestamp": "2026-04-12T18:15:00.000Z",
+          "runStatus": "done",
+          "executionMode": "agent-run",
+          "deliverable": "useMemo optimization for HabboRoom floor tiles",
+          "text": "144 SVG tiles cached to avoid recalculation on every render",
+          "agentId": "scout",
+          "agentName": "Scout"
+        }
+      },
+      {
+        "id": "perf-implement",
+        "title": "Forge implements the approved performance fix",
+        "status": "completed",
+        "ownerAgentId": "forge",
+        "reviewerAgentId": "audit",
+        "handoffToAgentId": "audit",
+        "dependsOnPhaseIds": [
+          "perf-brief"
+        ],
+        "latestRun": {
+          "id": "phase-perf-implement-done",
+          "kind": "agent_packet",
+          "intent": "start",
+          "timestamp": "2026-04-12T18:15:00.000Z",
+          "runStatus": "done",
+          "executionMode": "agent-run",
+          "deliverable": "useMemo added to HabboRoom.tsx",
+          "text": "144 floor tiles now cached; re-renders no longer recalculate grid",
+          "agentId": "forge",
+          "agentName": "Forge"
+        }
+      },
+      {
+        "id": "perf-review",
+        "title": "Audit verifies the performance fix",
+        "status": "completed",
+        "ownerAgentId": "audit",
+        "reviewerAgentId": "henry",
+        "dependsOnPhaseIds": [
+          "perf-implement"
+        ],
+        "latestRun": {
+          "id": "phase-perf-review-done",
+          "kind": "agent_packet",
+          "intent": "review",
+          "timestamp": "2026-04-12T19:40:00.000Z",
+          "runStatus": "done",
+          "executionMode": "agent-run",
+          "deliverable": "Pass. First optimization done.",
+          "text": "useMemo added to HabboRoom.tsx. Next: full-page analysis",
+          "agentId": "audit",
+          "agentName": "Audit"
+        }
+      }
+    ]
+  },
+  {
+    "id": "mc-slack-multi-agent-official-v1",
+    "title": "Official Slack Multi-Agent Routing v1",
+    "description": "Bring Henry, Scout, Forge, and Audit onto the official OpenClaw multi-agent routing path for Slack, with separate bindings and account design.",
+    "status": "active",
+    "progress": 5,
+    "priority": "high",
+    "agent": {
+      "emoji": "👔",
+      "name": "Henry",
+      "color": "#FFD700"
+    },
+    "updatedAgo": "just now",
+    "updatedBy": "Henry",
+    "ownerAgentId": "henry",
+    "participatingAgentIds": [
+      "henry",
+      "scout",
+      "forge",
+      "audit"
+    ],
+    "phases": [
+      {
+        "id": "routing-brief",
+        "title": "Scout defines official Slack routing plan",
+        "status": "in_progress",
+        "ownerAgentId": "scout",
+        "reviewerAgentId": "henry",
+        "handoffToAgentId": "forge",
+        "dependsOnPhaseIds": []
+      },
+      {
+        "id": "config-apply",
+        "title": "Forge prepares config changes",
+        "status": "pending",
+        "ownerAgentId": "forge",
+        "reviewerAgentId": "audit",
+        "handoffToAgentId": "audit",
+        "dependsOnPhaseIds": [
+          "routing-brief"
+        ]
+      },
+      {
+        "id": "config-review",
+        "title": "Audit verifies official alignment",
+        "status": "pending",
+        "ownerAgentId": "audit",
+        "reviewerAgentId": "henry",
+        "dependsOnPhaseIds": [
+          "config-apply"
+        ]
+      }
+    ]
   }
 ]
